@@ -227,6 +227,10 @@ Use `--id=`, `--message-id=`, `--dry-run`, or `--force` when needed. Reprocessin
 
 If a reprocessing message reaches final failure again, the existing DLQ row is moved to `failed_reprocess` without resetting its reprocess count.
 
+## Internal Pipelines
+
+The receive controller and queue jobs delegate orchestration to focused pipelines: `ReceiveIncomingTalktoMessagePipeline`, `ProcessIncomingTalktoMessagePipeline`, and `SendOutgoingTalktoMessagePipeline`. Public routes, jobs, retry behavior, DLQ behavior, and handler/target registries remain the external integration points.
+
 ## Adding Talkto To A New Laravel Service
 
 Use the onboarding kit when a new Laravel service adopts Talkto Reliable:
