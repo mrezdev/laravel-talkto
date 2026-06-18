@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Hardened incoming idempotency around `message_id` using the existing message ledger.
+- Added retry/backoff state, due retry command behavior, and conservative HTTP retry classification.
+- Added Dead Letter Queue storage and `talkto:dlq-reprocess`.
+- Added incoming handler registry support for config and programmatic handlers.
+- Added outgoing target registry support for config, aliases, legacy target keys, and programmatic targets.
+- Moved receive, incoming processing, and outgoing send orchestration into pipelines without changing public commands or routes.
+- Added versioned signatures with backward-compatible v1 defaults and opt-in v2 signing.
+- Added read-only observability metrics, health summaries, and `talkto:report`.
+- Hardened release docs, publish tags, CI validation, public API inventory, and compatibility tests.
 - Added actual private package extraction docs, first private repository commit and tag plans, and the host VCS migration next-step plan.
 - Documented that P.49A2 creates a package-only seed with no production behavior change.
 - Removed the static package `version` field so future package versions can come from Git tags.

@@ -5,6 +5,7 @@ use Ibake\TalktoReliable\Http\Controllers\TalktoReceiveController;
 use Ibake\TalktoReliable\Jobs\ProcessIncomingTalktoMessage;
 use Ibake\TalktoReliable\Models\TalktoAttempt;
 use Ibake\TalktoReliable\Models\TalktoMessage;
+use Ibake\TalktoReliable\Pipelines\ReceiveIncomingTalktoMessagePipeline;
 use Ibake\TalktoReliable\Services\TalktoIncomingCommandResult;
 use Ibake\TalktoReliable\Services\TalktoPayloadHasher;
 use Ibake\TalktoReliable\Services\TalktoSignatureVerifier;
@@ -77,7 +78,7 @@ test('duplicate key race during receive is handled as already received', functio
 });
 
 test('duplicate key detection uses the configured message table', function (): void {
-    $method = new ReflectionMethod(TalktoReceiveController::class, 'isDuplicateMessageIdException');
+    $method = new ReflectionMethod(ReceiveIncomingTalktoMessagePipeline::class, 'isDuplicateMessageIdException');
     $exception = new QueryException(
         'sqlite',
         'insert into custom_talkto_messages',
@@ -85,8 +86,8 @@ test('duplicate key detection uses the configured message table', function (): v
         new RuntimeException('SQLSTATE[23000]: Integrity constraint violation: 19 UNIQUE constraint failed: custom_talkto_messages.message_id')
     );
 
-    expect($method->invoke(app(TalktoReceiveController::class), $exception, 'custom_talkto_messages'))->toBeTrue()
-        ->and($method->invoke(app(TalktoReceiveController::class), $exception, 'other_messages'))->toBeFalse();
+    expect($method->invoke(app(ReceiveIncomingTalktoMessagePipeline::class), $exception, 'custom_talkto_messages'))->toBeTrue()
+        ->and($method->invoke(app(ReceiveIncomingTalktoMessagePipeline::class), $exception, 'other_messages'))->toBeFalse();
 });
 
 test('idempotency key after success returns already processed and does not dispatch', function (): void {

@@ -347,6 +347,8 @@ Use the repository preparation docs before extracting the package into a private
 - `docs/ci.md` for GitHub Actions and local test parity.
 - `docs/release-process.md` for private-first release tagging.
 - `docs/versioning.md` for semantic versioning and compatibility policy.
+- `docs/PUBLIC_API.md` for stable extension points.
+- `docs/SMOKE_TESTS.md` for host-app release checks.
 - `UPGRADE.md` for host upgrade notes.
 - `RELEASE_CHECKLIST.md` for release verification.
 - `docs/private-composer-installation.md` for path and private VCS installation examples.
