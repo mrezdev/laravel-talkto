@@ -1,0 +1,19 @@
+<?php
+
+use App\Services\Talkto\Callbacks\ExampleResultCallbackHandler;
+
+test('source service can accept an example result callback', function (): void {
+    $result = app(ExampleResultCallbackHandler::class)->receiveResult([
+        'message_id' => 'message-123',
+        'source' => '<destination-service>',
+        'target' => '<source-service>',
+        'command' => 'example:sync-record',
+        'status' => 'succeeded',
+        'result' => [
+            'processed' => true,
+        ],
+    ]);
+
+    expect($result['accepted'])->toBeTrue()
+        ->and($result['message_id'])->toBe('message-123');
+});

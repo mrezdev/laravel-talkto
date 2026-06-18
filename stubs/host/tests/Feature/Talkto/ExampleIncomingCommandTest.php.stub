@@ -1,0 +1,24 @@
+<?php
+
+use App\Services\Talkto\Handlers\ExampleCommandHandler;
+use Ibake\TalktoReliable\Models\TalktoMessage;
+
+test('destination service can handle an example incoming command', function (): void {
+    $message = new TalktoMessage([
+        'message_id' => 'message-123',
+        'source' => '<source-service>',
+        'target' => '<destination-service>',
+        'command' => 'example:sync-record',
+        'payload' => [
+            'schema_version' => 1,
+            'record' => [
+                'external_id' => 'example-123',
+                'status' => 'ready',
+            ],
+        ],
+    ]);
+
+    $result = app(ExampleCommandHandler::class)->handle($message);
+
+    expect($result->ok())->toBeTrue();
+});

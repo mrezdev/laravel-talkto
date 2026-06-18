@@ -1,0 +1,44 @@
+<?php
+
+namespace App\Services\Talkto\Commands;
+
+final class ExamplePayloadBuilder
+{
+    public function build(ExampleRecord $record): array
+    {
+        return [
+            'schema_version' => 1,
+            'record' => [
+                'external_id' => $record->externalId(),
+                'status' => $record->status(),
+            ],
+            'requested_by' => [
+                'service' => '<source-service>',
+            ],
+        ];
+    }
+}
+
+final class ExampleRecord
+{
+    public function __construct(
+        private readonly string $externalId,
+        private readonly string $status,
+    ) {
+    }
+
+    public function externalId(): string
+    {
+        return $this->externalId;
+    }
+
+    public function status(): string
+    {
+        return $this->status;
+    }
+
+    public function idempotencyKey(): string
+    {
+        return '<source-service>:example:sync-record:'.$this->externalId.':v1';
+    }
+}

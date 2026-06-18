@@ -1,0 +1,16 @@
+/vendor/
+composer.lock
+.phpunit.cache/
+.phpunit.result.cache
+.pest/
+.env
+.env.*
+storage/
+node_modules/
+coverage/
+build/
+dist/
+*.log
+.DS_Store
+.idea/
+.vscode/

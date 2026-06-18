@@ -1,0 +1,33 @@
+<?php
+
+namespace App\Services\Talkto\Commands;
+
+use Ibake\TalktoReliable\Models\TalktoMessage;
+use Ibake\TalktoReliable\Services\TalktoFlowFactory;
+
+final class ExampleCommandSender
+{
+    public function __construct(
+        private readonly TalktoFlowFactory $flows,
+        private readonly ExamplePayloadBuilder $payloads,
+    ) {
+    }
+
+    public function send(ExampleRecord $record): TalktoMessage
+    {
+        $payload = $this->payloads->build($record);
+
+        return $this->flows
+            ->flow('example-sync-record')
+            ->to('<destination-service>')
+            ->command('example:sync-record')
+            ->businessKey($record->externalId())
+            ->idempotencyKey($record->idempotencyKey())
+            ->run(fn (): array => [
+                'payload' => $payload,
+                'result' => [
+                    'queued_by' => '<source-service>',
+                ],
+            ]);
+    }
+}

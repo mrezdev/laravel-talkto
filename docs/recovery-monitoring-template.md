@@ -1,0 +1,89 @@
+# Recovery And Monitoring Template
+
+Use this template to design operational views and recovery actions for a host service.
+
+## Monitoring Summary Fields
+
+Expose summary fields for operators:
+
+- service identity
+- peer service
+- command
+- direction
+- status
+- retryability
+- count
+- oldest pending age
+- newest failure age
+- callback status
+- last redacted error code
+
+## Message List Fields
+
+A message list should be searchable by:
+
+- message id
+- correlation id
+- business key
+- peer service
+- command
+- status
+- retryability
+- attempt count
+- created time
+- updated time
+- next retry time
+
+## Message Detail Fields
+
+A detail page or command output should show:
+
+- envelope metadata
+- redacted payload summary
+- attempts
+- lifecycle events
+- callback state
+- retryability classification
+- last redacted error
+- available safe actions
+
+## Retryability Classifications
+
+Use explicit classifications:
+
+- `retryable`: temporary network, queue, or timeout issue.
+- `review_required`: validation error, unexpected state, or missing source message.
+- `blocked`: config, peer, route, or handler problem.
+- `not_retryable`: invalid signature, payload hash mismatch, unknown source, unsafe duplicate.
+
+## Recovery Action Safety Gates
+
+Recovery actions should require:
+
+- trusted operator access
+- current environment confirmation
+- message id
+- expected current status
+- reason
+- `confirm=true`
+- redacted logging
+
+## Single-Message Action Rule
+
+Run recovery actions on one message at a time unless a separate batch recovery process has its own design, rate limits, dry-run output, and approval.
+
+## Confirm True Rule
+
+Any action that retries, marks, replays, cancels, or completes a message must require `confirm=true`. Without confirmation, return a dry-run result showing what would happen.
+
+## Redaction Rule
+
+Monitoring and recovery output must not show shared secrets, raw signatures, full headers, full payloads, credentials, or sensitive result data. Prefer ids, counts, statuses, and short redacted error codes.
+
+## Production Access Policy
+
+Restrict production monitoring and recovery to approved operators. Log who requested the action, when it ran, the message id, the prior state, the new state, and the redacted reason. Do not run destructive database commands for recovery.
+
+## Readiness Checks
+
+A production readiness check should confirm config, peer services, route ownership, migration ownership, queue settings, retry settings, callback settings, monitoring, redaction, and rollback steps before enabling traffic.

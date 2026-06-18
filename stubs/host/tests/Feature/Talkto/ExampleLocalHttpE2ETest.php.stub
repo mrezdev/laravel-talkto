@@ -1,0 +1,26 @@
+<?php
+
+use Illuminate\Support\Facades\Http;
+
+test('local http e2e example sends to destination and receives callback', function (): void {
+    config([
+        'app.env' => 'testing',
+        'queue.default' => 'sync',
+        'talkto.service' => '<source-service>',
+    ]);
+
+    Http::fake([
+        'http://127.0.0.1:<port>/api/talkto/receive' => Http::response([
+            'accepted' => true,
+            'message_id' => 'message-123',
+        ], 202),
+        'http://127.0.0.1:<port>/api/talkto/result-callback' => Http::response([
+            'accepted' => true,
+        ], 202),
+    ]);
+
+    // TODO: Replace this with the host sender call and callback assertion.
+
+    expect(config('talkto.service'))->toBe('<source-service>')
+        ->and(config('queue.default'))->toBe('sync');
+});

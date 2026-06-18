@@ -1,0 +1,30 @@
+<?php
+
+namespace App\Services\Talkto\Callbacks;
+
+use Ibake\TalktoReliable\Contracts\ResultCallbackReceiverContract;
+
+final class ExampleResultCallbackHandler implements ResultCallbackReceiverContract
+{
+    public function receiveResult(array $envelope, array $headers = []): mixed
+    {
+        $messageId = $envelope['message_id'] ?? null;
+        $status = $envelope['status'] ?? null;
+
+        if (! is_string($messageId) || ! is_string($status)) {
+            return [
+                'accepted' => false,
+                'code' => 'invalid_callback_payload',
+            ];
+        }
+
+        // TODO: Verify the callback through package services, match the source
+        // message, update host-owned state, and handle duplicate callbacks safely.
+
+        return [
+            'accepted' => true,
+            'message_id' => $messageId,
+            'status' => $status,
+        ];
+    }
+}

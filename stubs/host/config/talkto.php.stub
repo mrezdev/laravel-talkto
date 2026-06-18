@@ -1,0 +1,42 @@
+<?php
+
+return [
+    'service' => env('TALKTO_SERVICE', '<source-service>'),
+
+    'routes' => [
+        'enabled' => false,
+        'prefix' => 'api/talkto',
+        'middleware' => ['api'],
+    ],
+
+    'migrations' => [
+        'enabled' => false,
+    ],
+
+    'outgoing' => [
+        '<destination-service>' => [
+            'url' => env('TALKTO_DESTINATION_URL', 'http://127.0.0.1:<port>'),
+            'endpoint' => env('TALKTO_DESTINATION_ENDPOINT', '/api/talkto/receive'),
+            'secret' => env('TALKTO_SECRET', '<local-test-secret>'),
+            'mode' => 'reliable',
+            'queue' => env('TALKTO_QUEUE', 'default'),
+        ],
+    ],
+
+    'incoming' => [
+        '<source-service>' => [
+            'secret' => env('TALKTO_SECRET', '<local-test-secret>'),
+            'allowed_commands' => [
+                'example:sync-record' => [
+                    'driver' => 'handler',
+                    'handler' => App\Services\Talkto\Handlers\ExampleCommandHandler::class,
+                    'idempotency' => 'required',
+                ],
+            ],
+        ],
+    ],
+
+    'testing' => [
+        'database' => '<service-testing-db>',
+    ],
+];

@@ -1,0 +1,62 @@
+{
+    "name": "ibake/talkto-reliable",
+    "description": "Reliable and secure Talkto communication layer for Laravel applications.",
+    "type": "library",
+    "license": "proprietary",
+    "keywords": [
+        "laravel",
+        "webhook",
+        "service-to-service",
+        "hmac",
+        "idempotency",
+        "outbox",
+        "callback"
+    ],
+    "authors": [
+        {
+            "name": "Talkto Reliable Maintainers",
+            "role": "Maintainers"
+        }
+    ],
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "require": {
+        "php": "^8.2",
+        "illuminate/contracts": "^12.0|^13.0",
+        "illuminate/database": "^12.0|^13.0",
+        "illuminate/http": "^12.0|^13.0",
+        "illuminate/queue": "^12.0|^13.0",
+        "illuminate/support": "^12.0|^13.0",
+        "illuminate/validation": "^12.0|^13.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^10.0|^11.0",
+        "pestphp/pest": "^3.0|^4.0",
+        "pestphp/pest-plugin-laravel": "^3.0|^4.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Ibake\\TalktoReliable\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Ibake\\TalktoReliable\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "pest"
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Ibake\\TalktoReliable\\TalktoReliableServiceProvider"
+            ]
+        }
+    }
+}

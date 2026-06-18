@@ -1,0 +1,36 @@
+<?php
+
+namespace App\Services\Talkto\Handlers;
+
+use Ibake\TalktoReliable\Contracts\CommandHandlerContract;
+use Ibake\TalktoReliable\Models\TalktoMessage;
+use Ibake\TalktoReliable\Services\TalktoIncomingCommandResult;
+
+final class ExampleCommandHandler implements CommandHandlerContract
+{
+    public function handle(TalktoMessage $message): TalktoIncomingCommandResult
+    {
+        $payload = $message->payload ?? [];
+
+        if (($payload['schema_version'] ?? null) !== 1) {
+            return TalktoIncomingCommandResult::failed([
+                'code' => 'unsupported_schema_version',
+            ]);
+        }
+
+        $externalId = $payload['record']['external_id'] ?? null;
+
+        if (! is_string($externalId) || $externalId === '') {
+            return TalktoIncomingCommandResult::failed([
+                'code' => 'validation_failed',
+            ]);
+        }
+
+        // TODO: Perform host-owned lookup and safe write for ExampleRecord.
+
+        return TalktoIncomingCommandResult::succeeded([
+            'processed' => true,
+            'external_id' => $externalId,
+        ]);
+    }
+}

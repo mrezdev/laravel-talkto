@@ -1,0 +1,20 @@
+<?php
+
+namespace App\Http\Controllers\Talkto;
+
+use Illuminate\Http\JsonResponse;
+
+final class TestingHealthController
+{
+    public function __invoke(): JsonResponse
+    {
+        abort_unless(app()->environment('testing', 'local'), 404);
+
+        return response()->json([
+            'service' => config('talkto.service', '<source-service>'),
+            'environment' => app()->environment(),
+            'queue' => config('queue.default'),
+            'talkto_configured' => config()->has('talkto'),
+        ]);
+    }
+}

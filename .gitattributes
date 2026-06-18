@@ -1,0 +1,11 @@
+* text=auto
+
+/.github/ export-ignore
+/tests/ export-ignore
+/.phpunit.cache/ export-ignore
+/.pest/ export-ignore
+/vendor/ export-ignore
+/composer.lock export-ignore
+/coverage/ export-ignore
+/build/ export-ignore
+/dist/ export-ignore
