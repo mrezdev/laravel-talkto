@@ -1,10 +1,10 @@
 <?php
 
-namespace Ibake\TalktoReliable\Services;
+namespace Mrezdev\LaravelTalkto\Services;
 
-use Ibake\TalktoReliable\Models\TalktoDeadLetter;
-use Ibake\TalktoReliable\Models\TalktoEvent;
-use Ibake\TalktoReliable\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
+use Mrezdev\LaravelTalkto\Models\TalktoEvent;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Throwable;

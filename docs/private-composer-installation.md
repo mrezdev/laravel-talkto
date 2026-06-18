@@ -11,7 +11,7 @@ For local development while the package lives inside a host repository:
   "repositories": [
     {
       "type": "path",
-      "url": "packages/talkto-reliable",
+      "url": "packages/laravel-talkto",
       "options": {
         "symlink": false
       }

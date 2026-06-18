@@ -1,6 +1,6 @@
 # Versioning Policy
 
-Talkto Reliable follows semantic versioning once private tags begin.
+Laravel Talkto follows semantic versioning once private tags begin.
 
 ## Patch Releases
 

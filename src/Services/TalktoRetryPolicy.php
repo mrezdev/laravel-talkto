@@ -1,8 +1,8 @@
 <?php
 
-namespace Ibake\TalktoReliable\Services;
+namespace Mrezdev\LaravelTalkto\Services;
 
-use Ibake\TalktoReliable\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 
 class TalktoRetryPolicy
 {

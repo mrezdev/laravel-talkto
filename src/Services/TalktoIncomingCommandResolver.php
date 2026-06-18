@@ -1,13 +1,13 @@
 <?php
 
-namespace Ibake\TalktoReliable\Services;
+namespace Mrezdev\LaravelTalkto\Services;
 
-use Ibake\TalktoReliable\Contracts\TalktoIncomingCommandHandler;
-use Ibake\TalktoReliable\Contracts\TalktoIncomingHandlerRegistryContract;
-use Ibake\TalktoReliable\Exceptions\UnknownTalktoIncomingCommand;
-use Ibake\TalktoReliable\Handlers\NoopIncomingCommandHandler;
-use Ibake\TalktoReliable\Handlers\SkippedIncomingCommandHandler;
-use Ibake\TalktoReliable\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler;
+use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingHandlerRegistryContract;
+use Mrezdev\LaravelTalkto\Exceptions\UnknownTalktoIncomingCommand;
+use Mrezdev\LaravelTalkto\Handlers\NoopIncomingCommandHandler;
+use Mrezdev\LaravelTalkto\Handlers\SkippedIncomingCommandHandler;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use InvalidArgumentException;
 
 class TalktoIncomingCommandResolver

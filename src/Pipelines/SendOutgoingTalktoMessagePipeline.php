@@ -1,13 +1,13 @@
 <?php
 
-namespace Ibake\TalktoReliable\Pipelines;
+namespace Mrezdev\LaravelTalkto\Pipelines;
 
-use Ibake\TalktoReliable\Models\TalktoAttempt;
-use Ibake\TalktoReliable\Models\TalktoEvent;
-use Ibake\TalktoReliable\Models\TalktoMessage;
-use Ibake\TalktoReliable\Services\TalktoDeadLetterQueue;
-use Ibake\TalktoReliable\Services\TalktoOutgoingEnvelopeBuilder;
-use Ibake\TalktoReliable\Services\TalktoRetryPolicy;
+use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
+use Mrezdev\LaravelTalkto\Models\TalktoEvent;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
+use Mrezdev\LaravelTalkto\Services\TalktoOutgoingEnvelopeBuilder;
+use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Throwable;

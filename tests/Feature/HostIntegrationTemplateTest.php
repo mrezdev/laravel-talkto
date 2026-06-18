@@ -39,7 +39,7 @@ if (! function_exists('p48ForbiddenProjectTerms')) {
             'receive-bulks-'.'hybrid',
             'product_'.'inventory',
             'ware'.'house',
-            'ibake'.'_testing',
+            'mrezdev'.'_testing',
             'inventory'.'_testing',
         ];
     }

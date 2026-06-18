@@ -1,10 +1,10 @@
 <?php
 
-namespace Ibake\TalktoReliable\Services;
+namespace Mrezdev\LaravelTalkto\Services;
 
 use Closure;
-use Ibake\TalktoReliable\Jobs\SendTalktoMessage;
-use Ibake\TalktoReliable\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;

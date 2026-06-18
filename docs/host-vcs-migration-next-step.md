@@ -9,7 +9,7 @@ The host applications still reference the package from a local path:
 ```json
 {
   "type": "path",
-  "url": "packages/talkto-reliable"
+  "url": "packages/laravel-talkto"
 }
 ```
 
@@ -33,10 +33,10 @@ Hosts should require an exact version tag such as `v0.1.0`, not an open-ended br
 3. Update one host at a time in a non-production branch.
 4. Change the host repository entry from local path to private VCS.
 5. Require the exact package tag.
-6. Run `composer update ibake/talkto-reliable` only.
+6. Run `composer update mrezdev/laravel-talkto` only.
 7. Run package tests and host compatibility tests.
 8. Repeat for the second host.
 
 ## Rollback
 
-If the private VCS install fails or host compatibility checks fail, restore the local path repository entry, run `composer update ibake/talkto-reliable` only, and rerun host compatibility tests.
+If the private VCS install fails or host compatibility checks fail, restore the local path repository entry, run `composer update mrezdev/laravel-talkto` only, and rerun host compatibility tests.

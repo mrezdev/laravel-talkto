@@ -1,9 +1,9 @@
 <?php
 
-namespace Ibake\TalktoReliable\Contracts;
+namespace Mrezdev\LaravelTalkto\Contracts;
 
-use Ibake\TalktoReliable\Models\TalktoMessage;
-use Ibake\TalktoReliable\Services\TalktoIncomingCommandResult;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
 
 interface CommandHandlerContract
 {

@@ -4,10 +4,10 @@ This page lists the package surfaces intended for host applications to depend on
 
 ## Contracts
 
-- `Ibake\TalktoReliable\Contracts\TalktoIncomingCommandHandler`
-- `Ibake\TalktoReliable\Contracts\TalktoIncomingHandlerRegistryContract`
-- `Ibake\TalktoReliable\Contracts\TalktoOutgoingTargetRegistryContract`
-- Callback contracts under `Ibake\TalktoReliable\Contracts` for host-owned result callback implementations.
+- `Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler`
+- `Mrezdev\LaravelTalkto\Contracts\TalktoIncomingHandlerRegistryContract`
+- `Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract`
+- Callback contracts under `Mrezdev\LaravelTalkto\Contracts` for host-owned result callback implementations.
 
 ## App-Level Services
 

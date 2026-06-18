@@ -1,6 +1,6 @@
 # Upgrade Guide
 
-Use this guide when moving a host application to a newer Talkto Reliable package version.
+Use this guide when moving a host application to a newer Laravel Talkto package version.
 
 ## Before Upgrading
 

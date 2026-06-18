@@ -1,15 +1,15 @@
 <?php
 
-use Ibake\TalktoReliable\Contracts\TalktoIncomingCommandHandler;
-use Ibake\TalktoReliable\Contracts\TalktoIncomingHandlerRegistryContract;
-use Ibake\TalktoReliable\Exceptions\InvalidTalktoIncomingHandler;
-use Ibake\TalktoReliable\Handlers\NoopIncomingCommandHandler;
-use Ibake\TalktoReliable\Jobs\ProcessIncomingTalktoMessage;
-use Ibake\TalktoReliable\Models\TalktoEvent;
-use Ibake\TalktoReliable\Models\TalktoMessage;
-use Ibake\TalktoReliable\Services\TalktoIncomingCommandResolver;
-use Ibake\TalktoReliable\Services\TalktoIncomingCommandResult;
-use Ibake\TalktoReliable\Services\TalktoIncomingHandlerRegistry;
+use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler;
+use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingHandlerRegistryContract;
+use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoIncomingHandler;
+use Mrezdev\LaravelTalkto\Handlers\NoopIncomingCommandHandler;
+use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoEvent;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResolver;
+use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
+use Mrezdev\LaravelTalkto\Services\TalktoIncomingHandlerRegistry;
 
 beforeEach(function (): void {
     $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');

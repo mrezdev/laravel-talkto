@@ -1,8 +1,8 @@
 <?php
 
-namespace Ibake\TalktoReliable\Contracts;
+namespace Mrezdev\LaravelTalkto\Contracts;
 
-use Ibake\TalktoReliable\Services\TalktoOutgoingTarget;
+use Mrezdev\LaravelTalkto\Services\TalktoOutgoingTarget;
 
 interface TalktoOutgoingTargetRegistryContract
 {

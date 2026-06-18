@@ -1,16 +1,16 @@
 <?php
 
-use Ibake\TalktoReliable\Contracts\TalktoOutgoingTargetRegistryContract;
-use Ibake\TalktoReliable\Exceptions\InvalidTalktoOutgoingTarget;
-use Ibake\TalktoReliable\Exceptions\UnknownTalktoOutgoingTarget;
-use Ibake\TalktoReliable\Jobs\SendTalktoMessage;
-use Ibake\TalktoReliable\Models\TalktoMessage;
-use Ibake\TalktoReliable\Services\TalktoOutgoingEnvelopeBuilder;
-use Ibake\TalktoReliable\Services\TalktoOutgoingMessageFactory;
-use Ibake\TalktoReliable\Services\TalktoOutgoingTarget;
-use Ibake\TalktoReliable\Services\TalktoOutgoingTargetRegistry;
-use Ibake\TalktoReliable\Services\TalktoPayloadHasher;
-use Ibake\TalktoReliable\Services\TalktoRetryPolicy;
+use Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract;
+use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoOutgoingTarget;
+use Mrezdev\LaravelTalkto\Exceptions\UnknownTalktoOutgoingTarget;
+use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoOutgoingEnvelopeBuilder;
+use Mrezdev\LaravelTalkto\Services\TalktoOutgoingMessageFactory;
+use Mrezdev\LaravelTalkto\Services\TalktoOutgoingTarget;
+use Mrezdev\LaravelTalkto\Services\TalktoOutgoingTargetRegistry;
+use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
+use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 

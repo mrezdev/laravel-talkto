@@ -1,6 +1,6 @@
 <?php
 
-namespace Ibake\TalktoReliable\Exceptions;
+namespace Mrezdev\LaravelTalkto\Exceptions;
 
 class InvalidTalktoOutgoingTarget extends TalktoException
 {

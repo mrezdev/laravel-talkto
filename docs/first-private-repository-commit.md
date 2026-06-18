@@ -11,8 +11,8 @@ Create an empty private repository manually using the owner-approved namespace a
 Use placeholders only. Do not paste credentials or private access values into committed files.
 
 ```bash
-mkdir talkto-reliable-private
-cd talkto-reliable-private
+mkdir laravel-talkto-private
+cd laravel-talkto-private
 unzip <package-seed-zip> -d .
 git init
 git status --short
@@ -20,7 +20,7 @@ composer validate --no-check-publish
 composer install --prefer-dist --no-interaction --no-progress
 vendor/bin/pest
 git add .
-git commit -m "Initial private Talkto Reliable package"
+git commit -m "Initial private Laravel Talkto package"
 git branch -M main
 git remote add origin <private-repository-url>
 git push -u origin main

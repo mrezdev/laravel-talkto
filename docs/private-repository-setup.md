@@ -5,7 +5,7 @@ This package is prepared for a future private repository, but P.49A does not cre
 ## Setup Steps
 
 1. Create a private repository using the owner-approved repository name and namespace.
-2. Copy the contents of `packages/talkto-reliable` into the new repository root.
+2. Copy the contents of `packages/laravel-talkto` into the new repository root.
 3. Do not copy host application files, host routes, host config, host database files, generated files, review exports, or local environment files.
 4. Verify `composer.json`, `README.md`, `LICENSE.md`, and `CHANGELOG.md` are present.
 5. Run `composer validate --no-check-publish`.

@@ -9,10 +9,10 @@ return [
     ],
 
     'models' => [
-        'message' => \Ibake\TalktoReliable\Models\TalktoMessage::class,
-        'attempt' => \Ibake\TalktoReliable\Models\TalktoAttempt::class,
-        'event' => \Ibake\TalktoReliable\Models\TalktoEvent::class,
-        'dead_letter' => \Ibake\TalktoReliable\Models\TalktoDeadLetter::class,
+        'message' => \Mrezdev\LaravelTalkto\Models\TalktoMessage::class,
+        'attempt' => \Mrezdev\LaravelTalkto\Models\TalktoAttempt::class,
+        'event' => \Mrezdev\LaravelTalkto\Models\TalktoEvent::class,
+        'dead_letter' => \Mrezdev\LaravelTalkto\Models\TalktoDeadLetter::class,
     ],
 
     'security' => [
@@ -54,12 +54,12 @@ return [
     ],
 
     'jobs' => [
-        'send_message' => \Ibake\TalktoReliable\Jobs\SendTalktoMessage::class,
-        'process_incoming' => \Ibake\TalktoReliable\Jobs\ProcessIncomingTalktoMessage::class,
+        'send_message' => \Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage::class,
+        'process_incoming' => \Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage::class,
     ],
 
     'builders' => [
-        'flow' => \Ibake\TalktoReliable\Services\TalktoFlowBuilder::class,
+        'flow' => \Mrezdev\LaravelTalkto\Services\TalktoFlowBuilder::class,
     ],
 
     'retry' => [

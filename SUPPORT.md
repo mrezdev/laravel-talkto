@@ -1,6 +1,6 @@
 # Support
 
-Talkto Reliable is supported as a private internal package.
+Laravel Talkto is supported as a private internal package.
 
 For now, support requests, bug reports, and release questions should be handled through the project owner's internal planning and review process. Do not publish private support addresses, secrets, credentials, or production data in repository metadata.
 

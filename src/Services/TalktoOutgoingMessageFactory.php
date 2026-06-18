@@ -1,10 +1,10 @@
 <?php
 
-namespace Ibake\TalktoReliable\Services;
+namespace Mrezdev\LaravelTalkto\Services;
 
-use Ibake\TalktoReliable\Contracts\TalktoOutgoingTargetRegistryContract;
-use Ibake\TalktoReliable\Models\TalktoEvent;
-use Ibake\TalktoReliable\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract;
+use Mrezdev\LaravelTalkto\Models\TalktoEvent;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;

@@ -1,13 +1,13 @@
 <?php
 
-namespace Ibake\TalktoReliable\Console\Commands;
+namespace Mrezdev\LaravelTalkto\Console\Commands;
 
-use Ibake\TalktoReliable\Jobs\ProcessIncomingTalktoMessage;
-use Ibake\TalktoReliable\Jobs\SendTalktoMessage;
-use Ibake\TalktoReliable\Models\TalktoDeadLetter;
-use Ibake\TalktoReliable\Models\TalktoEvent;
-use Ibake\TalktoReliable\Models\TalktoMessage;
-use Ibake\TalktoReliable\Services\TalktoDeadLetterQueue;
+use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
+use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
+use Mrezdev\LaravelTalkto\Models\TalktoEvent;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
 use Illuminate\Console\Command;
 
 class ReprocessTalktoDeadLettersCommand extends Command

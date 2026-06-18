@@ -1,24 +1,24 @@
 <?php
 
-namespace Ibake\TalktoReliable;
+namespace Mrezdev\LaravelTalkto;
 
-use Ibake\TalktoReliable\Console\Commands\RetryFailedTalktoMessagesCommand;
-use Ibake\TalktoReliable\Console\Commands\ReportTalktoMessagesCommand;
-use Ibake\TalktoReliable\Console\Commands\ReprocessTalktoDeadLettersCommand;
-use Ibake\TalktoReliable\Contracts\TalktoIncomingHandlerRegistryContract;
-use Ibake\TalktoReliable\Contracts\TalktoOutgoingTargetRegistryContract;
-use Ibake\TalktoReliable\Pipelines\ProcessIncomingTalktoMessagePipeline;
-use Ibake\TalktoReliable\Pipelines\ReceiveIncomingTalktoMessagePipeline;
-use Ibake\TalktoReliable\Pipelines\SendOutgoingTalktoMessagePipeline;
-use Ibake\TalktoReliable\Services\TalktoDeadLetterQueue;
-use Ibake\TalktoReliable\Services\TalktoHealthChecker;
-use Ibake\TalktoReliable\Services\TalktoIncomingHandlerRegistry;
-use Ibake\TalktoReliable\Services\TalktoMetricsCollector;
-use Ibake\TalktoReliable\Services\TalktoOutgoingTargetRegistry;
-use Ibake\TalktoReliable\Services\TalktoRetryPolicy;
+use Mrezdev\LaravelTalkto\Console\Commands\RetryFailedTalktoMessagesCommand;
+use Mrezdev\LaravelTalkto\Console\Commands\ReportTalktoMessagesCommand;
+use Mrezdev\LaravelTalkto\Console\Commands\ReprocessTalktoDeadLettersCommand;
+use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingHandlerRegistryContract;
+use Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract;
+use Mrezdev\LaravelTalkto\Pipelines\ProcessIncomingTalktoMessagePipeline;
+use Mrezdev\LaravelTalkto\Pipelines\ReceiveIncomingTalktoMessagePipeline;
+use Mrezdev\LaravelTalkto\Pipelines\SendOutgoingTalktoMessagePipeline;
+use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
+use Mrezdev\LaravelTalkto\Services\TalktoHealthChecker;
+use Mrezdev\LaravelTalkto\Services\TalktoIncomingHandlerRegistry;
+use Mrezdev\LaravelTalkto\Services\TalktoMetricsCollector;
+use Mrezdev\LaravelTalkto\Services\TalktoOutgoingTargetRegistry;
+use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 use Illuminate\Support\ServiceProvider;
 
-class TalktoReliableServiceProvider extends ServiceProvider
+class LaravelTalktoServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
@@ -48,14 +48,14 @@ class TalktoReliableServiceProvider extends ServiceProvider
 
         $this->publishes([
             __DIR__.'/../config/talkto.php' => config_path('talkto.php'),
-        ], 'talkto-reliable-config');
+        ], 'laravel-talkto-config');
         $this->publishes([
             __DIR__.'/../config/talkto.php' => config_path('talkto.php'),
         ], 'talkto-config');
 
         $this->publishes([
             __DIR__.'/../database/migrations' => database_path('migrations'),
-        ], 'talkto-reliable-migrations');
+        ], 'laravel-talkto-migrations');
         $this->publishes([
             __DIR__.'/../database/migrations' => database_path('migrations'),
         ], 'talkto-migrations');

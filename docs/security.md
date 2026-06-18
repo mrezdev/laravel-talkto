@@ -1,6 +1,6 @@
 # Security
 
-Talkto Reliable protects service-to-service messages with explicit peer configuration and signed envelopes.
+Laravel Talkto protects service-to-service messages with explicit peer configuration and signed envelopes.
 
 ## Signing
 

@@ -1,13 +1,13 @@
 <?php
 
-namespace Ibake\TalktoReliable\Console\Commands;
+namespace Mrezdev\LaravelTalkto\Console\Commands;
 
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
-use Ibake\TalktoReliable\Models\TalktoEvent;
-use Ibake\TalktoReliable\Models\TalktoMessage;
-use Ibake\TalktoReliable\Services\TalktoHealthChecker;
-use Ibake\TalktoReliable\Services\TalktoMetricsCollector;
+use Mrezdev\LaravelTalkto\Models\TalktoEvent;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoHealthChecker;
+use Mrezdev\LaravelTalkto\Services\TalktoMetricsCollector;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema;

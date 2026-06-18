@@ -1,6 +1,6 @@
 # Security Policy
 
-Talkto Reliable is currently a private, proprietary package.
+Laravel Talkto is currently a private, proprietary package.
 
 ## Supported Versions
 

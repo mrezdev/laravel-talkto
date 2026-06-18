@@ -2,8 +2,8 @@
 
 namespace App\Services\Talkto\Commands;
 
-use Ibake\TalktoReliable\Models\TalktoMessage;
-use Ibake\TalktoReliable\Services\TalktoFlowFactory;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoFlowFactory;
 
 final class ExampleCommandSender
 {

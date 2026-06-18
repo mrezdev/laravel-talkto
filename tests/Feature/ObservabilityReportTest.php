@@ -1,11 +1,11 @@
 <?php
 
-use Ibake\TalktoReliable\Models\TalktoDeadLetter;
-use Ibake\TalktoReliable\Models\TalktoEvent;
-use Ibake\TalktoReliable\Models\TalktoMessage;
-use Ibake\TalktoReliable\Models\TalktoAttempt;
-use Ibake\TalktoReliable\Services\TalktoHealthChecker;
-use Ibake\TalktoReliable\Services\TalktoMetricsCollector;
+use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
+use Mrezdev\LaravelTalkto\Models\TalktoEvent;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
+use Mrezdev\LaravelTalkto\Services\TalktoHealthChecker;
+use Mrezdev\LaravelTalkto\Services\TalktoMetricsCollector;
 use Illuminate\Support\Facades\Artisan;
 
 beforeEach(function (): void {

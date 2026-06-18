@@ -7,9 +7,9 @@ The destination application receives a signed envelope, verifies the source, val
 Handlers implement `CommandHandlerContract` or the legacy-compatible `TalktoIncomingCommandHandler`.
 
 ```php
-use Ibake\TalktoReliable\Contracts\CommandHandlerContract;
-use Ibake\TalktoReliable\Models\TalktoMessage;
-use Ibake\TalktoReliable\Services\TalktoIncomingCommandResult;
+use Mrezdev\LaravelTalkto\Contracts\CommandHandlerContract;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
 
 final class DomainCommandHandler implements CommandHandlerContract
 {

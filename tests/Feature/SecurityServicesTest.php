@@ -1,8 +1,8 @@
 <?php
 
-use Ibake\TalktoReliable\Services\TalktoPayloadHasher;
-use Ibake\TalktoReliable\Services\TalktoSignatureVerifier;
-use Ibake\TalktoReliable\Services\TalktoSigner;
+use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
+use Mrezdev\LaravelTalkto\Services\TalktoSignatureVerifier;
+use Mrezdev\LaravelTalkto\Services\TalktoSigner;
 
 test('signer and verifier accept a valid signed envelope', function (): void {
     config([

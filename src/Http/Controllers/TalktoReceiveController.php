@@ -1,9 +1,9 @@
 <?php
 
-namespace Ibake\TalktoReliable\Http\Controllers;
+namespace Mrezdev\LaravelTalkto\Http\Controllers;
 
-use Ibake\TalktoReliable\Pipelines\ReceiveIncomingTalktoMessagePipeline;
-use Ibake\TalktoReliable\Services\TalktoSignatureVerifier;
+use Mrezdev\LaravelTalkto\Pipelines\ReceiveIncomingTalktoMessagePipeline;
+use Mrezdev\LaravelTalkto\Services\TalktoSignatureVerifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 

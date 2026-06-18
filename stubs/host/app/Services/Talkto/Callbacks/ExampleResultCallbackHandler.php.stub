@@ -2,7 +2,7 @@
 
 namespace App\Services\Talkto\Callbacks;
 
-use Ibake\TalktoReliable\Contracts\ResultCallbackReceiverContract;
+use Mrezdev\LaravelTalkto\Contracts\ResultCallbackReceiverContract;
 
 final class ExampleResultCallbackHandler implements ResultCallbackReceiverContract
 {

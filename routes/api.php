@@ -1,6 +1,6 @@
 <?php
 
-use Ibake\TalktoReliable\Http\Controllers\TalktoReceiveController;
+use Mrezdev\LaravelTalkto\Http\Controllers\TalktoReceiveController;
 use Illuminate\Support\Facades\Route;
 
 $prefix = config('talkto.routes.prefix', 'api');

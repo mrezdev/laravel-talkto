@@ -1,6 +1,6 @@
 # Release Checklist
 
-Use this checklist before tagging or publishing Talkto Reliable.
+Use this checklist before tagging or publishing Laravel Talkto.
 
 ## Code And Metadata
 
@@ -12,9 +12,9 @@ Use this checklist before tagging or publishing Talkto Reliable.
 
 ## Installation Surface
 
-- Confirm config publishes with `talkto-reliable-config` and `talkto-config`.
-- Confirm migrations publish with `talkto-reliable-migrations` and `talkto-migrations`.
-- Confirm package discovery loads `TalktoReliableServiceProvider`.
+- Confirm config publishes with `laravel-talkto-config` and `talkto-config`.
+- Confirm migrations publish with `laravel-talkto-migrations` and `talkto-migrations`.
+- Confirm package discovery loads `LaravelTalktoServiceProvider`.
 - Confirm routes and migrations remain opt-in by default.
 - Confirm default config contains no production URLs, secrets, or host-only classes.
 

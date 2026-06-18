@@ -1,13 +1,13 @@
 # Sending Commands
 
-Talkto Reliable creates outgoing message records before transport. This gives the source application a durable lifecycle for status, retries, attempts, and callbacks.
+Laravel Talkto creates outgoing message records before transport. This gives the source application a durable lifecycle for status, retries, attempts, and callbacks.
 
 ## Flow Builder
 
 Use `TalktoFlowFactory` when a source action must run before the command is sent.
 
 ```php
-$message = app(\Ibake\TalktoReliable\Services\TalktoFlowFactory::class)
+$message = app(\Mrezdev\LaravelTalkto\Services\TalktoFlowFactory::class)
     ->flow('source-action-name')
     ->to('target-service')
     ->command('domain.command')
@@ -24,7 +24,7 @@ $message = app(\Ibake\TalktoReliable\Services\TalktoFlowFactory::class)
 Use `TalktoOutgoingMessageFactory` when the host already has a payload and does not need source-action wrapping.
 
 ```php
-$message = app(\Ibake\TalktoReliable\Services\TalktoOutgoingMessageFactory::class)
+$message = app(\Mrezdev\LaravelTalkto\Services\TalktoOutgoingMessageFactory::class)
     ->create('target-service', 'domain.command', ['id' => 123], [
         'business_key' => 'business-key-123',
         'idempotency_key' => 'command-123',

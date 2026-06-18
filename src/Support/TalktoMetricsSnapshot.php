@@ -1,6 +1,6 @@
 <?php
 
-namespace Ibake\TalktoReliable\Support;
+namespace Mrezdev\LaravelTalkto\Support;
 
 use Carbon\CarbonInterface;
 

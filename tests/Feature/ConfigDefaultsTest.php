@@ -37,9 +37,9 @@ test('default config has no production urls or shared secrets', function (): voi
 test('default config uses generic package classes only', function (): void {
     $defaults = require __DIR__.'/../../config/talkto.php';
 
-    expect($defaults['models']['message'])->toStartWith('Ibake\\TalktoReliable\\')
-        ->and($defaults['models']['attempt'])->toStartWith('Ibake\\TalktoReliable\\')
-        ->and($defaults['models']['event'])->toStartWith('Ibake\\TalktoReliable\\')
-        ->and($defaults['jobs']['send_message'])->toStartWith('Ibake\\TalktoReliable\\')
-        ->and($defaults['jobs']['process_incoming'])->toStartWith('Ibake\\TalktoReliable\\');
+    expect($defaults['models']['message'])->toStartWith('Mrezdev\\LaravelTalkto\\')
+        ->and($defaults['models']['attempt'])->toStartWith('Mrezdev\\LaravelTalkto\\')
+        ->and($defaults['models']['event'])->toStartWith('Mrezdev\\LaravelTalkto\\')
+        ->and($defaults['jobs']['send_message'])->toStartWith('Mrezdev\\LaravelTalkto\\')
+        ->and($defaults['jobs']['process_incoming'])->toStartWith('Mrezdev\\LaravelTalkto\\');
 });

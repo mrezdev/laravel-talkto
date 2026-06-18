@@ -6,14 +6,14 @@ Use this document when turning the local package copy into the root of a future 
 
 The package currently lives inside the host applications at:
 
-- Website host: `packages/talkto-reliable`
-- Inventory host: `packages/talkto-reliable`
+- Website host: `packages/laravel-talkto`
+- Inventory host: `packages/laravel-talkto`
 
 Before extracting, confirm both package copies are synchronized. Treat the Website package copy as canonical only after that sync check passes.
 
 ## Repository Root Rule
 
-Copy the contents of `packages/talkto-reliable` into the new repository root. Do not copy the parent `packages/` directory and do not nest the package under `packages/talkto-reliable` in the new repository.
+Copy the contents of `packages/laravel-talkto` into the new repository root. Do not copy the parent `packages/` directory and do not nest the package under `packages/laravel-talkto` in the new repository.
 
 The new repository root should contain files such as `composer.json`, `README.md`, `src/`, `config/`, `docs/`, and `tests/` directly at the top level.
 

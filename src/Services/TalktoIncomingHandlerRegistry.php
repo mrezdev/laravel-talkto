@@ -1,10 +1,10 @@
 <?php
 
-namespace Ibake\TalktoReliable\Services;
+namespace Mrezdev\LaravelTalkto\Services;
 
-use Ibake\TalktoReliable\Contracts\TalktoIncomingHandlerRegistryContract;
-use Ibake\TalktoReliable\Contracts\TalktoIncomingCommandHandler;
-use Ibake\TalktoReliable\Exceptions\InvalidTalktoIncomingHandler;
+use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingHandlerRegistryContract;
+use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler;
+use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoIncomingHandler;
 use Illuminate\Contracts\Container\Container;
 
 class TalktoIncomingHandlerRegistry implements TalktoIncomingHandlerRegistryContract

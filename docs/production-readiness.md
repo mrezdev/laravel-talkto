@@ -1,6 +1,6 @@
 # Production Readiness
 
-Talkto Reliable gives Laravel services a secure delivery layer, but each host application still owns its rollout plan, peer configuration, operational controls, and domain behavior.
+Laravel Talkto gives Laravel services a secure delivery layer, but each host application still owns its rollout plan, peer configuration, operational controls, and domain behavior.
 
 ## Package Release Checklist
 

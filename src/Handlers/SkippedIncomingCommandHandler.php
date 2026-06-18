@@ -1,10 +1,10 @@
 <?php
 
-namespace Ibake\TalktoReliable\Handlers;
+namespace Mrezdev\LaravelTalkto\Handlers;
 
-use Ibake\TalktoReliable\Contracts\TalktoIncomingCommandHandler;
-use Ibake\TalktoReliable\Models\TalktoMessage;
-use Ibake\TalktoReliable\Services\TalktoIncomingCommandResult;
+use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
 
 class SkippedIncomingCommandHandler implements TalktoIncomingCommandHandler
 {

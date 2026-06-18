@@ -1,12 +1,12 @@
-# Talkto Reliable
+# Laravel Talkto
 
-Talkto Reliable is a Laravel package for secure service-to-service command delivery. It helps one Laravel application send a signed command to another application, track that command through an outbox/inbox lifecycle, process it through an approved handler, and receive a signed result callback.
+Laravel Talkto is a Laravel package for secure service-to-service command delivery. It helps one Laravel application send a signed command to another application, track that command through an outbox/inbox lifecycle, process it through an approved handler, and receive a signed result callback.
 
 The package is intentionally generic. It provides the communication layer; each host application keeps its own domain rules, model lookups, data mapping, writes, and rollout decisions.
 
 ## What Problem It Solves
 
-Cross-service commands are easy to send once and hard to operate safely. Talkto Reliable gives hosts a common structure for signed payloads, idempotent delivery, retries, attempts, status tracking, and callbacks without forcing domain code into the transport package.
+Cross-service commands are easy to send once and hard to operate safely. Laravel Talkto gives hosts a common structure for signed payloads, idempotent delivery, retries, attempts, status tracking, and callbacks without forcing domain code into the transport package.
 
 ## What It Does
 
@@ -32,9 +32,9 @@ Cross-service commands are easy to send once and hard to operate safely. Talkto 
 ## Installation
 
 ```bash
-composer require ibake/talkto-reliable
-php artisan vendor:publish --tag=talkto-reliable-config
-php artisan vendor:publish --tag=talkto-reliable-migrations
+composer require mrezdev/laravel-talkto
+php artisan vendor:publish --tag=laravel-talkto-config
+php artisan vendor:publish --tag=laravel-talkto-migrations
 ```
 
 The Laravel service provider is auto-discovered. Package routes and migrations are disabled by default so existing applications can adopt the package without duplicate endpoints or duplicate tables. Short publish tags are also available: `talkto-config` and `talkto-migrations`.
@@ -55,8 +55,8 @@ The Laravel service provider is auto-discovered. Package routes and migrations a
 Publish config first and review ownership before enabling routes or migrations:
 
 ```bash
-php artisan vendor:publish --tag=talkto-reliable-config
-php artisan vendor:publish --tag=talkto-reliable-migrations
+php artisan vendor:publish --tag=laravel-talkto-config
+php artisan vendor:publish --tag=laravel-talkto-migrations
 # or:
 php artisan vendor:publish --tag=talkto-config
 php artisan vendor:publish --tag=talkto-migrations
@@ -128,7 +128,7 @@ Use `talkto:retry-failed --dry-run` before enabling scheduled dispatch in a new 
 Use `TalktoFlowFactory` when the host wants to run a source-side action and create an outgoing message in one lifecycle:
 
 ```php
-$message = app(\Ibake\TalktoReliable\Services\TalktoFlowFactory::class)
+$message = app(\Mrezdev\LaravelTalkto\Services\TalktoFlowFactory::class)
     ->flow('reserve-resource')
     ->to('target-service')
     ->command('domain.command')
@@ -143,7 +143,7 @@ $message = app(\Ibake\TalktoReliable\Services\TalktoFlowFactory::class)
 Use `TalktoOutgoingMessageFactory` directly when the host already completed its source-side work:
 
 ```php
-$message = app(\Ibake\TalktoReliable\Services\TalktoOutgoingMessageFactory::class)
+$message = app(\Mrezdev\LaravelTalkto\Services\TalktoOutgoingMessageFactory::class)
     ->create(
         target: 'target-service',
         command: 'domain.command',
@@ -171,7 +171,7 @@ Outgoing targets describe where a command should be delivered and how it should 
 Hosts can also register or override targets from a service provider:
 
 ```php
-app(\Ibake\TalktoReliable\Contracts\TalktoOutgoingTargetRegistryContract::class)
+app(\Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract::class)
     ->register('target-service', [
         'url' => 'https://target.test',
         'secret' => env('TALKTO_TO_TARGET_SERVICE_SECRET'),
@@ -187,9 +187,9 @@ Destination applications register incoming command handlers while keeping domain
 ```php
 namespace App\Talkto\Handlers;
 
-use Ibake\TalktoReliable\Contracts\TalktoIncomingCommandHandler;
-use Ibake\TalktoReliable\Models\TalktoMessage;
-use Ibake\TalktoReliable\Services\TalktoIncomingCommandResult;
+use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
 
 final class CreateOrderHandler implements TalktoIncomingCommandHandler
 {
@@ -217,11 +217,11 @@ Register handlers in config:
 Or register from a host service provider:
 
 ```php
-app(\Ibake\TalktoReliable\Services\TalktoIncomingHandlerRegistry::class)
+app(\Mrezdev\LaravelTalkto\Services\TalktoIncomingHandlerRegistry::class)
     ->register('order.create', App\Talkto\Handlers\CreateOrderHandler::class);
 ```
 
-Hosts may also inject or resolve `Ibake\TalktoReliable\Contracts\TalktoIncomingHandlerRegistryContract`; it shares the same registry instance as the concrete service.
+Hosts may also inject or resolve `Mrezdev\LaravelTalkto\Contracts\TalktoIncomingHandlerRegistryContract`; it shares the same registry instance as the concrete service.
 
 Unknown commands fail by default so existing retry and DLQ behavior can handle them. Set `talkto.incoming.unknown_command_strategy` to `skip` only when the host explicitly wants unknown commands marked skipped. Handler execution happens in the queued incoming job and keeps the existing idempotency and status guards.
 
@@ -230,7 +230,7 @@ Unknown commands fail by default so existing retry and DLQ behavior can handle t
 Hosts can send a signed result back to the source after a destination command succeeds or fails:
 
 ```php
-use Ibake\TalktoReliable\Contracts\ResultCallbackSenderContract;
+use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
 
 app(ResultCallbackSenderContract::class)->sendResultCallback(
     messageId: $message->message_id,
@@ -242,7 +242,7 @@ Concrete callback sender and receiver services may remain host-owned while imple
 
 ## Retry And Backoff
 
-Talkto Reliable stores retry state on `talkto_messages` and uses database state as the source of truth. Outgoing delivery retries are enabled by default; incoming handler retries are disabled by default because handlers may have host-owned side effects.
+Laravel Talkto stores retry state on `talkto_messages` and uses database state as the source of truth. Outgoing delivery retries are enabled by default; incoming handler retries are disabled by default because handlers may have host-owned side effects.
 
 Key config values live under `talkto.retry`: `enabled`, `max_attempts`, `backoff_seconds`, `outgoing_enabled`, `incoming_enabled`, `retryable_statuses`, and `final_failure_status`.
 
@@ -272,7 +272,7 @@ If a reprocessing message reaches final failure again, the existing DLQ row is m
 
 ## Observability Reports
 
-Talkto Reliable includes read-only observability services and a report command over the existing `talkto_messages`, `talkto_attempts`, `talkto_events`, and `talkto_dead_letters` tables. No dashboard/UI is included.
+Laravel Talkto includes read-only observability services and a report command over the existing `talkto_messages`, `talkto_attempts`, `talkto_events`, and `talkto_dead_letters` tables. No dashboard/UI is included.
 
 ```bash
 php artisan talkto:report --hours=24 --direction=all --limit=20
@@ -292,7 +292,7 @@ The receive controller and queue jobs delegate orchestration to focused pipeline
 
 ## Adding Talkto To A New Laravel Service
 
-Use the onboarding kit when a new Laravel service adopts Talkto Reliable:
+Use the onboarding kit when a new Laravel service adopts Laravel Talkto:
 
 - `docs/new-service-onboarding.md` for the full service checklist.
 - `docs/local-http-e2e-template.md` for a two-service local test pattern.
@@ -308,7 +308,7 @@ Generic copy/paste examples live under `stubs/host/`. They are intentionally not
 Package tests are designed for a package-local checkout:
 
 ```bash
-cd packages/talkto-reliable
+cd packages/laravel-talkto
 composer install
 vendor/bin/pest
 ```
@@ -319,7 +319,7 @@ For local end-to-end checks, use non-production services, non-production queues,
 
 ## Security Notes
 
-Talkto Reliable signs canonical message fields with HMAC SHA-256, verifies timestamps within a configured tolerance, hashes normalized payloads for tamper detection, enforces source and command allowlists, and supports required idempotency keys for replay protection.
+Laravel Talkto signs canonical message fields with HMAC SHA-256, verifies timestamps within a configured tolerance, hashes normalized payloads for tamper detection, enforces source and command allowlists, and supports required idempotency keys for replay protection.
 
 Signature verification accepts `v1` and `v2` by default. Outgoing messages continue to use the backward-compatible `v1` signature unless `talkto.security.signature_version` is set to `v2`. Update both peers before forcing `talkto.security.accept_versions` to only `v2`. Unsupported outgoing signature versions fail clearly instead of silently downgrading.
 

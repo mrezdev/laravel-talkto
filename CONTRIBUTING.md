@@ -11,7 +11,7 @@ Keep the package reusable across Laravel applications.
 ## Local Checks
 
 ```bash
-cd packages/talkto-reliable
+cd packages/laravel-talkto
 composer install
 vendor/bin/pest
 ```

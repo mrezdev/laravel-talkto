@@ -11,7 +11,7 @@ Package tests use Orchestra Testbench and Pest. The committed test entry points 
 Run tests from the package directory after package-local development dependencies are installed:
 
 ```bash
-cd packages/talkto-reliable
+cd packages/laravel-talkto
 composer install
 vendor/bin/pest
 ```

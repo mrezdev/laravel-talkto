@@ -1,10 +1,10 @@
 <?php
 
-namespace Ibake\TalktoReliable\Services;
+namespace Mrezdev\LaravelTalkto\Services;
 
-use Ibake\TalktoReliable\Contracts\TalktoOutgoingTargetRegistryContract;
-use Ibake\TalktoReliable\Exceptions\InvalidTalktoOutgoingTarget;
-use Ibake\TalktoReliable\Exceptions\UnknownTalktoOutgoingTarget;
+use Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract;
+use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoOutgoingTarget;
+use Mrezdev\LaravelTalkto\Exceptions\UnknownTalktoOutgoingTarget;
 
 class TalktoOutgoingTargetRegistry implements TalktoOutgoingTargetRegistryContract
 {

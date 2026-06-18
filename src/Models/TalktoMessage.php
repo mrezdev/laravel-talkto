@@ -1,6 +1,6 @@
 <?php
 
-namespace Ibake\TalktoReliable\Models;
+namespace Mrezdev\LaravelTalkto\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;

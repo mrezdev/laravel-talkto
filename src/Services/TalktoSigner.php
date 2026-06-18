@@ -1,6 +1,6 @@
 <?php
 
-namespace Ibake\TalktoReliable\Services;
+namespace Mrezdev\LaravelTalkto\Services;
 
 class TalktoSigner
 {

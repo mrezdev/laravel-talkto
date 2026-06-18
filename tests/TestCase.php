@@ -1,8 +1,8 @@
 <?php
 
-namespace Ibake\TalktoReliable\Tests;
+namespace Mrezdev\LaravelTalkto\Tests;
 
-use Ibake\TalktoReliable\TalktoReliableServiceProvider;
+use Mrezdev\LaravelTalkto\LaravelTalktoServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
 
 abstract class TestCase extends Orchestra
@@ -10,7 +10,7 @@ abstract class TestCase extends Orchestra
     protected function getPackageProviders($app): array
     {
         return [
-            TalktoReliableServiceProvider::class,
+            LaravelTalktoServiceProvider::class,
         ];
     }
 

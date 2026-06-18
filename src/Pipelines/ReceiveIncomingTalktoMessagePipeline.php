@@ -1,11 +1,11 @@
 <?php
 
-namespace Ibake\TalktoReliable\Pipelines;
+namespace Mrezdev\LaravelTalkto\Pipelines;
 
-use Ibake\TalktoReliable\Jobs\ProcessIncomingTalktoMessage;
-use Ibake\TalktoReliable\Models\TalktoEvent;
-use Ibake\TalktoReliable\Models\TalktoMessage;
-use Ibake\TalktoReliable\Services\TalktoSignatureVerifier;
+use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoEvent;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoSignatureVerifier;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;

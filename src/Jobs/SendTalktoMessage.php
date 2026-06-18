@@ -1,10 +1,10 @@
 <?php
 
-namespace Ibake\TalktoReliable\Jobs;
+namespace Mrezdev\LaravelTalkto\Jobs;
 
-use Ibake\TalktoReliable\Pipelines\SendOutgoingTalktoMessagePipeline;
-use Ibake\TalktoReliable\Services\TalktoOutgoingEnvelopeBuilder;
-use Ibake\TalktoReliable\Services\TalktoRetryPolicy;
+use Mrezdev\LaravelTalkto\Pipelines\SendOutgoingTalktoMessagePipeline;
+use Mrezdev\LaravelTalkto\Services\TalktoOutgoingEnvelopeBuilder;
+use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;

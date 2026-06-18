@@ -1,6 +1,6 @@
 # New Service Onboarding
 
-Use this checklist when adding Talkto Reliable to a new Laravel service. This is a template only; it does not create a third service and does not enable production traffic.
+Use this checklist when adding Laravel Talkto to a new Laravel service. This is a template only; it does not create a third service and does not enable production traffic.
 
 ## New Service Checklist
 
@@ -27,9 +27,9 @@ Use this checklist when adding Talkto Reliable to a new Laravel service. This is
 Install the package in the host application:
 
 ```bash
-composer require ibake/talkto-reliable
-php artisan vendor:publish --tag=talkto-reliable-config
-php artisan vendor:publish --tag=talkto-reliable-migrations
+composer require mrezdev/laravel-talkto
+php artisan vendor:publish --tag=laravel-talkto-config
+php artisan vendor:publish --tag=laravel-talkto-migrations
 ```
 
 Review the published config before changing any traffic flag. Existing services may keep package routes and migrations disabled and use host-owned wrappers.

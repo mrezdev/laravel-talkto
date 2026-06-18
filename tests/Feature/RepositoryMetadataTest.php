@@ -27,7 +27,7 @@ if (! function_exists('p49ForbiddenProjectTerms')) {
             'receive-bulks-'.'hybrid',
             'product_'.'inventory',
             'ware'.'house',
-            'ibake'.'_testing',
+            'mrezdev'.'_testing',
             'inventory'.'_testing',
         ];
     }
@@ -77,7 +77,7 @@ test('github workflow validates composer metadata installs dependencies and runs
         ->and($workflow)->toContain('push:')
         ->and($workflow)->toContain('actions/checkout')
         ->and($workflow)->toContain('shivammathur/setup-php')
-        ->and($workflow)->toContain('composer validate --no-check-publish')
+        ->and($workflow)->toContain('composer validate --strict')
         ->and($workflow)->toContain('composer install --prefer-dist --no-interaction --no-progress')
         ->and($workflow)->toContain('vendor/bin/pest');
 
@@ -85,7 +85,7 @@ test('github workflow validates composer metadata installs dependencies and runs
         expect(strtolower($workflow))->not->toContain($term);
     }
 
-    foreach (array_merge(p49ForbiddenProjectTerms(), p49ObviousSecretPatterns(), ['E:/laragon', 'E:\\laragon', 'ibake-v2']) as $term) {
+    foreach (array_merge(p49ForbiddenProjectTerms(), p49ObviousSecretPatterns(), ['E:/laragon', 'E:\\laragon', 'mrezdev-v2']) as $term) {
         expect($workflow)->not->toContain($term);
     }
 });

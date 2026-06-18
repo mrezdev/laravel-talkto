@@ -1,10 +1,10 @@
 <?php
 
-namespace Ibake\TalktoReliable\Services;
+namespace Mrezdev\LaravelTalkto\Services;
 
-use Ibake\TalktoReliable\Contracts\TalktoOutgoingTargetRegistryContract;
-use Ibake\TalktoReliable\Exceptions\InvalidTalktoSignatureException;
-use Ibake\TalktoReliable\Exceptions\InvalidTalktoOutgoingTarget;
+use Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract;
+use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoSignatureException;
+use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoOutgoingTarget;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 

@@ -1,13 +1,13 @@
 <?php
 
-use Ibake\TalktoReliable\Jobs\ProcessIncomingTalktoMessage;
-use Ibake\TalktoReliable\Jobs\SendTalktoMessage;
-use Ibake\TalktoReliable\Models\TalktoDeadLetter;
-use Ibake\TalktoReliable\Models\TalktoEvent;
-use Ibake\TalktoReliable\Models\TalktoMessage;
-use Ibake\TalktoReliable\Services\TalktoDeadLetterQueue;
-use Ibake\TalktoReliable\Services\TalktoOutgoingEnvelopeBuilder;
-use Ibake\TalktoReliable\Services\TalktoRetryPolicy;
+use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
+use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
+use Mrezdev\LaravelTalkto\Models\TalktoEvent;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
+use Mrezdev\LaravelTalkto\Services\TalktoOutgoingEnvelopeBuilder;
+use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -239,7 +239,7 @@ function dlqOutgoingMessage(string $messageId, array $attributes = []): TalktoMe
         'target_service' => 'peer',
         'command' => 'domain.command',
         'payload' => ['id' => $messageId],
-        'payload_hash' => app(\Ibake\TalktoReliable\Services\TalktoPayloadHasher::class)->hash(['id' => $messageId]),
+        'payload_hash' => app(\Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher::class)->hash(['id' => $messageId]),
         'schema_version' => 1,
         'source_action_status' => 'succeeded_assumed',
         'transport_status' => 'pending',

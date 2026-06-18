@@ -1,5 +1,5 @@
 <?php
 
-use Ibake\TalktoReliable\Tests\TestCase;
+use Mrezdev\LaravelTalkto\Tests\TestCase;
 
 uses(TestCase::class)->in('Feature', 'Unit');

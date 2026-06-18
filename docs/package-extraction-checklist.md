@@ -1,6 +1,6 @@
 # Package Extraction Checklist
 
-Use this checklist when moving `packages/talkto-reliable` into its own private repository.
+Use this checklist when moving `packages/laravel-talkto` into its own private repository.
 
 ## Copy
 

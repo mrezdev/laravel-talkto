@@ -3,9 +3,9 @@
 Install the package through Composer and publish only the assets your host application needs.
 
 ```bash
-composer require ibake/talkto-reliable
-php artisan vendor:publish --tag=talkto-reliable-config
-php artisan vendor:publish --tag=talkto-reliable-migrations
+composer require mrezdev/laravel-talkto
+php artisan vendor:publish --tag=laravel-talkto-config
+php artisan vendor:publish --tag=laravel-talkto-migrations
 ```
 
 Package routes and migrations are disabled by default. Existing applications should keep them disabled until they have checked for duplicate tables and duplicate receive endpoints.

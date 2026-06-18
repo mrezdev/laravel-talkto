@@ -54,9 +54,9 @@ Use a correlation id to connect source logs, destination logs, attempts, callbac
 ## Handler Contract Example
 
 ```php
-use Ibake\TalktoReliable\Contracts\CommandHandlerContract;
-use Ibake\TalktoReliable\Models\TalktoMessage;
-use Ibake\TalktoReliable\Services\TalktoIncomingCommandResult;
+use Mrezdev\LaravelTalkto\Contracts\CommandHandlerContract;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
 
 final class ExampleCommandHandler implements CommandHandlerContract
 {

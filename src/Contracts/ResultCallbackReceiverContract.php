@@ -1,6 +1,6 @@
 <?php
 
-namespace Ibake\TalktoReliable\Contracts;
+namespace Mrezdev\LaravelTalkto\Contracts;
 
 interface ResultCallbackReceiverContract
 {

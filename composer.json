@@ -1,6 +1,6 @@
 {
-    "name": "ibake/talkto-reliable",
-    "description": "Reliable and secure Talkto communication layer for Laravel applications.",
+    "name": "mrezdev/laravel-talkto",
+    "description": "Laravel Talkto provides a reliable and secure service-to-service communication layer for Laravel applications.",
     "type": "library",
     "license": "proprietary",
     "keywords": [
@@ -14,7 +14,7 @@
     ],
     "authors": [
         {
-            "name": "Talkto Reliable Maintainers",
+            "name": "Laravel Talkto Maintainers",
             "role": "Maintainers"
         }
     ],
@@ -37,12 +37,12 @@
     },
     "autoload": {
         "psr-4": {
-            "Ibake\\TalktoReliable\\": "src/"
+            "Mrezdev\\LaravelTalkto\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Ibake\\TalktoReliable\\Tests\\": "tests/"
+            "Mrezdev\\LaravelTalkto\\Tests\\": "tests/"
         }
     },
     "scripts": {
@@ -56,7 +56,7 @@
     "extra": {
         "laravel": {
             "providers": [
-                "Ibake\\TalktoReliable\\TalktoReliableServiceProvider"
+                "Mrezdev\\LaravelTalkto\\LaravelTalktoServiceProvider"
             ]
         }
     }

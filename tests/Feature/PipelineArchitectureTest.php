@@ -1,14 +1,14 @@
 <?php
 
-use Ibake\TalktoReliable\Jobs\ProcessIncomingTalktoMessage;
-use Ibake\TalktoReliable\Jobs\SendTalktoMessage;
-use Ibake\TalktoReliable\Pipelines\ProcessIncomingTalktoMessagePipeline;
-use Ibake\TalktoReliable\Pipelines\ReceiveIncomingTalktoMessagePipeline;
-use Ibake\TalktoReliable\Pipelines\SendOutgoingTalktoMessagePipeline;
-use Ibake\TalktoReliable\Http\Controllers\TalktoReceiveController;
-use Ibake\TalktoReliable\Services\TalktoOutgoingEnvelopeBuilder;
-use Ibake\TalktoReliable\Services\TalktoRetryPolicy;
-use Ibake\TalktoReliable\Services\TalktoSignatureVerifier;
+use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
+use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
+use Mrezdev\LaravelTalkto\Pipelines\ProcessIncomingTalktoMessagePipeline;
+use Mrezdev\LaravelTalkto\Pipelines\ReceiveIncomingTalktoMessagePipeline;
+use Mrezdev\LaravelTalkto\Pipelines\SendOutgoingTalktoMessagePipeline;
+use Mrezdev\LaravelTalkto\Http\Controllers\TalktoReceiveController;
+use Mrezdev\LaravelTalkto\Services\TalktoOutgoingEnvelopeBuilder;
+use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
+use Mrezdev\LaravelTalkto\Services\TalktoSignatureVerifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 

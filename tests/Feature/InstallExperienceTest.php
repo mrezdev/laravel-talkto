@@ -1,27 +1,27 @@
 <?php
 
-use Ibake\TalktoReliable\Contracts\CommandHandlerContract;
-use Ibake\TalktoReliable\Contracts\IncomingCommandResultContract;
-use Ibake\TalktoReliable\Contracts\ResultCallbackReceiverContract;
-use Ibake\TalktoReliable\Contracts\ResultCallbackSenderContract;
-use Ibake\TalktoReliable\Contracts\SourceActionContract;
-use Ibake\TalktoReliable\Contracts\TalktoIncomingCommandHandler;
-use Ibake\TalktoReliable\Exceptions\InvalidTalktoSignatureException;
-use Ibake\TalktoReliable\Exceptions\TalktoCommandNotAllowedException;
-use Ibake\TalktoReliable\Exceptions\TalktoException;
-use Ibake\TalktoReliable\Exceptions\TalktoIdempotencyException;
-use Ibake\TalktoReliable\Exceptions\TalktoPayloadHashMismatchException;
-use Ibake\TalktoReliable\Models\TalktoAttempt;
-use Ibake\TalktoReliable\Models\TalktoEvent;
-use Ibake\TalktoReliable\Models\TalktoMessage;
-use Ibake\TalktoReliable\Services\TalktoPayloadHasher;
-use Ibake\TalktoReliable\Services\TalktoSigner;
-use Ibake\TalktoReliable\TalktoReliableServiceProvider;
+use Mrezdev\LaravelTalkto\Contracts\CommandHandlerContract;
+use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
+use Mrezdev\LaravelTalkto\Contracts\ResultCallbackReceiverContract;
+use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
+use Mrezdev\LaravelTalkto\Contracts\SourceActionContract;
+use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler;
+use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoSignatureException;
+use Mrezdev\LaravelTalkto\Exceptions\TalktoCommandNotAllowedException;
+use Mrezdev\LaravelTalkto\Exceptions\TalktoException;
+use Mrezdev\LaravelTalkto\Exceptions\TalktoIdempotencyException;
+use Mrezdev\LaravelTalkto\Exceptions\TalktoPayloadHashMismatchException;
+use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
+use Mrezdev\LaravelTalkto\Models\TalktoEvent;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
+use Mrezdev\LaravelTalkto\Services\TalktoSigner;
+use Mrezdev\LaravelTalkto\LaravelTalktoServiceProvider;
 use Illuminate\Support\Facades\Route;
 
 test('service provider is discoverable and loaded by testbench', function (): void {
-    expect(class_exists(TalktoReliableServiceProvider::class))->toBeTrue()
-        ->and(app()->getProvider(TalktoReliableServiceProvider::class))->not->toBeNull();
+    expect(class_exists(LaravelTalktoServiceProvider::class))->toBeTrue()
+        ->and(app()->getProvider(LaravelTalktoServiceProvider::class))->not->toBeNull();
 });
 
 test('published config defaults are safe for a first install', function (): void {

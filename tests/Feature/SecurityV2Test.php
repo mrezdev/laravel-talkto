@@ -1,14 +1,14 @@
 <?php
 
-use Ibake\TalktoReliable\Exceptions\InvalidTalktoSignatureException;
-use Ibake\TalktoReliable\Http\Controllers\TalktoReceiveController;
-use Ibake\TalktoReliable\Jobs\ProcessIncomingTalktoMessage;
-use Ibake\TalktoReliable\Models\TalktoMessage;
-use Ibake\TalktoReliable\Services\TalktoOutgoingEnvelopeBuilder;
-use Ibake\TalktoReliable\Services\TalktoOutgoingMessageFactory;
-use Ibake\TalktoReliable\Services\TalktoPayloadHasher;
-use Ibake\TalktoReliable\Services\TalktoSignatureVerifier;
-use Ibake\TalktoReliable\Services\TalktoSigner;
+use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoSignatureException;
+use Mrezdev\LaravelTalkto\Http\Controllers\TalktoReceiveController;
+use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoOutgoingEnvelopeBuilder;
+use Mrezdev\LaravelTalkto\Services\TalktoOutgoingMessageFactory;
+use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
+use Mrezdev\LaravelTalkto\Services\TalktoSignatureVerifier;
+use Mrezdev\LaravelTalkto\Services\TalktoSigner;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Queue;

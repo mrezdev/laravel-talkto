@@ -1,22 +1,22 @@
 <?php
 
-use Ibake\TalktoReliable\Contracts\TalktoIncomingCommandHandler;
-use Ibake\TalktoReliable\Contracts\TalktoIncomingHandlerRegistryContract;
-use Ibake\TalktoReliable\Contracts\TalktoOutgoingTargetRegistryContract;
-use Ibake\TalktoReliable\Exceptions\InvalidTalktoIncomingHandler;
-use Ibake\TalktoReliable\Exceptions\UnknownTalktoIncomingCommand;
-use Ibake\TalktoReliable\Handlers\NoopIncomingCommandHandler;
-use Ibake\TalktoReliable\Handlers\SkippedIncomingCommandHandler;
-use Ibake\TalktoReliable\Models\TalktoMessage;
-use Ibake\TalktoReliable\Services\TalktoIncomingCommandResolver;
-use Ibake\TalktoReliable\Services\TalktoIncomingCommandResult;
-use Ibake\TalktoReliable\Services\TalktoOutgoingEnvelopeBuilder;
-use Ibake\TalktoReliable\Services\TalktoOutgoingMessageFactory;
-use Ibake\TalktoReliable\Services\TalktoOutgoingTarget;
-use Ibake\TalktoReliable\Services\TalktoPayloadHasher;
-use Ibake\TalktoReliable\Services\TalktoSignatureVerifier;
-use Ibake\TalktoReliable\Services\TalktoSigner;
-use Ibake\TalktoReliable\TalktoReliableServiceProvider;
+use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler;
+use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingHandlerRegistryContract;
+use Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract;
+use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoIncomingHandler;
+use Mrezdev\LaravelTalkto\Exceptions\UnknownTalktoIncomingCommand;
+use Mrezdev\LaravelTalkto\Handlers\NoopIncomingCommandHandler;
+use Mrezdev\LaravelTalkto\Handlers\SkippedIncomingCommandHandler;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResolver;
+use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
+use Mrezdev\LaravelTalkto\Services\TalktoOutgoingEnvelopeBuilder;
+use Mrezdev\LaravelTalkto\Services\TalktoOutgoingMessageFactory;
+use Mrezdev\LaravelTalkto\Services\TalktoOutgoingTarget;
+use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
+use Mrezdev\LaravelTalkto\Services\TalktoSignatureVerifier;
+use Mrezdev\LaravelTalkto\Services\TalktoSigner;
+use Mrezdev\LaravelTalkto\LaravelTalktoServiceProvider;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\ServiceProvider;
 
@@ -225,8 +225,8 @@ test('commands options publish tags and required config keys remain stable', fun
         ->and($commands['talkto:report']->getDefinition()->hasOption('to'))->toBeTrue()
         ->and($commands['talkto:report']->getDefinition()->hasOption('json'))->toBeTrue();
 
-    foreach (['talkto-reliable-config', 'talkto-config', 'talkto-reliable-migrations', 'talkto-migrations'] as $tag) {
-        expect(ServiceProvider::pathsToPublish(TalktoReliableServiceProvider::class, $tag))->not->toBeEmpty();
+    foreach (['laravel-talkto-config', 'talkto-config', 'laravel-talkto-migrations', 'talkto-migrations'] as $tag) {
+        expect(ServiceProvider::pathsToPublish(LaravelTalktoServiceProvider::class, $tag))->not->toBeEmpty();
     }
 
     foreach (['incoming', 'outgoing', 'aliases', 'retry', 'dead_letter', 'security', 'observability'] as $key) {

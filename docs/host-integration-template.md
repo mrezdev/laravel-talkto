@@ -1,6 +1,6 @@
 # Host Integration Template
 
-Use this template when adding Talkto Reliable to a Laravel application.
+Use this template when adding Laravel Talkto to a Laravel application.
 
 This page is the map. The detailed onboarding kit is split by concern:
 

@@ -1,6 +1,6 @@
 # Installing Into Existing Apps
 
-Installing Talkto Reliable into an application that already has local messaging tables, routes, jobs, or config requires an opt-in transition.
+Installing Laravel Talkto into an application that already has local messaging tables, routes, jobs, or config requires an opt-in transition.
 
 ## Main Risks
 

@@ -1,8 +1,8 @@
 <?php
 
-namespace Ibake\TalktoReliable\Services;
+namespace Mrezdev\LaravelTalkto\Services;
 
-use Ibake\TalktoReliable\Exceptions\InvalidTalktoOutgoingTarget;
+use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoOutgoingTarget;
 
 class TalktoOutgoingTarget
 {

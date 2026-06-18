@@ -1,46 +1,46 @@
 <?php
 
-use Ibake\TalktoReliable\Console\Commands\ReportTalktoMessagesCommand;
-use Ibake\TalktoReliable\Console\Commands\ReprocessTalktoDeadLettersCommand;
-use Ibake\TalktoReliable\Console\Commands\RetryFailedTalktoMessagesCommand;
-use Ibake\TalktoReliable\Contracts\TalktoIncomingHandlerRegistryContract;
-use Ibake\TalktoReliable\Contracts\TalktoOutgoingTargetRegistryContract;
-use Ibake\TalktoReliable\Pipelines\ProcessIncomingTalktoMessagePipeline;
-use Ibake\TalktoReliable\Pipelines\ReceiveIncomingTalktoMessagePipeline;
-use Ibake\TalktoReliable\Pipelines\SendOutgoingTalktoMessagePipeline;
-use Ibake\TalktoReliable\Services\TalktoDeadLetterQueue;
-use Ibake\TalktoReliable\Services\TalktoHealthChecker;
-use Ibake\TalktoReliable\Services\TalktoMetricsCollector;
-use Ibake\TalktoReliable\Services\TalktoRetryPolicy;
-use Ibake\TalktoReliable\TalktoReliableServiceProvider;
+use Mrezdev\LaravelTalkto\Console\Commands\ReportTalktoMessagesCommand;
+use Mrezdev\LaravelTalkto\Console\Commands\ReprocessTalktoDeadLettersCommand;
+use Mrezdev\LaravelTalkto\Console\Commands\RetryFailedTalktoMessagesCommand;
+use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingHandlerRegistryContract;
+use Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract;
+use Mrezdev\LaravelTalkto\Pipelines\ProcessIncomingTalktoMessagePipeline;
+use Mrezdev\LaravelTalkto\Pipelines\ReceiveIncomingTalktoMessagePipeline;
+use Mrezdev\LaravelTalkto\Pipelines\SendOutgoingTalktoMessagePipeline;
+use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
+use Mrezdev\LaravelTalkto\Services\TalktoHealthChecker;
+use Mrezdev\LaravelTalkto\Services\TalktoMetricsCollector;
+use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
+use Mrezdev\LaravelTalkto\LaravelTalktoServiceProvider;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\ServiceProvider;
 
 test('composer metadata is package release friendly', function (): void {
     $composer = json_decode((string) file_get_contents(__DIR__.'/../../composer.json'), true);
 
-    expect($composer['name'])->toBe('ibake/talkto-reliable')
+    expect($composer['name'])->toBe('mrezdev/laravel-talkto')
         ->and($composer['description'])->toBeString()->not->toBe('')
         ->and($composer['type'])->toBe('library')
         ->and($composer['license'])->toBeString()->not->toBe('')
-        ->and($composer['autoload']['psr-4']['Ibake\\TalktoReliable\\'])->toBe('src/')
-        ->and($composer['autoload-dev']['psr-4']['Ibake\\TalktoReliable\\Tests\\'])->toBe('tests/')
-        ->and($composer['extra']['laravel']['providers'])->toContain(TalktoReliableServiceProvider::class)
+        ->and($composer['autoload']['psr-4']['Mrezdev\\LaravelTalkto\\'])->toBe('src/')
+        ->and($composer['autoload-dev']['psr-4']['Mrezdev\\LaravelTalkto\\Tests\\'])->toBe('tests/')
+        ->and($composer['extra']['laravel']['providers'])->toContain(LaravelTalktoServiceProvider::class)
         ->and($composer['scripts']['test'])->toBe('pest');
 });
 
 test('service provider exposes config and migration publish tags', function (): void {
     $configTags = [
-        'talkto-reliable-config',
+        'laravel-talkto-config',
         'talkto-config',
     ];
     $migrationTags = [
-        'talkto-reliable-migrations',
+        'laravel-talkto-migrations',
         'talkto-migrations',
     ];
 
     foreach ($configTags as $tag) {
-        $paths = ServiceProvider::pathsToPublish(TalktoReliableServiceProvider::class, $tag);
+        $paths = ServiceProvider::pathsToPublish(LaravelTalktoServiceProvider::class, $tag);
         $source = str_replace('\\', '/', (string) array_key_first($paths));
 
         expect($paths)->not->toBeEmpty()
@@ -48,7 +48,7 @@ test('service provider exposes config and migration publish tags', function (): 
     }
 
     foreach ($migrationTags as $tag) {
-        $paths = ServiceProvider::pathsToPublish(TalktoReliableServiceProvider::class, $tag);
+        $paths = ServiceProvider::pathsToPublish(LaravelTalktoServiceProvider::class, $tag);
         $source = str_replace('\\', '/', (string) array_key_first($paths));
 
         expect($paths)->not->toBeEmpty()

@@ -1,6 +1,6 @@
 # Smoke Tests
 
-Run these checks in a non-production host application after installing or upgrading Talkto Reliable.
+Run these checks in a non-production host application after installing or upgrading Laravel Talkto.
 
 1. Install or update the package.
 2. Publish config and migrations if the host owns the package config/tables.
