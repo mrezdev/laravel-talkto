@@ -2,6 +2,7 @@
 
 namespace Ibake\TalktoReliable\Services;
 
+use Ibake\TalktoReliable\Contracts\TalktoOutgoingTargetRegistryContract;
 use Ibake\TalktoReliable\Models\TalktoEvent;
 use Ibake\TalktoReliable\Models\TalktoMessage;
 use Illuminate\Contracts\Support\Arrayable;
@@ -13,7 +14,8 @@ use JsonSerializable;
 class TalktoOutgoingMessageFactory
 {
     public function __construct(
-        private readonly TalktoPayloadHasher $payloadHasher
+        private readonly TalktoPayloadHasher $payloadHasher,
+        private readonly TalktoOutgoingTargetRegistryContract $targets
     ) {
     }
 
@@ -23,10 +25,9 @@ class TalktoOutgoingMessageFactory
         mixed $payload = [],
         array $options = []
     ): TalktoMessage {
-        $resolvedTarget = config("talkto.aliases.{$target}", $target);
-        $targetConfig = config("talkto.outgoing.{$resolvedTarget}");
+        $resolvedTarget = $this->resolvedTargetName($target);
 
-        if (! is_array($targetConfig)) {
+        if (! $this->targets->resolve($target)) {
             throw new InvalidArgumentException("Talkto outgoing target [{$target}] is not configured.");
         }
 
@@ -111,6 +112,13 @@ class TalktoOutgoingMessageFactory
 
             return $message;
         });
+    }
+
+    private function resolvedTargetName(string $target): string
+    {
+        $alias = config("talkto.aliases.{$target}");
+
+        return is_string($alias) && $alias !== '' ? $alias : $target;
     }
 
     protected function messageModelClass(): string

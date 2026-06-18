@@ -110,6 +110,33 @@ $message = app(\Ibake\TalktoReliable\Services\TalktoOutgoingMessageFactory::clas
     );
 ```
 
+## Outgoing Targets
+
+Outgoing targets describe where a command should be delivered and how it should be signed. Existing `talkto.outgoing` config remains supported:
+
+```php
+'outgoing' => [
+    'target-service' => [
+        'url' => env('TALKTO_TARGET_SERVICE_URL'),
+        'secret' => env('TALKTO_TO_TARGET_SERVICE_SECRET'),
+        'endpoint' => '/api/talkto/receive',
+        'headers' => [],
+    ],
+],
+```
+
+Hosts can also register or override targets from a service provider:
+
+```php
+app(\Ibake\TalktoReliable\Contracts\TalktoOutgoingTargetRegistryContract::class)
+    ->register('target-service', [
+        'url' => 'https://target.test',
+        'secret' => env('TALKTO_TO_TARGET_SERVICE_SECRET'),
+    ]);
+```
+
+Delivery still runs through the existing queued send job. Retry/backoff and DLQ behavior continue to handle transport failures after the target is resolved.
+
 ## Incoming Handlers
 
 Destination applications register incoming command handlers while keeping domain behavior in the host:

@@ -2,13 +2,15 @@
 
 namespace Ibake\TalktoReliable\Services;
 
+use Ibake\TalktoReliable\Contracts\TalktoOutgoingTargetRegistryContract;
+use Ibake\TalktoReliable\Exceptions\InvalidTalktoOutgoingTarget;
 use Illuminate\Database\Eloquent\Model;
-use InvalidArgumentException;
 
 class TalktoOutgoingEnvelopeBuilder
 {
     public function __construct(
-        private readonly TalktoSigner $signer
+        private readonly TalktoSigner $signer,
+        private readonly TalktoOutgoingTargetRegistryContract $targets
     ) {
     }
 
@@ -34,10 +36,11 @@ class TalktoOutgoingEnvelopeBuilder
     public function buildHeaders(Model $message, ?string $timestamp = null): array
     {
         $timestamp ??= now()->toIso8601String();
-        $secret = config("talkto.outgoing.{$message->target_service}.secret");
+        $target = $this->targets->get((string) $message->target_service);
+        $secret = $target->secret();
 
-        if ($secret === null || $secret === '') {
-            throw new InvalidArgumentException("Talkto outgoing secret for target [{$message->target_service}] is not configured.");
+        if ($secret === null) {
+            throw InvalidTalktoOutgoingTarget::forTarget((string) $message->target_service, 'secret is not configured');
         }
 
         $signature = $this->signer->sign(
@@ -50,12 +53,12 @@ class TalktoOutgoingEnvelopeBuilder
             (string) $secret
         );
 
-        return [
+        return array_merge($target->headers(), [
             'X-Talkto-Signature' => $signature,
             'X-Talkto-Timestamp' => $timestamp,
             'X-Talkto-Message-Id' => $message->message_id,
             'X-Talkto-Protocol-Version' => '2',
-        ];
+        ]);
     }
 
     public function build(Model $message): array
@@ -68,13 +71,12 @@ class TalktoOutgoingEnvelopeBuilder
 
     public function endpointFor(Model $message): string
     {
-        $baseUrl = config("talkto.outgoing.{$message->target_service}.url");
-        $endpoint = config("talkto.outgoing.{$message->target_service}.endpoint", '/api/talkto/receive');
+        return $this->targets->get((string) $message->target_service)->endpointUrl();
+    }
 
-        if ($baseUrl === null || $baseUrl === '') {
-            throw new InvalidArgumentException("Talkto outgoing URL for target [{$message->target_service}] is not configured.");
-        }
-
-        return rtrim((string) $baseUrl, '/') . '/' . ltrim((string) $endpoint, '/');
+    public function timeoutFor(Model $message): int
+    {
+        return $this->targets->get((string) $message->target_service)->timeout()
+            ?? (int) config('talkto.http.timeout_seconds', 20);
     }
 }

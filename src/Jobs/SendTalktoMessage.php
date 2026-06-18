@@ -69,7 +69,7 @@ class SendTalktoMessage implements ShouldQueue
             $headers = $builder->buildHeaders($message);
 
             $response = Http::withHeaders($headers)
-                ->timeout((int) config('talkto.http.timeout_seconds', 20))
+                ->timeout($builder->timeoutFor($message))
                 ->post($endpoint, $envelope);
 
             if ($response->successful()) {

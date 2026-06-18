@@ -67,11 +67,17 @@ return [
     ],
 
     'outgoing' => [
+        // Outgoing targets can also be registered programmatically through
+        // TalktoOutgoingTargetRegistryContract. Programmatic targets override
+        // config targets with the same name. Existing url/secret/endpoint keys
+        // remain supported.
         // Example:
         // 'peer-service' => [
         //     'url' => env('TALKTO_PEER_SERVICE_URL'),
         //     'secret' => env('TALKTO_TO_PEER_SERVICE_SECRET'),
         //     'endpoint' => env('TALKTO_PEER_SERVICE_ENDPOINT', '/api/talkto/receive'),
+        //     'headers' => [],
+        //     'timeout' => 20,
         //     'mode' => env('TALKTO_PEER_SERVICE_MODE', 'reliable'),
         // ],
     ],
