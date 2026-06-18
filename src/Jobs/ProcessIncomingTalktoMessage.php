@@ -19,6 +19,17 @@ class ProcessIncomingTalktoMessage implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    private const PROCESSABLE_STATUSES = ['queued', 'pending'];
+
+    private const NON_PROCESSABLE_STATUSES = [
+        'processing',
+        'succeeded',
+        'completed',
+        'failed_final',
+        'cancelled',
+        'skipped',
+    ];
+
     public int $tries = 1;
 
     public function __construct(public int $talktoMessageId) {}
@@ -45,12 +56,6 @@ class ProcessIncomingTalktoMessage implements ShouldQueue
         }
 
         if (! $this->isQueuedForProcessing($message)) {
-            $this->createSkippedAttempt(
-                $message,
-                'not_queued',
-                'Message is not queued for destination processing.'
-            );
-
             return;
         }
 
@@ -74,8 +79,15 @@ class ProcessIncomingTalktoMessage implements ShouldQueue
 
     private function isQueuedForProcessing(TalktoMessage $message): bool
     {
-        return $message->overall_status === 'queued'
-            || $message->destination_action_status === 'queued';
+        if (
+            in_array($message->overall_status, self::NON_PROCESSABLE_STATUSES, true)
+            || in_array($message->destination_action_status, self::NON_PROCESSABLE_STATUSES, true)
+        ) {
+            return false;
+        }
+
+        return in_array($message->overall_status, self::PROCESSABLE_STATUSES, true)
+            || in_array($message->destination_action_status, self::PROCESSABLE_STATUSES, true);
     }
 
     private function processorLockName(): string
@@ -128,12 +140,6 @@ class ProcessIncomingTalktoMessage implements ShouldQueue
             }
 
             if (! $this->isQueuedForProcessing($message)) {
-                $this->createSkippedAttempt(
-                    $message,
-                    'not_queued',
-                    'Message is not queued for destination processing.'
-                );
-
                 return null;
             }
 

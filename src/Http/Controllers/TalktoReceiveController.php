@@ -6,6 +6,7 @@ use Ibake\TalktoReliable\Jobs\ProcessIncomingTalktoMessage;
 use Ibake\TalktoReliable\Models\TalktoEvent;
 use Ibake\TalktoReliable\Models\TalktoMessage;
 use Ibake\TalktoReliable\Services\TalktoSignatureVerifier;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -59,12 +60,7 @@ class TalktoReceiveController
             ->first();
 
         if ($existingMessage) {
-            return new JsonResponse([
-                'received' => true,
-                'duplicate' => true,
-                'status' => $existingMessage->overall_status,
-                'message_id' => $existingMessage->message_id,
-            ], 200);
+            return $this->duplicateResponse($existingMessage, 'already_received');
         }
 
         $idempotencyKey = $envelope['idempotency_key'] ?? null;
@@ -72,60 +68,72 @@ class TalktoReceiveController
         if ($idempotencyKey !== null && $idempotencyKey !== '') {
             $processedMessage = $messageClass::query()
                 ->where('idempotency_key', $idempotencyKey)
+                ->where('direction', 'incoming')
                 ->whereIn('overall_status', ['completed', 'succeeded'])
                 ->first();
 
             if ($processedMessage) {
-                return new JsonResponse([
-                    'received' => true,
-                    'duplicate' => true,
-                    'status' => 'already_processed',
-                    'message_id' => $processedMessage->message_id,
-                ], 200);
+                return $this->duplicateResponse($processedMessage, 'already_processed');
             }
         }
 
-        $message = DB::transaction(function () use ($envelope, $messageClass): TalktoMessage {
-            $eventClass = $this->eventModelClass();
+        try {
+            $message = DB::transaction(function () use ($envelope, $messageClass): TalktoMessage {
+                $eventClass = $this->eventModelClass();
 
-            $message = $messageClass::create([
-                'message_id' => $envelope['message_id'],
-                'correlation_id' => $envelope['correlation_id'] ?? null,
-                'parent_message_id' => $envelope['parent_message_id'] ?? null,
-                'direction' => 'incoming',
-                'source_service' => $envelope['source'],
-                'target_service' => $envelope['target'],
-                'command' => $envelope['command'],
-                'business_key' => $envelope['business_key'] ?? null,
-                'idempotency_key' => $envelope['idempotency_key'] ?? null,
-                'payload' => $envelope['payload'] ?? null,
-                'payload_hash' => $envelope['payload_hash'],
-                'schema_version' => $envelope['schema_version'] ?? 1,
-                'source_action_status' => null,
-                'transport_status' => null,
-                'destination_receive_status' => 'received',
-                'destination_action_status' => 'queued',
-                'overall_status' => 'queued',
-                'received_at' => now(),
-            ]);
-
-            $eventClass::create([
-                'talkto_message_id' => $message->id,
-                'message_id' => $message->message_id,
-                'service_name' => config('talkto.service', 'app'),
-                'event_type' => 'message_received',
-                'old_status' => null,
-                'new_status' => 'queued',
-                'meta' => array_filter([
-                    'source' => $envelope['source'],
-                    'target' => $envelope['target'],
+                $message = $messageClass::create([
+                    'message_id' => $envelope['message_id'],
+                    'correlation_id' => $envelope['correlation_id'] ?? null,
+                    'parent_message_id' => $envelope['parent_message_id'] ?? null,
+                    'direction' => 'incoming',
+                    'source_service' => $envelope['source'],
+                    'target_service' => $envelope['target'],
                     'command' => $envelope['command'],
                     'business_key' => $envelope['business_key'] ?? null,
-                ], fn (mixed $value): bool => $value !== null),
-            ]);
+                    'idempotency_key' => $envelope['idempotency_key'] ?? null,
+                    'payload' => $envelope['payload'] ?? null,
+                    'payload_hash' => $envelope['payload_hash'],
+                    'schema_version' => $envelope['schema_version'] ?? 1,
+                    'source_action_status' => null,
+                    'transport_status' => null,
+                    'destination_receive_status' => 'received',
+                    'destination_action_status' => 'queued',
+                    'overall_status' => 'queued',
+                    'received_at' => now(),
+                ]);
 
-            return $message;
-        });
+                $eventClass::create([
+                    'talkto_message_id' => $message->id,
+                    'message_id' => $message->message_id,
+                    'service_name' => config('talkto.service', 'app'),
+                    'event_type' => 'message_received',
+                    'old_status' => null,
+                    'new_status' => 'queued',
+                    'meta' => array_filter([
+                        'source' => $envelope['source'],
+                        'target' => $envelope['target'],
+                        'command' => $envelope['command'],
+                        'business_key' => $envelope['business_key'] ?? null,
+                    ], fn (mixed $value): bool => $value !== null),
+                ]);
+
+                return $message;
+            });
+        } catch (QueryException $exception) {
+            if (! $this->isDuplicateMessageIdException($exception, (new $messageClass)->getTable())) {
+                throw $exception;
+            }
+
+            $existingMessage = $messageClass::query()
+                ->where('message_id', $messageId)
+                ->first();
+
+            if (! $existingMessage) {
+                throw $exception;
+            }
+
+            return $this->duplicateResponse($existingMessage, 'already_received');
+        }
 
         $jobClass = $this->processIncomingJobClass();
         $jobClass::dispatch($message->id)->afterCommit();
@@ -135,6 +143,33 @@ class TalktoReceiveController
             'status' => 'queued',
             'message_id' => $message->message_id,
         ], 202);
+    }
+
+    private function duplicateResponse(TalktoMessage $message, string $status): JsonResponse
+    {
+        return new JsonResponse([
+            'received' => true,
+            'duplicate' => true,
+            'status' => $status,
+            'message_id' => $message->message_id,
+        ], 200);
+    }
+
+    private function isDuplicateMessageIdException(QueryException $exception, string $messageTable): bool
+    {
+        $sqlState = (string) ($exception->errorInfo[0] ?? '');
+        $driverCode = (string) ($exception->errorInfo[1] ?? '');
+        $message = strtolower($exception->getMessage());
+        $table = strtolower($messageTable);
+
+        $isDuplicateConstraint = in_array($sqlState, ['23000', '23505'], true)
+            || in_array($driverCode, ['19', '1062'], true)
+            || str_contains($message, 'unique constraint failed')
+            || str_contains($message, 'duplicate entry');
+
+        return $isDuplicateConstraint
+            && str_contains($message, $table)
+            && str_contains($message, 'message_id');
     }
 
     private function messageModelClass(): string
