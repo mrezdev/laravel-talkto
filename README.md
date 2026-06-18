@@ -227,6 +227,18 @@ Use `--id=`, `--message-id=`, `--dry-run`, or `--force` when needed. Reprocessin
 
 If a reprocessing message reaches final failure again, the existing DLQ row is moved to `failed_reprocess` without resetting its reprocess count.
 
+## Observability Reports
+
+Talkto Reliable includes read-only observability services and a report command over the existing `talkto_messages`, `talkto_attempts`, `talkto_events`, and `talkto_dead_letters` tables. No dashboard/UI is included.
+
+```bash
+php artisan talkto:report --hours=24 --direction=all --limit=20
+```
+
+Use `--json` for machine-readable output, `--from=` and `--to=` for an explicit window, and `--direction=incoming|outgoing|all` to filter message metrics. The report includes message totals, status and direction counts, retry/DLQ counts, health warnings, and recent failures/events. It does not dispatch jobs or mutate rows.
+
+Observability defaults live under `talkto.observability`: report window/limit settings and health thresholds for stale processing messages and due retry backlog grace.
+
 ## Internal Pipelines
 
 The receive controller and queue jobs delegate orchestration to focused pipelines: `ReceiveIncomingTalktoMessagePipeline`, `ProcessIncomingTalktoMessagePipeline`, and `SendOutgoingTalktoMessagePipeline`. Public routes, jobs, retry behavior, DLQ behavior, and handler/target registries remain the external integration points.

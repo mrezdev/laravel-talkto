@@ -3,10 +3,13 @@
 namespace Ibake\TalktoReliable;
 
 use Ibake\TalktoReliable\Console\Commands\RetryFailedTalktoMessagesCommand;
+use Ibake\TalktoReliable\Console\Commands\ReportTalktoMessagesCommand;
 use Ibake\TalktoReliable\Console\Commands\ReprocessTalktoDeadLettersCommand;
 use Ibake\TalktoReliable\Contracts\TalktoIncomingHandlerRegistryContract;
 use Ibake\TalktoReliable\Contracts\TalktoOutgoingTargetRegistryContract;
 use Ibake\TalktoReliable\Services\TalktoIncomingHandlerRegistry;
+use Ibake\TalktoReliable\Services\TalktoHealthChecker;
+use Ibake\TalktoReliable\Services\TalktoMetricsCollector;
 use Ibake\TalktoReliable\Services\TalktoOutgoingTargetRegistry;
 use Illuminate\Support\ServiceProvider;
 
@@ -19,6 +22,8 @@ class TalktoReliableServiceProvider extends ServiceProvider
         $this->app->alias(TalktoIncomingHandlerRegistry::class, TalktoIncomingHandlerRegistryContract::class);
         $this->app->singleton(TalktoOutgoingTargetRegistry::class);
         $this->app->alias(TalktoOutgoingTargetRegistry::class, TalktoOutgoingTargetRegistryContract::class);
+        $this->app->bind(TalktoMetricsCollector::class);
+        $this->app->bind(TalktoHealthChecker::class);
     }
 
     public function boot(): void
@@ -27,6 +32,7 @@ class TalktoReliableServiceProvider extends ServiceProvider
             $this->commands([
                 RetryFailedTalktoMessagesCommand::class,
                 ReprocessTalktoDeadLettersCommand::class,
+                ReportTalktoMessagesCommand::class,
             ]);
         }
 

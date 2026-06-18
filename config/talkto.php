@@ -76,6 +76,18 @@ return [
         'max_reprocess_attempts' => (int) env('TALKTO_DEAD_LETTER_MAX_REPROCESS_ATTEMPTS', 3),
     ],
 
+    'observability' => [
+        'enabled' => env('TALKTO_OBSERVABILITY_ENABLED', true),
+        'report' => [
+            'default_window_hours' => (int) env('TALKTO_REPORT_WINDOW_HOURS', 24),
+            'default_limit' => (int) env('TALKTO_REPORT_LIMIT', 20),
+        ],
+        'health' => [
+            'stale_processing_minutes' => (int) env('TALKTO_STALE_PROCESSING_MINUTES', 15),
+            'due_retry_grace_minutes' => (int) env('TALKTO_DUE_RETRY_GRACE_MINUTES', 5),
+        ],
+    ],
+
     'outgoing' => [
         // Outgoing targets can also be registered programmatically through
         // TalktoOutgoingTargetRegistryContract. Programmatic targets override
