@@ -3,6 +3,7 @@
 use Ibake\TalktoReliable\Contracts\TalktoIncomingCommandHandler;
 use Ibake\TalktoReliable\Jobs\ProcessIncomingTalktoMessage;
 use Ibake\TalktoReliable\Jobs\SendTalktoMessage;
+use Ibake\TalktoReliable\Models\TalktoDeadLetter;
 use Ibake\TalktoReliable\Models\TalktoEvent;
 use Ibake\TalktoReliable\Models\TalktoMessage;
 use Ibake\TalktoReliable\Services\TalktoIncomingCommandResult;
@@ -11,7 +12,6 @@ use Ibake\TalktoReliable\Services\TalktoRetryPolicy;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
-use Illuminate\Support\Facades\Schema;
 
 beforeEach(function (): void {
     $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');
@@ -84,7 +84,7 @@ test('outgoing transport failure becomes final when attempts are exhausted', fun
     expect($message->overall_status)->toBe('failed_final')
         ->and($message->transport_status)->toBe('failed_final')
         ->and($message->next_retry_at)->toBeNull()
-        ->and(Schema::hasTable('talkto_dead_letters'))->toBeFalse();
+        ->and(TalktoDeadLetter::query()->where('message_id', 'retry-outgoing-final')->exists())->toBeTrue();
 });
 
 test('permanent http statuses become final without scheduling retry by default', function (): void {

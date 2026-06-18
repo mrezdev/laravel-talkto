@@ -5,6 +5,7 @@ namespace Ibake\TalktoReliable\Jobs;
 use Ibake\TalktoReliable\Models\TalktoAttempt;
 use Ibake\TalktoReliable\Models\TalktoEvent;
 use Ibake\TalktoReliable\Models\TalktoMessage;
+use Ibake\TalktoReliable\Services\TalktoDeadLetterQueue;
 use Ibake\TalktoReliable\Services\TalktoOutgoingEnvelopeBuilder;
 use Ibake\TalktoReliable\Services\TalktoRetryPolicy;
 use Illuminate\Bus\Queueable;
@@ -285,6 +286,10 @@ class SendTalktoMessage implements ShouldQueue
                 'last_response' => $responseExcerpt,
             ])->save();
 
+            if (! $retryable) {
+                $this->storeDeadLetterIfEnabled($message, $errorMessage);
+            }
+
             $attempt->forceFill([
                 'status' => $message->overall_status,
                 'http_status' => $status,
@@ -333,6 +338,10 @@ class SendTalktoMessage implements ShouldQueue
                 ? $retryPolicy->markRetryableFailure($message, 'transport_status', $errorMessage)
                 : $retryPolicy->markFinalFailure($message, 'transport_status', $errorMessage);
 
+            if (! $retryable) {
+                $this->storeDeadLetterIfEnabled($message, $errorMessage, $throwable);
+            }
+
             $attempt->forceFill([
                 'status' => $message->overall_status,
                 'error_class' => $throwable::class,
@@ -354,6 +363,17 @@ class SendTalktoMessage implements ShouldQueue
 
             $this->recordRetryEvent($eventClass, $message, $retryable ? 'retry_scheduled' : 'retry_exhausted');
         });
+    }
+
+    private function storeDeadLetterIfEnabled(TalktoMessage $message, ?string $failureReason = null, ?Throwable $throwable = null): void
+    {
+        $deadLetterQueue = app(TalktoDeadLetterQueue::class);
+
+        if (! $deadLetterQueue->autoStoreEnabled()) {
+            return;
+        }
+
+        $deadLetterQueue->store($message, $failureReason, $throwable);
     }
 
     private function recordRetryEvent(string $eventClass, TalktoMessage $message, string $eventType): void

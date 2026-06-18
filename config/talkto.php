@@ -12,6 +12,7 @@ return [
         'message' => \Ibake\TalktoReliable\Models\TalktoMessage::class,
         'attempt' => \Ibake\TalktoReliable\Models\TalktoAttempt::class,
         'event' => \Ibake\TalktoReliable\Models\TalktoEvent::class,
+        'dead_letter' => \Ibake\TalktoReliable\Models\TalktoDeadLetter::class,
     ],
 
     'security' => [
@@ -55,6 +56,14 @@ return [
         'final_failure_status' => 'failed_final',
         'retryable_http_statuses' => [408, 425, 429],
         'retry_server_errors' => true,
+    ],
+
+    'dead_letter' => [
+        'enabled' => env('TALKTO_DEAD_LETTER_ENABLED', true),
+        'table' => 'talkto_dead_letters',
+        'auto_store_on_final_failure' => env('TALKTO_DEAD_LETTER_AUTO_STORE', true),
+        'allow_reprocess' => env('TALKTO_DEAD_LETTER_ALLOW_REPROCESS', true),
+        'max_reprocess_attempts' => (int) env('TALKTO_DEAD_LETTER_MAX_REPROCESS_ATTEMPTS', 3),
     ],
 
     'outgoing' => [

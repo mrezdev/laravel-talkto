@@ -5,6 +5,7 @@ namespace Ibake\TalktoReliable\Jobs;
 use Ibake\TalktoReliable\Models\TalktoAttempt;
 use Ibake\TalktoReliable\Models\TalktoEvent;
 use Ibake\TalktoReliable\Models\TalktoMessage;
+use Ibake\TalktoReliable\Services\TalktoDeadLetterQueue;
 use Ibake\TalktoReliable\Services\TalktoIncomingCommandResolver;
 use Ibake\TalktoReliable\Services\TalktoIncomingCommandResult;
 use Ibake\TalktoReliable\Services\TalktoRetryPolicy;
@@ -281,6 +282,10 @@ class ProcessIncomingTalktoMessage implements ShouldQueue
                 ])->save();
             }
 
+            if ($newStatus === $retryPolicy->finalFailureStatus()) {
+                $this->storeDeadLetterIfEnabled($message, $result->errorMessage);
+            }
+
             $attempt->forceFill([
                 'status' => $newStatus,
                 'error_class' => $result->errorClass,
@@ -345,6 +350,10 @@ class ProcessIncomingTalktoMessage implements ShouldQueue
                 ])->save();
             }
 
+            if ($newStatus === $retryPolicy->finalFailureStatus()) {
+                $this->storeDeadLetterIfEnabled($message, $throwable->getMessage(), $throwable);
+            }
+
             if ($attempt) {
                 $attempt->forceFill([
                     'status' => $newStatus,
@@ -370,6 +379,17 @@ class ProcessIncomingTalktoMessage implements ShouldQueue
                 $this->recordRetryEvent($eventClass, $message, $scheduled ? 'retry_scheduled' : 'retry_exhausted');
             }
         });
+    }
+
+    private function storeDeadLetterIfEnabled(TalktoMessage $message, ?string $failureReason = null, ?Throwable $throwable = null): void
+    {
+        $deadLetterQueue = app(TalktoDeadLetterQueue::class);
+
+        if (! $deadLetterQueue->autoStoreEnabled()) {
+            return;
+        }
+
+        $deadLetterQueue->store($message, $failureReason, $throwable);
     }
 
     private function recordRetryEvent(string $eventClass, TalktoMessage $message, string $eventType): void

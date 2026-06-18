@@ -163,6 +163,22 @@ php artisan talkto:retry-failed --direction=outgoing --limit=100
 
 Use `--direction=incoming|outgoing|all` and `--dry-run` when inspecting work. In production, schedule the command from the host application scheduler, for example every minute, after queue workers and retry limits are reviewed.
 
+## Dead Letter Queue
+
+Final or exhausted failures can be preserved in `talkto_dead_letters` so operators can inspect them and optionally dispatch them for reprocessing later. Temporary retryable failures are not dead-lettered.
+
+DLQ behavior is controlled under `talkto.dead_letter`: `enabled`, `table`, `auto_store_on_final_failure`, `allow_reprocess`, and `max_reprocess_attempts`.
+
+Reprocess eligible rows with:
+
+```bash
+php artisan talkto:dlq-reprocess --direction=all --limit=50
+```
+
+Use `--id=`, `--message-id=`, `--dry-run`, or `--force` when needed. Reprocessing dispatches the existing outgoing or incoming jobs and relies on the same retry, status, and idempotency guards; it does not execute handlers inline and does not include a dashboard/UI.
+
+If a reprocessing message reaches final failure again, the existing DLQ row is moved to `failed_reprocess` without resetting its reprocess count.
+
 ## Adding Talkto To A New Laravel Service
 
 Use the onboarding kit when a new Laravel service adopts Talkto Reliable:

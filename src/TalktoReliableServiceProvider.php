@@ -3,6 +3,7 @@
 namespace Ibake\TalktoReliable;
 
 use Ibake\TalktoReliable\Console\Commands\RetryFailedTalktoMessagesCommand;
+use Ibake\TalktoReliable\Console\Commands\ReprocessTalktoDeadLettersCommand;
 use Illuminate\Support\ServiceProvider;
 
 class TalktoReliableServiceProvider extends ServiceProvider
@@ -17,6 +18,7 @@ class TalktoReliableServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 RetryFailedTalktoMessagesCommand::class,
+                ReprocessTalktoDeadLettersCommand::class,
             ]);
         }
 
