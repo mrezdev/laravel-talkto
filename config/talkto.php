@@ -46,8 +46,15 @@ return [
     ],
 
     'retry' => [
-        'max_attempts' => (int) env('TALKTO_MAX_ATTEMPTS', 6),
-        'backoff_seconds' => [60, 300, 900, 3600, 21600],
+        'enabled' => env('TALKTO_RETRY_ENABLED', true),
+        'max_attempts' => (int) env('TALKTO_MAX_ATTEMPTS', 5),
+        'backoff_seconds' => [10, 30, 60, 120, 300],
+        'outgoing_enabled' => env('TALKTO_OUTGOING_RETRY_ENABLED', true),
+        'incoming_enabled' => env('TALKTO_INCOMING_RETRY_ENABLED', false),
+        'retryable_statuses' => ['failed_retryable'],
+        'final_failure_status' => 'failed_final',
+        'retryable_http_statuses' => [408, 425, 429],
+        'retry_server_errors' => true,
     ],
 
     'outgoing' => [

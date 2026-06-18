@@ -28,14 +28,17 @@ return new class extends Migration
             $table->string('destination_action_status', 80)->nullable()->index();
             $table->string('overall_status', 80)->default('created')->index();
             $table->unsignedInteger('attempts')->default(0);
+            $table->unsignedInteger('retry_count')->default(0);
             $table->unsignedInteger('max_attempts')->default(6);
             $table->timestamp('next_attempt_at')->nullable()->index();
+            $table->timestamp('next_retry_at')->nullable()->index();
             $table->integer('last_http_status')->nullable();
             $table->text('last_error')->nullable();
             $table->text('last_response')->nullable();
             $table->timestamp('sent_at')->nullable()->index();
             $table->timestamp('received_at')->nullable();
             $table->timestamp('processing_started_at')->nullable();
+            $table->timestamp('last_attempted_at')->nullable();
             $table->timestamp('completed_at')->nullable();
             $table->timestamp('failed_at')->nullable()->index();
             $table->timestamp('locked_at')->nullable();

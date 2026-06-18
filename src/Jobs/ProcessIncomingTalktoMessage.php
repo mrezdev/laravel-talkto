@@ -7,6 +7,7 @@ use Ibake\TalktoReliable\Models\TalktoEvent;
 use Ibake\TalktoReliable\Models\TalktoMessage;
 use Ibake\TalktoReliable\Services\TalktoIncomingCommandResolver;
 use Ibake\TalktoReliable\Services\TalktoIncomingCommandResult;
+use Ibake\TalktoReliable\Services\TalktoRetryPolicy;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -34,9 +35,10 @@ class ProcessIncomingTalktoMessage implements ShouldQueue
 
     public function __construct(public int $talktoMessageId) {}
 
-    public function handle(mixed $resolver = null): void
+    public function handle(mixed $resolver = null, ?TalktoRetryPolicy $retryPolicy = null): void
     {
         $resolver ??= app(TalktoIncomingCommandResolver::class);
+        $retryPolicy ??= app(TalktoRetryPolicy::class);
 
         $messageClass = $this->messageModelClass();
         $message = $messageClass::query()->find($this->talktoMessageId);
@@ -55,11 +57,11 @@ class ProcessIncomingTalktoMessage implements ShouldQueue
             return;
         }
 
-        if (! $this->isQueuedForProcessing($message)) {
+        if (! $this->isQueuedForProcessing($message, $retryPolicy)) {
             return;
         }
 
-        $processing = $this->markProcessing();
+        $processing = $this->markProcessing($retryPolicy);
 
         if ($processing === null) {
             return;
@@ -71,13 +73,13 @@ class ProcessIncomingTalktoMessage implements ShouldQueue
             $handler = $resolver->resolve($message);
             $result = $handler->handle($message);
 
-            $this->applyResult($message, $attempt, $result);
+            $this->applyResult($message, $attempt, $result, $retryPolicy);
         } catch (Throwable $throwable) {
-            $this->applyUnexpectedFailure($message, $attempt, $throwable);
+            $this->applyUnexpectedFailure($message, $attempt, $throwable, $retryPolicy);
         }
     }
 
-    private function isQueuedForProcessing(TalktoMessage $message): bool
+    private function isQueuedForProcessing(TalktoMessage $message, TalktoRetryPolicy $retryPolicy): bool
     {
         if (
             in_array($message->overall_status, self::NON_PROCESSABLE_STATUSES, true)
@@ -87,7 +89,8 @@ class ProcessIncomingTalktoMessage implements ShouldQueue
         }
 
         return in_array($message->overall_status, self::PROCESSABLE_STATUSES, true)
-            || in_array($message->destination_action_status, self::PROCESSABLE_STATUSES, true);
+            || in_array($message->destination_action_status, self::PROCESSABLE_STATUSES, true)
+            || ($retryPolicy->canRetry($message) && $retryPolicy->isDue($message));
     }
 
     private function processorLockName(): string
@@ -113,9 +116,9 @@ class ProcessIncomingTalktoMessage implements ShouldQueue
         ]);
     }
 
-    private function markProcessing(): ?array
+    private function markProcessing(TalktoRetryPolicy $retryPolicy): ?array
     {
-        return DB::transaction(function (): ?array {
+        return DB::transaction(function () use ($retryPolicy): ?array {
             $messageClass = $this->messageModelClass();
             $attemptClass = $this->attemptModelClass();
             $eventClass = $this->eventModelClass();
@@ -139,7 +142,7 @@ class ProcessIncomingTalktoMessage implements ShouldQueue
                 return null;
             }
 
-            if (! $this->isQueuedForProcessing($message)) {
+            if (! $this->isQueuedForProcessing($message, $retryPolicy)) {
                 return null;
             }
 
@@ -151,6 +154,9 @@ class ProcessIncomingTalktoMessage implements ShouldQueue
                 'destination_action_status' => 'processing',
                 'overall_status' => 'processing',
                 'processing_started_at' => $message->processing_started_at ?: now(),
+                'last_attempted_at' => now(),
+                'next_retry_at' => null,
+                'next_attempt_at' => null,
                 'locked_at' => now(),
                 'locked_by' => $this->processorLockName(),
             ])->save();
@@ -182,7 +188,7 @@ class ProcessIncomingTalktoMessage implements ShouldQueue
         });
     }
 
-    private function applyResult(TalktoMessage $message, TalktoAttempt $attempt, TalktoIncomingCommandResult $result): void
+    private function applyResult(TalktoMessage $message, TalktoAttempt $attempt, TalktoIncomingCommandResult $result, TalktoRetryPolicy $retryPolicy): void
     {
         if ($result->succeeded) {
             $this->applySuccessfulResult($message, $attempt, $result);
@@ -190,7 +196,7 @@ class ProcessIncomingTalktoMessage implements ShouldQueue
             return;
         }
 
-        $this->applyFailedResult($message, $attempt, $result);
+        $this->applyFailedResult($message, $attempt, $result, $retryPolicy);
     }
 
     private function applySuccessfulResult(TalktoMessage $message, TalktoAttempt $attempt, TalktoIncomingCommandResult $result): void
@@ -238,11 +244,11 @@ class ProcessIncomingTalktoMessage implements ShouldQueue
         });
     }
 
-    private function applyFailedResult(TalktoMessage $message, TalktoAttempt $attempt, TalktoIncomingCommandResult $result): void
+    private function applyFailedResult(TalktoMessage $message, TalktoAttempt $attempt, TalktoIncomingCommandResult $result, TalktoRetryPolicy $retryPolicy): void
     {
         $newStatus = $result->retryable ? 'failed_retryable' : 'failed_final';
 
-        DB::transaction(function () use ($message, $attempt, $result, $newStatus): void {
+        DB::transaction(function () use ($message, $attempt, $result, $newStatus, $retryPolicy): void {
             $messageClass = $this->messageModelClass();
             $eventClass = $this->eventModelClass();
 
@@ -252,14 +258,28 @@ class ProcessIncomingTalktoMessage implements ShouldQueue
                 return;
             }
 
-            $message->forceFill([
-                'destination_action_status' => $newStatus,
-                'overall_status' => $newStatus,
-                'failed_at' => now(),
-                'last_error' => $result->errorMessage,
-                'locked_at' => null,
-                'locked_by' => null,
-            ])->save();
+            $scheduled = false;
+
+            if ($result->retryable && $retryPolicy->isDirectionEnabled($message)) {
+                if ($retryPolicy->canScheduleRetry($message)) {
+                    $retryPolicy->markRetryableFailure($message, 'destination_action_status', $result->errorMessage);
+                    $newStatus = $message->overall_status;
+                    $scheduled = true;
+                } else {
+                    $retryPolicy->markFinalFailure($message, 'destination_action_status', $result->errorMessage);
+                    $newStatus = $message->overall_status;
+                }
+            } else {
+                $message->forceFill([
+                    'destination_action_status' => $newStatus,
+                    'overall_status' => $newStatus,
+                    'failed_at' => now(),
+                    'last_attempted_at' => now(),
+                    'last_error' => $result->errorMessage,
+                    'locked_at' => null,
+                    'locked_by' => null,
+                ])->save();
+            }
 
             $attempt->forceFill([
                 'status' => $newStatus,
@@ -282,12 +302,16 @@ class ProcessIncomingTalktoMessage implements ShouldQueue
                     'retryable' => $result->retryable,
                 ]),
             ]);
+
+            if ($result->retryable && $retryPolicy->isDirectionEnabled($message)) {
+                $this->recordRetryEvent($eventClass, $message, $scheduled ? 'retry_scheduled' : 'retry_exhausted');
+            }
         });
     }
 
-    private function applyUnexpectedFailure(TalktoMessage $message, ?TalktoAttempt $attempt, Throwable $throwable): void
+    private function applyUnexpectedFailure(TalktoMessage $message, ?TalktoAttempt $attempt, Throwable $throwable, TalktoRetryPolicy $retryPolicy): void
     {
-        DB::transaction(function () use ($message, $attempt, $throwable): void {
+        DB::transaction(function () use ($message, $attempt, $throwable, $retryPolicy): void {
             $messageClass = $this->messageModelClass();
             $eventClass = $this->eventModelClass();
 
@@ -297,18 +321,33 @@ class ProcessIncomingTalktoMessage implements ShouldQueue
                 return;
             }
 
-            $message->forceFill([
-                'destination_action_status' => 'failed_retryable',
-                'overall_status' => 'failed_retryable',
-                'failed_at' => now(),
-                'last_error' => $throwable->getMessage(),
-                'locked_at' => null,
-                'locked_by' => null,
-            ])->save();
+            $newStatus = 'failed_retryable';
+            $scheduled = false;
+
+            if ($retryPolicy->isDirectionEnabled($message)) {
+                if ($retryPolicy->canScheduleRetry($message)) {
+                    $retryPolicy->markRetryableFailure($message, 'destination_action_status', $throwable->getMessage());
+                    $scheduled = true;
+                } else {
+                    $retryPolicy->markFinalFailure($message, 'destination_action_status', $throwable->getMessage());
+                }
+
+                $newStatus = $message->overall_status;
+            } else {
+                $message->forceFill([
+                    'destination_action_status' => $newStatus,
+                    'overall_status' => $newStatus,
+                    'failed_at' => now(),
+                    'last_attempted_at' => now(),
+                    'last_error' => $throwable->getMessage(),
+                    'locked_at' => null,
+                    'locked_by' => null,
+                ])->save();
+            }
 
             if ($attempt) {
                 $attempt->forceFill([
-                    'status' => 'failed_retryable',
+                    'status' => $newStatus,
                     'error_class' => $throwable::class,
                     'error_message' => $throwable->getMessage(),
                 ])->save();
@@ -320,13 +359,34 @@ class ProcessIncomingTalktoMessage implements ShouldQueue
                 'service_name' => config('talkto.service', 'app'),
                 'event_type' => 'destination_processing_failed',
                 'old_status' => 'processing',
-                'new_status' => 'failed_retryable',
+                'new_status' => $newStatus,
                 'meta' => $this->eventMeta($message, [
                     'error_class' => $throwable::class,
                     'retryable' => true,
                 ]),
             ]);
+
+            if ($retryPolicy->isDirectionEnabled($message)) {
+                $this->recordRetryEvent($eventClass, $message, $scheduled ? 'retry_scheduled' : 'retry_exhausted');
+            }
         });
+    }
+
+    private function recordRetryEvent(string $eventClass, TalktoMessage $message, string $eventType): void
+    {
+        $eventClass::query()->create([
+            'talkto_message_id' => $message->id,
+            'message_id' => $message->message_id,
+            'service_name' => config('talkto.service', 'app'),
+            'event_type' => $eventType,
+            'old_status' => 'processing',
+            'new_status' => $message->overall_status,
+            'meta' => $this->eventMeta($message, [
+                'direction' => $message->direction,
+                'retry_count' => (int) ($message->retry_count ?? 0),
+                'next_retry_at' => optional($message->next_retry_at)->toIso8601String(),
+            ]),
+        ]);
     }
 
     private function eventMeta(TalktoMessage $message, array $extra = []): array

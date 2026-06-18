@@ -149,6 +149,20 @@ app(ResultCallbackSenderContract::class)->sendResultCallback(
 
 Concrete callback sender and receiver services may remain host-owned while implementing the package contracts.
 
+## Retry And Backoff
+
+Talkto Reliable stores retry state on `talkto_messages` and uses database state as the source of truth. Outgoing delivery retries are enabled by default; incoming handler retries are disabled by default because handlers may have host-owned side effects.
+
+Key config values live under `talkto.retry`: `enabled`, `max_attempts`, `backoff_seconds`, `outgoing_enabled`, `incoming_enabled`, `retryable_statuses`, and `final_failure_status`.
+
+Run due retries with:
+
+```bash
+php artisan talkto:retry-failed --direction=outgoing --limit=100
+```
+
+Use `--direction=incoming|outgoing|all` and `--dry-run` when inspecting work. In production, schedule the command from the host application scheduler, for example every minute, after queue workers and retry limits are reviewed.
+
 ## Adding Talkto To A New Laravel Service
 
 Use the onboarding kit when a new Laravel service adopts Talkto Reliable:

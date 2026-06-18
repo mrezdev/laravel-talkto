@@ -2,6 +2,7 @@
 
 namespace Ibake\TalktoReliable;
 
+use Ibake\TalktoReliable\Console\Commands\RetryFailedTalktoMessagesCommand;
 use Illuminate\Support\ServiceProvider;
 
 class TalktoReliableServiceProvider extends ServiceProvider
@@ -13,6 +14,12 @@ class TalktoReliableServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                RetryFailedTalktoMessagesCommand::class,
+            ]);
+        }
+
         $this->publishes([
             __DIR__.'/../config/talkto.php' => config_path('talkto.php'),
         ], 'talkto-reliable-config');
