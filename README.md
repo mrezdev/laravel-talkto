@@ -37,7 +37,18 @@ php artisan vendor:publish --tag=talkto-reliable-config
 php artisan vendor:publish --tag=talkto-reliable-migrations
 ```
 
-The Laravel service provider is auto-discovered. Package routes and migrations are disabled by default so existing applications can adopt the package without duplicate endpoints or duplicate tables.
+The Laravel service provider is auto-discovered. Package routes and migrations are disabled by default so existing applications can adopt the package without duplicate endpoints or duplicate tables. Short publish tags are also available: `talkto-config` and `talkto-migrations`.
+
+## Production Install Checklist
+
+1. Install with Composer.
+2. Publish config and migrations.
+3. Review `config/talkto.php` ownership, peer names, secrets, routes, and migration settings.
+4. Run package migrations only after confirming the host owns the `talkto_*` tables.
+5. Run a queue worker for `SendTalktoMessage` and `ProcessIncomingTalktoMessage`.
+6. Schedule `talkto:retry-failed`, and schedule or manually run `talkto:report`.
+7. Keep DLQ reprocessing manual or operator-approved with `talkto:dlq-reprocess`.
+8. Run one outgoing test, one incoming test, one duplicate `message_id` test, one retry dry-run, and one report command in a non-production environment.
 
 ## Publishing Config And Migrations
 
@@ -46,9 +57,30 @@ Publish config first and review ownership before enabling routes or migrations:
 ```bash
 php artisan vendor:publish --tag=talkto-reliable-config
 php artisan vendor:publish --tag=talkto-reliable-migrations
+# or:
+php artisan vendor:publish --tag=talkto-config
+php artisan vendor:publish --tag=talkto-migrations
 ```
 
 Keep `talkto.routes.enabled` and `talkto.migrations.enabled` false unless the host application has confirmed it wants package-owned routes or tables.
+
+## Environment Variables
+
+Common production variables include:
+
+```dotenv
+TALKTO_SERVICE=source-app
+TALKTO_ROUTES_ENABLED=false
+TALKTO_MIGRATIONS_ENABLED=false
+TALKTO_REQUIRE_SIGNATURE=true
+TALKTO_SIGNATURE_VERSION=v1
+TALKTO_TIMESTAMP_TOLERANCE_SECONDS=300
+TALKTO_RETRY_ENABLED=true
+TALKTO_DEAD_LETTER_ENABLED=true
+TALKTO_OBSERVABILITY_ENABLED=true
+```
+
+Use peer-specific environment variable names for URLs and secrets, for example `TALKTO_TARGET_APP_URL`, `TALKTO_TO_TARGET_APP_SECRET`, and `TALKTO_FROM_SOURCE_APP_SECRET`.
 
 ## Configure Peers
 
@@ -56,17 +88,17 @@ Each application names itself with `TALKTO_SERVICE` and configures explicit peer
 
 ```php
 'outgoing' => [
-    'target-service' => [
-        'url' => env('TALKTO_TARGET_SERVICE_URL'),
-        'secret' => env('TALKTO_TO_TARGET_SERVICE_SECRET'),
+    'target-app' => [
+        'url' => env('TALKTO_TARGET_APP_URL'),
+        'secret' => env('TALKTO_TO_TARGET_APP_SECRET'),
         'endpoint' => '/api/talkto/receive',
         'mode' => 'reliable',
     ],
 ],
 
 'incoming' => [
-    'source-service' => [
-        'secret' => env('TALKTO_FROM_SOURCE_SERVICE_SECRET'),
+    'source-app' => [
+        'secret' => env('TALKTO_FROM_SOURCE_APP_SECRET'),
         'allowed_commands' => [
             'domain.command' => [
                 'driver' => 'handler',
@@ -79,6 +111,17 @@ Each application names itself with `TALKTO_SERVICE` and configures explicit peer
 ```
 
 Never store real secrets in documentation or committed config.
+
+## Queues And Scheduler
+
+Run Laravel queue workers for the queues used by package jobs. A typical scheduler setup runs:
+
+```bash
+php artisan talkto:retry-failed --direction=all --limit=100
+php artisan talkto:report --hours=24 --direction=all --limit=20
+```
+
+Use `talkto:retry-failed --dry-run` before enabling scheduled dispatch in a new environment. Use `talkto:dlq-reprocess --dry-run` before reprocessing dead letters.
 
 ## Basic Sender Example
 
@@ -239,6 +282,10 @@ Use `--json` for machine-readable output, `--from=` and `--to=` for an explicit 
 
 Observability defaults live under `talkto.observability`: report window/limit settings and health thresholds for stale processing messages and due retry backlog grace.
 
+## Public Extension Points
+
+Stable package extension points include `TalktoIncomingCommandHandler`, `TalktoIncomingHandlerRegistryContract`, `TalktoOutgoingTargetRegistryContract`, `TalktoMetricsCollector`, `TalktoHealthChecker`, the `talkto:*` artisan commands, and the documented `talkto.*` config keys. Host applications should extend through these surfaces instead of depending on internal pipeline details.
+
 ## Internal Pipelines
 
 The receive controller and queue jobs delegate orchestration to focused pipelines: `ReceiveIncomingTalktoMessagePipeline`, `ProcessIncomingTalktoMessagePipeline`, and `SendOutgoingTalktoMessagePipeline`. Public routes, jobs, retry behavior, DLQ behavior, and handler/target registries remain the external integration points.
@@ -300,6 +347,8 @@ Use the repository preparation docs before extracting the package into a private
 - `docs/ci.md` for GitHub Actions and local test parity.
 - `docs/release-process.md` for private-first release tagging.
 - `docs/versioning.md` for semantic versioning and compatibility policy.
+- `UPGRADE.md` for host upgrade notes.
+- `RELEASE_CHECKLIST.md` for release verification.
 - `docs/private-composer-installation.md` for path and private VCS installation examples.
 - `docs/package-extraction-checklist.md` for the future extraction checklist.
 - `docs/public-release-readiness.md` for blockers before any public release.

@@ -11,6 +11,7 @@
 - Added a generic install-experience test for provider loading, safe defaults, and host-class independence.
 - Added neutral package metadata and contributor/license placeholders.
 - Added private repository metadata, CI workflow template, release docs, and repository metadata tests.
+- Added production release hardening docs, upgrade guidance, release checklist, publish tag aliases, and package release smoke tests.
 
 ## 0.1.0-alpha
 

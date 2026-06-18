@@ -1,0 +1,37 @@
+# Release Checklist
+
+Use this checklist before tagging or publishing Talkto Reliable.
+
+## Code And Metadata
+
+- Run `composer validate --strict`.
+- Run `php -l` on changed PHP files.
+- Run focused Pest tests for changed areas and core regressions.
+- Confirm `vendor/`, `node_modules/`, caches, and local ZIP artifacts are not included in the release.
+- Confirm `composer.json` package name, description, license, autoload, dev autoload, and Laravel provider discovery are correct.
+
+## Installation Surface
+
+- Confirm config publishes with `talkto-reliable-config` and `talkto-config`.
+- Confirm migrations publish with `talkto-reliable-migrations` and `talkto-migrations`.
+- Confirm package discovery loads `TalktoReliableServiceProvider`.
+- Confirm routes and migrations remain opt-in by default.
+- Confirm default config contains no production URLs, secrets, or host-only classes.
+
+## Runtime Checks
+
+- Confirm queue workers are configured for send and incoming processing jobs.
+- Confirm scheduler entries for `talkto:retry-failed` and reporting are documented.
+- Run a v1 signed send/receive test.
+- Run a v2 signed send/receive test if enabling v2.
+- Run duplicate `message_id` idempotency test.
+- Run `talkto:retry-failed --dry-run`.
+- Run `talkto:dlq-reprocess --dry-run` when DLQ is enabled.
+- Run `talkto:report --json`.
+
+## Release
+
+- Review `CHANGELOG.md`, `UPGRADE.md`, `SECURITY.md`, and README install docs.
+- Tag with the intended semantic version once release versioning is approved.
+- Push the tag and verify CI passes.
+- For Packagist or public release, confirm license, repository visibility, security contact, and package ownership first.

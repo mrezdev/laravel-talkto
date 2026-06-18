@@ -28,7 +28,8 @@ test('default config has no production urls or shared secrets', function (): voi
         }
     }
 
-    expect($defaults['incoming'])->toBe([])
+    expect($defaults['incoming']['handlers'])->toBe([])
+        ->and($defaults['incoming']['unknown_command_strategy'])->toBe('fail')
         ->and($defaults['outgoing'])->toBe([])
         ->and($matches)->toBe([]);
 });
