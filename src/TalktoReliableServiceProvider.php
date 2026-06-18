@@ -4,6 +4,8 @@ namespace Ibake\TalktoReliable;
 
 use Ibake\TalktoReliable\Console\Commands\RetryFailedTalktoMessagesCommand;
 use Ibake\TalktoReliable\Console\Commands\ReprocessTalktoDeadLettersCommand;
+use Ibake\TalktoReliable\Contracts\TalktoIncomingHandlerRegistryContract;
+use Ibake\TalktoReliable\Services\TalktoIncomingHandlerRegistry;
 use Illuminate\Support\ServiceProvider;
 
 class TalktoReliableServiceProvider extends ServiceProvider
@@ -11,6 +13,8 @@ class TalktoReliableServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/talkto.php', 'talkto');
+        $this->app->singleton(TalktoIncomingHandlerRegistry::class);
+        $this->app->alias(TalktoIncomingHandlerRegistry::class, TalktoIncomingHandlerRegistryContract::class);
     }
 
     public function boot(): void

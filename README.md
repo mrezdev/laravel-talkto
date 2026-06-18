@@ -110,29 +110,50 @@ $message = app(\Ibake\TalktoReliable\Services\TalktoOutgoingMessageFactory::clas
     );
 ```
 
-## Basic Receiver Handler Example
+## Incoming Handlers
 
-Destination applications whitelist allowed source services and commands. A handler keeps domain behavior in the host:
+Destination applications register incoming command handlers while keeping domain behavior in the host:
 
 ```php
 namespace App\Talkto\Handlers;
 
-use Ibake\TalktoReliable\Contracts\CommandHandlerContract;
-use Ibake\TalktoReliable\Contracts\IncomingCommandResultContract;
+use Ibake\TalktoReliable\Contracts\TalktoIncomingCommandHandler;
+use Ibake\TalktoReliable\Models\TalktoMessage;
 use Ibake\TalktoReliable\Services\TalktoIncomingCommandResult;
 
-class DomainCommandHandler implements CommandHandlerContract
+final class CreateOrderHandler implements TalktoIncomingCommandHandler
 {
-    public function handle(array $envelope, array $payload): IncomingCommandResultContract
+    public function handle(TalktoMessage $message): TalktoIncomingCommandResult
     {
-        // Host-owned lookup, validation, and write logic lives here.
+        $payload = $message->payload ?? [];
+        // Host-owned validation, lookup, and write logic lives here.
 
-        return TalktoIncomingCommandResult::succeeded([
-            'processed' => true,
-        ]);
+        return TalktoIncomingCommandResult::succeeded(['processed' => true]);
     }
 }
 ```
+
+Register handlers in config:
+
+```php
+'incoming' => [
+    'handlers' => [
+        'order.create' => App\Talkto\Handlers\CreateOrderHandler::class,
+    ],
+    'unknown_command_strategy' => 'fail',
+],
+```
+
+Or register from a host service provider:
+
+```php
+app(\Ibake\TalktoReliable\Services\TalktoIncomingHandlerRegistry::class)
+    ->register('order.create', App\Talkto\Handlers\CreateOrderHandler::class);
+```
+
+Hosts may also inject or resolve `Ibake\TalktoReliable\Contracts\TalktoIncomingHandlerRegistryContract`; it shares the same registry instance as the concrete service.
+
+Unknown commands fail by default so existing retry and DLQ behavior can handle them. Set `talkto.incoming.unknown_command_strategy` to `skip` only when the host explicitly wants unknown commands marked skipped. Handler execution happens in the queued incoming job and keeps the existing idempotency and status guards.
 
 ## Result Callback Example
 

@@ -77,6 +77,12 @@ return [
     ],
 
     'incoming' => [
+        'handlers' => [
+            // 'domain.command' => App\Talkto\Handlers\DomainCommandHandler::class,
+        ],
+
+        'unknown_command_strategy' => env('TALKTO_UNKNOWN_COMMAND_STRATEGY', 'fail'),
+
         // Example:
         // 'peer-service' => [
         //     'secret' => env('TALKTO_FROM_PEER_SERVICE_SECRET'),

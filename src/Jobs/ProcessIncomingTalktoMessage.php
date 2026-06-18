@@ -191,6 +191,12 @@ class ProcessIncomingTalktoMessage implements ShouldQueue
 
     private function applyResult(TalktoMessage $message, TalktoAttempt $attempt, TalktoIncomingCommandResult $result, TalktoRetryPolicy $retryPolicy): void
     {
+        if ($result->skipped) {
+            $this->applySkippedResult($message, $attempt, $result);
+
+            return;
+        }
+
         if ($result->succeeded) {
             $this->applySuccessfulResult($message, $attempt, $result);
 
@@ -198,6 +204,47 @@ class ProcessIncomingTalktoMessage implements ShouldQueue
         }
 
         $this->applyFailedResult($message, $attempt, $result, $retryPolicy);
+    }
+
+    private function applySkippedResult(TalktoMessage $message, TalktoAttempt $attempt, TalktoIncomingCommandResult $result): void
+    {
+        DB::transaction(function () use ($message, $attempt, $result): void {
+            $messageClass = $this->messageModelClass();
+            $eventClass = $this->eventModelClass();
+
+            $message = $messageClass::query()->whereKey($message->id)->lockForUpdate()->first();
+
+            if (! $message) {
+                return;
+            }
+
+            $message->forceFill([
+                'destination_action_status' => 'skipped',
+                'overall_status' => 'skipped',
+                'completed_at' => now(),
+                'failed_at' => null,
+                'last_error' => null,
+                'locked_at' => null,
+                'locked_by' => null,
+            ])->save();
+
+            $attempt->forceFill([
+                'status' => 'skipped',
+                'meta' => $this->mergeAttemptMeta($attempt, [
+                    'result_meta' => $result->meta,
+                ]),
+            ])->save();
+
+            $eventClass::query()->create([
+                'talkto_message_id' => $message->id,
+                'message_id' => $message->message_id,
+                'service_name' => config('talkto.service', 'app'),
+                'event_type' => 'incoming_command_skipped',
+                'old_status' => 'processing',
+                'new_status' => 'skipped',
+                'meta' => $this->eventMeta($message, $result->meta),
+            ]);
+        });
     }
 
     private function applySuccessfulResult(TalktoMessage $message, TalktoAttempt $attempt, TalktoIncomingCommandResult $result): void
