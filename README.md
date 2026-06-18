@@ -262,6 +262,14 @@ For local end-to-end checks, use non-production services, non-production queues,
 
 Talkto Reliable signs canonical message fields with HMAC SHA-256, verifies timestamps within a configured tolerance, hashes normalized payloads for tamper detection, enforces source and command allowlists, and supports required idempotency keys for replay protection.
 
+Signature verification accepts `v1` and `v2` by default. Outgoing messages continue to use the backward-compatible `v1` signature unless `talkto.security.signature_version` is set to `v2`. Update both peers before forcing `talkto.security.accept_versions` to only `v2`. Unsupported outgoing signature versions fail clearly instead of silently downgrading.
+
+Signed requests always require `X-Talkto-Timestamp` because both `v1` and `v2` signatures include it. `talkto.security.require_timestamp` only controls unsigned requests when `talkto.security.require_signature` is `false`.
+
+`v2` signatures include the signature version, timestamp, optional nonce, message ID, source, target, command, and payload hash in the signed canonical string. `v2` outgoing headers include `X-Talkto-Signature-Version`, `X-Talkto-Timestamp`, `X-Talkto-Payload-Hash`, and a generated nonce header. Set `talkto.security.replay_protection.require_nonce_for_v2` only after all senders provide the nonce header.
+
+Replay protection continues to rely on the existing `message_id` ledger and unique constraint; no separate nonce table is created. Tune `talkto.security.timestamp_tolerance_seconds` for clock skew between services.
+
 Never log shared secrets, raw signature secrets, production payloads, or secret headers.
 
 ## Production Checklist

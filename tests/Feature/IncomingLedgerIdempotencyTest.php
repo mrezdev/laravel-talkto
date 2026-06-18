@@ -21,6 +21,7 @@ beforeEach(function (): void {
     config([
         'talkto.service' => 'testing',
         'talkto.security.require_signature' => false,
+        'talkto.security.require_timestamp' => false,
         'talkto.incoming.source' => [
             'allowed_commands' => [
                 'domain.command' => [

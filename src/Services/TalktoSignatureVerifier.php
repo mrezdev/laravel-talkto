@@ -25,11 +25,17 @@ class TalktoSignatureVerifier
         $payloadHash = (string) $envelope['payload_hash'];
         $requireSignature = (bool) config('talkto.security.require_signature', true);
         $normalizedHeaders = $this->normalizeHeaders($headers);
+        $version = $this->signatureVersion($normalizedHeaders);
+        $timestamp = $this->headerValue($normalizedHeaders, 'x-talkto-timestamp');
+
+        if (! in_array($version, $this->acceptedVersions(), true)) {
+            return $this->failure(401, 'unsupported_signature_version');
+        }
 
         if ($requireSignature) {
             $signature = $this->headerValue($normalizedHeaders, 'x-talkto-signature');
-            $timestamp = $this->headerValue($normalizedHeaders, 'x-talkto-timestamp');
             $headerMessageId = $this->headerValue($normalizedHeaders, 'x-talkto-message-id');
+            $nonce = $this->headerValue($normalizedHeaders, (string) config('talkto.security.nonce_header', 'X-Talkto-Nonce'));
 
             if ($signature === null || $timestamp === null || $headerMessageId === null) {
                 return $this->failure(401, 'missing_signature_header');
@@ -42,9 +48,30 @@ class TalktoSignatureVerifier
             if (! $this->timestampIsWithinTolerance($timestamp)) {
                 return $this->failure(401, 'timestamp_outside_tolerance');
             }
+
+            if (
+                $version === 'v2'
+                && (bool) config('talkto.security.replay_protection.require_nonce_for_v2', false)
+                && $nonce === null
+            ) {
+                return $this->failure(401, 'missing_nonce');
+            }
         } else {
             $signature = null;
             $timestamp = null;
+            $nonce = null;
+
+            if ((bool) config('talkto.security.require_timestamp', true)) {
+                $timestamp = $this->headerValue($normalizedHeaders, 'x-talkto-timestamp');
+
+                if ($timestamp === null) {
+                    return $this->failure(401, 'missing_timestamp');
+                }
+
+                if (! $this->timestampIsWithinTolerance($timestamp)) {
+                    return $this->failure(401, 'timestamp_outside_tolerance');
+                }
+            }
         }
 
         $incoming = (array) config('talkto.incoming', []);
@@ -78,6 +105,12 @@ class TalktoSignatureVerifier
             return $this->failure(422, 'payload_hash_mismatch');
         }
 
+        $payloadHashHeader = $this->headerValue($normalizedHeaders, 'x-talkto-payload-hash');
+
+        if ($payloadHashHeader !== null && ! hash_equals($payloadHashHeader, $payloadHash)) {
+            return $this->failure(422, 'payload_hash_mismatch');
+        }
+
         if ($requireSignature) {
             $secret = $sourceConfig['secret'] ?? null;
 
@@ -85,7 +118,11 @@ class TalktoSignatureVerifier
                 return $this->failure(403, 'missing_source_secret');
             }
 
-            if (! $this->signer->verify($signature, $messageId, $timestamp, $source, $target, $command, $payloadHash, (string) $secret)) {
+            $validSignature = $version === 'v2'
+                ? $this->signer->verifyV2($signature, $timestamp, $nonce, $messageId, $source, $target, $command, $payloadHash, (string) $secret)
+                : $this->signer->verify($signature, $messageId, $timestamp, $source, $target, $command, $payloadHash, (string) $secret);
+
+            if (! $validSignature) {
                 return $this->failure(401, 'invalid_signature');
             }
         }
@@ -130,6 +167,25 @@ class TalktoSignatureVerifier
         $tolerance = (int) config('talkto.security.timestamp_tolerance_seconds', 300);
 
         return abs(time() - $timestampValue) <= $tolerance;
+    }
+
+    private function signatureVersion(array $headers): string
+    {
+        $header = (string) config('talkto.security.signature_version_header', 'X-Talkto-Signature-Version');
+        $version = $this->headerValue($headers, $header);
+
+        return $version === 'v2' ? 'v2' : ($version === null ? 'v1' : $version);
+    }
+
+    private function acceptedVersions(): array
+    {
+        $versions = config('talkto.security.accept_versions', ['v1', 'v2']);
+
+        if (! is_array($versions) || $versions === []) {
+            return ['v1'];
+        }
+
+        return array_values(array_filter($versions, fn (mixed $version): bool => is_string($version) && $version !== ''));
     }
 
     private function commandConfig(array $sourceConfig, string $command): array|bool|null

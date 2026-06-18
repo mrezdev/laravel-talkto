@@ -17,8 +17,18 @@ return [
 
     'security' => [
         'require_signature' => env('TALKTO_REQUIRE_SIGNATURE', true),
+        'signature_version' => env('TALKTO_SIGNATURE_VERSION', 'v1'),
+        'accept_versions' => ['v1', 'v2'],
         'timestamp_tolerance_seconds' => (int) env('TALKTO_TIMESTAMP_TOLERANCE_SECONDS', 300),
+        'require_timestamp' => env('TALKTO_REQUIRE_TIMESTAMP', true),
         'algorithm' => 'sha256',
+        'replay_protection' => [
+            'enabled' => env('TALKTO_REPLAY_PROTECTION_ENABLED', true),
+            'use_message_id' => true,
+            'require_nonce_for_v2' => env('TALKTO_REQUIRE_V2_NONCE', false),
+        ],
+        'nonce_header' => 'X-Talkto-Nonce',
+        'signature_version_header' => 'X-Talkto-Signature-Version',
     ],
 
     'http' => [
