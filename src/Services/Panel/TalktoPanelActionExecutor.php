@@ -8,6 +8,7 @@ use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoCurrentServiceGuard;
 use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 use Mrezdev\LaravelTalkto\Services\TalktoTraceReporter;
@@ -22,6 +23,7 @@ class TalktoPanelActionExecutor
         private readonly TalktoRetryPolicy $retryPolicy,
         private readonly TalktoDeadLetterQueue $deadLetterQueue,
         private readonly TalktoTraceReporter $traceReporter,
+        private readonly TalktoCurrentServiceGuard $currentServiceGuard,
     ) {
     }
 
@@ -34,6 +36,13 @@ class TalktoPanelActionExecutor
         if (! in_array($message->direction, ['incoming', 'outgoing'], true)) {
             return TalktoPanelActionResult::failure('Unsupported message direction.', [
                 'direction' => $message->direction,
+            ]);
+        }
+
+        if (! $this->currentServiceGuard->allowsProcessing($message)) {
+            return TalktoPanelActionResult::failure('Message belongs to another service.', [
+                'message_id' => $message->message_id,
+                'current_service' => $this->currentServiceGuard->currentService(),
             ]);
         }
 
@@ -106,6 +115,14 @@ class TalktoPanelActionExecutor
             return TalktoPanelActionResult::failure('Original message was not found.', [
                 'dead_letter_id' => $deadLetter->id,
                 'message_id' => $deadLetter->message_id,
+            ]);
+        }
+
+        if (! $this->currentServiceGuard->allowsProcessing($message)) {
+            return TalktoPanelActionResult::failure('Original message belongs to another service.', [
+                'dead_letter_id' => $deadLetter->id,
+                'message_id' => $deadLetter->message_id,
+                'current_service' => $this->currentServiceGuard->currentService(),
             ]);
         }
 

@@ -110,6 +110,14 @@ The dashboard shows recent local Talkto messages and passive connection health. 
 
 Incoming-only services may show `unknown` when there is no recent local traffic. That means the panel has no local evidence yet; it is not a confirmed outage.
 
+When multiple services share the same Talkto database, the panel shows only rows involving the current configured service by default:
+
+```dotenv
+TALKTO_PANEL_CURRENT_SERVICE_ONLY=true
+```
+
+Disable this only for a trusted central observer panel. Read-only pages can then inspect all rows, but retry and dead-letter reprocess actions still honor `TALKTO_ENFORCE_CURRENT_SERVICE_STORAGE_SCOPE` and will not mutate another service's rows by default.
+
 ## Message Detail / Trace
 
 Message detail pages show status, attempts, events, dead-letter information, and hidden payload/response placeholders by default.
@@ -154,6 +162,8 @@ These are separate signals. Passive health can say whether local message history
 ## Passive Health Vs Active Health
 
 Passive health is always local. It looks at local message records, retry backlog, recent failures, and dead letters. It does not call remote services.
+
+In a shared database, passive health only counts traffic between the current service and the configured peer. It ignores third-party rows that happen to use the same peer service name.
 
 Active health is optional and disabled by default. When enabled, it calls only explicitly configured health URLs. It never sends Talkto commands and never attaches the configured Talkto shared secret.
 

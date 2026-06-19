@@ -32,6 +32,14 @@ return [
         ],
     ],
 
+    'storage' => [
+        /*
+         * When multiple services share the same Talkto database, queued jobs
+         * must only process rows owned by the current configured service.
+         */
+        'enforce_current_service' => env('TALKTO_ENFORCE_CURRENT_SERVICE_STORAGE_SCOPE', true),
+    ],
+
     'security' => [
         // v1 remains the default for backward compatibility. Enable v2 only
         // after both peers understand the version and nonce headers. New peer
@@ -174,6 +182,14 @@ return [
         'authorization' => [
             'enabled' => env('TALKTO_PANEL_AUTHORIZATION_ENABLED', true),
             'gate' => env('TALKTO_PANEL_GATE', 'viewTalktoPanel'),
+        ],
+
+        'scope' => [
+            /*
+             * Keep the panel focused on rows involving this service by default.
+             * Disable only for a trusted central observer panel.
+             */
+            'current_service_only' => env('TALKTO_PANEL_CURRENT_SERVICE_ONLY', true),
         ],
 
         'messages' => [

@@ -20,6 +20,7 @@ Packagist should read versions from Git tags such as `v0.1.0`, not from a commit
 ## Host Rollout Checklist
 
 - Keep routes and migrations disabled unless the host has confirmed it needs the package-owned versions.
+- If services share one Talkto database, give every service a stable `TALKTO_SERVICE` value and keep current-service storage enforcement enabled.
 - Use non-production services, queues, and databases for local and staging verification.
 - Configure one explicit outgoing peer and one explicit incoming source at a time.
 - Store shared secrets only in environment-specific secret storage.
@@ -38,6 +39,7 @@ Track message status, attempt count, last error, payload hash mismatch events, i
 - Protect the panel with authenticated middleware and a narrow authorization gate.
 - Keep payload and response display disabled in production unless there is a specific operational need.
 - Prefer active health checks only for safe, explicit health endpoints.
+- Keep `TALKTO_PANEL_CURRENT_SERVICE_ONLY=true` unless the panel is a trusted central observer.
 - Do not expose secrets in active health URLs.
 - Publish panel views if the host needs UI customization or production-specific wording.
 

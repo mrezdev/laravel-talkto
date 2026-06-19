@@ -10,6 +10,7 @@ use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoCurrentServiceGuard;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelMessageFilters;
 
 class TalktoPanelMessageQuery
@@ -164,7 +165,19 @@ class TalktoPanelMessageQuery
 
     private function baseMessageQuery(): Builder
     {
-        return $this->messageModelClass()::query();
+        $query = $this->messageModelClass()::query();
+        $guard = app(TalktoCurrentServiceGuard::class);
+
+        if (! $guard->shouldScopePanelToCurrentService()) {
+            return $query;
+        }
+
+        $currentService = $guard->currentService();
+
+        return $query->where(function (Builder $query) use ($currentService): void {
+            $query->where('source_service', $currentService)
+                ->orWhere('target_service', $currentService);
+        });
     }
 
     private function tableExists(string $modelClass): bool

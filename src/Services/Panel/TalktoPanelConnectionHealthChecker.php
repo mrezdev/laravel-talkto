@@ -7,13 +7,17 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoCurrentServiceGuard;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelConnection;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelConnectionHealth;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelHealthStatus;
 
 class TalktoPanelConnectionHealthChecker
 {
-    public function __construct(private readonly TalktoPanelConnectionRegistry $registry)
+    public function __construct(
+        private readonly TalktoPanelConnectionRegistry $registry,
+        private readonly TalktoCurrentServiceGuard $currentServiceGuard,
+    )
     {
     }
 
@@ -112,12 +116,18 @@ class TalktoPanelConnectionHealthChecker
 
     private function messagesForConnection(TalktoPanelConnection $connection): Builder
     {
+        $currentService = $this->currentServiceGuard->currentService();
+
         return $this->messageModelClass()::query()
             ->where('direction', $connection->direction)
             ->when(
                 $connection->direction === 'outgoing',
-                fn (Builder $query) => $query->where('target_service', $connection->service),
-                fn (Builder $query) => $query->where('source_service', $connection->service),
+                fn (Builder $query) => $query
+                    ->where('source_service', $currentService)
+                    ->where('target_service', $connection->service),
+                fn (Builder $query) => $query
+                    ->where('source_service', $connection->service)
+                    ->where('target_service', $currentService),
             );
     }
 
@@ -127,12 +137,18 @@ class TalktoPanelConnectionHealthChecker
             return 0;
         }
 
+        $currentService = $this->currentServiceGuard->currentService();
+
         return $this->deadLetterModelClass()::query()
             ->where('direction', $connection->direction)
             ->when(
                 $connection->direction === 'outgoing',
-                fn (Builder $query) => $query->where('target', $connection->service),
-                fn (Builder $query) => $query->where('source', $connection->service),
+                fn (Builder $query) => $query
+                    ->where('source', $currentService)
+                    ->where('target', $connection->service),
+                fn (Builder $query) => $query
+                    ->where('source', $connection->service)
+                    ->where('target', $currentService),
             )
             ->whereIn('status', ['open', 'failed_reprocess'])
             ->count();

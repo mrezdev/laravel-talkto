@@ -6,8 +6,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
-use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelActionExecutor;
+use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelMessageQuery;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelAuthorizer;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelJsonPresenter;
 
@@ -18,9 +18,10 @@ class TalktoPanelMessageActionsController
         Request $request,
         TalktoPanelAuthorizer $authorizer,
         TalktoPanelActionExecutor $actions,
+        TalktoPanelMessageQuery $messages,
     ): JsonResponse|RedirectResponse {
         $authorizer->authorize();
-        $talktoMessage = $this->findMessage($message);
+        $talktoMessage = $messages->findMessage($message);
 
         abort_if($talktoMessage === null, 404);
 
@@ -41,9 +42,10 @@ class TalktoPanelMessageActionsController
         TalktoPanelAuthorizer $authorizer,
         TalktoPanelActionExecutor $actions,
         TalktoPanelJsonPresenter $presenter,
+        TalktoPanelMessageQuery $messages,
     ): JsonResponse|View {
         $authorizer->authorize();
-        $talktoMessage = $this->findMessage($message);
+        $talktoMessage = $messages->findMessage($message);
 
         abort_if($talktoMessage === null, 404);
 
@@ -66,30 +68,6 @@ class TalktoPanelMessageActionsController
         }
 
         return view('talkto::panel.messages.trace', $data);
-    }
-
-    private function findMessage(string $message): ?TalktoMessage
-    {
-        $messageClass = $this->messageModelClass();
-
-        if (ctype_digit($message)) {
-            $found = $messageClass::query()->whereKey((int) $message)->first();
-
-            if ($found instanceof TalktoMessage) {
-                return $found;
-            }
-        }
-
-        return $messageClass::query()->where('message_id', $message)->first();
-    }
-
-    private function messageModelClass(): string
-    {
-        $class = config('talkto.models.message', TalktoMessage::class);
-
-        return is_string($class) && is_a($class, TalktoMessage::class, true)
-            ? $class
-            : TalktoMessage::class;
     }
 
     private function routePrefix(): string

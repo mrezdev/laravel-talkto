@@ -35,7 +35,29 @@ TALKTO_EVENTS_TABLE=talkto_events
 TALKTO_DEAD_LETTERS_TABLE=talkto_dead_letters
 ```
 
-Run Talkto migrations after the connection and table names are configured. If multiple services share one Talkto database, run the Talkto migrations once from one service or deployment job; shared database hardening guidance belongs to the shared-storage phase.
+Run Talkto migrations after the connection and table names are configured. If multiple services share one Talkto database, run the Talkto migrations once from one service or deployment job.
+
+## Shared Talkto Database
+
+Talkto can store several services in one Talkto database as long as each app has a stable `talkto.service` value. Outgoing rows are owned by the service in `source_service`; incoming rows are owned by the service in `target_service`.
+
+Queued processing is scoped to the current service by default:
+
+```dotenv
+TALKTO_ENFORCE_CURRENT_SERVICE_STORAGE_SCOPE=true
+```
+
+With this default, an outgoing job only sends rows where `source_service` matches `talkto.service`, and an incoming processing job only handles rows where `target_service` matches `talkto.service`. Jobs that find another service's row log a warning and exit without mutating the row.
+
+The panel is also scoped to rows involving the current service by default:
+
+```dotenv
+TALKTO_PANEL_CURRENT_SERVICE_ONLY=true
+```
+
+Set `TALKTO_PANEL_CURRENT_SERVICE_ONLY=false` only for a trusted central observer panel. Mutating actions still respect `TALKTO_ENFORCE_CURRENT_SERVICE_STORAGE_SCOPE`, so a central observer can inspect shared data without retrying or reprocessing another service's rows unless storage enforcement is explicitly disabled.
+
+Passive connection health always compares configured peers to the current service. For outgoing peers it counts current-service-to-peer rows; for incoming peers it counts peer-to-current-service rows.
 
 ## Peers
 
