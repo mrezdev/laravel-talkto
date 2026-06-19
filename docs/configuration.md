@@ -12,7 +12,7 @@ The package config is published as `config/talkto.php`. Defaults are conservativ
 
 ## Routes And Migrations
 
-`talkto.routes.enabled` and `talkto.migrations.enabled` are false by default. Enable them only when the host application does not already provide the same tables or receive endpoint.
+`talkto.routes.enabled` and `talkto.migrations.enabled` are false by default, and the package service provider also fails closed if those keys are missing. Enable them only when the host application does not already provide the same tables or receive endpoint.
 
 When enabling package routes for public traffic, include throttle or rate-limit middleware in `talkto.routes.middleware` or wrap the package controller in host-owned routes.
 
@@ -34,6 +34,8 @@ TALKTO_ATTEMPTS_TABLE=talkto_attempts
 TALKTO_EVENTS_TABLE=talkto_events
 TALKTO_DEAD_LETTERS_TABLE=talkto_dead_letters
 ```
+
+`talkto.database.tables.dead_letters` is the canonical dead-letter table config path. Older published configs may still contain `talkto.dead_letter.table`; when both are present, `talkto.database.tables.dead_letters` wins.
 
 Run Talkto migrations after the connection and table names are configured. If multiple services share one Talkto database, run the Talkto migrations once from one service or deployment job.
 

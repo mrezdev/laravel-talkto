@@ -266,7 +266,7 @@ The package provides a generic signed callback runtime through `ResultCallbackSe
 
 Source apps must configure the destination service under `talkto.incoming` and allow the callback command, which defaults to `talkto.result`. Destination apps must configure the source service under `talkto.outgoing` with a callback endpoint and shared secret.
 
-The package receive route depends on `talkto.routes.enabled`; the callback route depends on both `talkto.routes.enabled` and `talkto.callbacks.enabled`.
+The package receive route depends on `talkto.routes.enabled`; the callback route depends on both `talkto.routes.enabled` and `talkto.callbacks.enabled`. Routes and migrations are disabled by default and remain disabled if their config keys are missing, so hosts must explicitly opt in to package route or migration loading.
 
 ```php
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;

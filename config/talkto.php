@@ -148,9 +148,11 @@ return [
     ],
 
     'dead_letter' => [
-        // Uses the configured table name and stores final failures only.
+        // Stores final failures only. The dead-letter table name is configured
+        // at talkto.database.tables.dead_letters. Older published configs may
+        // still contain talkto.dead_letter.table; that legacy path remains a
+        // lower-priority runtime fallback only.
         'enabled' => env('TALKTO_DEAD_LETTER_ENABLED', true),
-        'table' => 'talkto_dead_letters',
         'auto_store_on_final_failure' => env('TALKTO_DEAD_LETTER_AUTO_STORE', true),
         'allow_reprocess' => env('TALKTO_DEAD_LETTER_ALLOW_REPROCESS', true),
         'max_reprocess_attempts' => (int) env('TALKTO_DEAD_LETTER_MAX_REPROCESS_ATTEMPTS', 3),

@@ -9,6 +9,13 @@ test('routes and migrations are disabled by default', function (): void {
         ->and(config('talkto.migrations.enabled'))->toBeFalse();
 });
 
+test('dead letter table config has a canonical database table path', function (): void {
+    $defaults = require __DIR__.'/../../config/talkto.php';
+
+    expect($defaults['database']['tables']['dead_letters'])->toBe('talkto_dead_letters')
+        ->and($defaults['dead_letter'])->not->toHaveKey('table');
+});
+
 test('default config has no production urls or shared secrets', function (): void {
     $defaults = require __DIR__.'/../../config/talkto.php';
     $values = new RecursiveIteratorIterator(new RecursiveArrayIterator($defaults));

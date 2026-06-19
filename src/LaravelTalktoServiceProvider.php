@@ -111,11 +111,11 @@ class LaravelTalktoServiceProvider extends ServiceProvider
             __DIR__.'/../resources/views/panel' => resource_path('views/vendor/talkto/panel'),
         ], 'talkto-panel-views');
 
-        if (config('talkto.migrations.enabled', true)) {
+        if (config('talkto.migrations.enabled', false)) {
             $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         }
 
-        if (config('talkto.routes.enabled', true)) {
+        if (config('talkto.routes.enabled', false)) {
             $this->loadRoutesFrom(__DIR__.'/../routes/api.php');
         }
 
