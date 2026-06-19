@@ -23,6 +23,10 @@ use Mrezdev\LaravelTalkto\Services\TalktoResultCallbackReceiver;
 use Mrezdev\LaravelTalkto\Services\TalktoResultCallbackSender;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 use Mrezdev\LaravelTalkto\Services\TalktoSecurityAuditor;
+use Mrezdev\LaravelTalkto\Services\Scaffolding\TalktoScaffoldNameResolver;
+use Mrezdev\LaravelTalkto\Services\Scaffolding\TalktoScaffoldPathResolver;
+use Mrezdev\LaravelTalkto\Services\Scaffolding\TalktoScaffoldWriter;
+use Mrezdev\LaravelTalkto\Services\Scaffolding\TalktoStubRenderer;
 use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
 use Illuminate\Support\ServiceProvider;
 
@@ -46,6 +50,10 @@ class LaravelTalktoServiceProvider extends ServiceProvider
         $this->app->bind(ReceiveIncomingTalktoMessagePipeline::class);
         $this->app->bind(ProcessIncomingTalktoMessagePipeline::class);
         $this->app->bind(SendOutgoingTalktoMessagePipeline::class);
+        $this->app->bind(TalktoScaffoldNameResolver::class);
+        $this->app->bind(TalktoScaffoldPathResolver::class);
+        $this->app->bind(TalktoStubRenderer::class);
+        $this->app->bind(TalktoScaffoldWriter::class);
     }
 
     public function boot(): void
