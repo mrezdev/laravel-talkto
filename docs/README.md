@@ -27,7 +27,7 @@ Use this page as the documentation map for Laravel Talkto. The root [README](../
 ## Callbacks
 
 - [Result callbacks](result-callbacks.md)
-- [Callback contract template](callback-contract-template.md)
+- [Callback runtime and override template](callback-contract-template.md)
 
 ## Security
 

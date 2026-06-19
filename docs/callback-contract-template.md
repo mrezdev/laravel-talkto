@@ -1,61 +1,81 @@
-# Callback Contract Template
+# Callback Runtime And Override Template
 
 Use result callbacks when the destination service needs to report command outcome back to the source service.
 
-## Callback Payload Structure
+Laravel Talkto now provides a generic signed result callback runtime. Hosts may use the default runtime or override `ResultCallbackSenderContract` and `ResultCallbackReceiverContract` with their own implementations.
+
+The default callback command is:
+
+```text
+talkto.result
+```
+
+## Callback Envelope
+
+Callbacks use the same signed Talkto envelope shape as command delivery. The callback envelope is sent from the destination service back to the source service.
+
+The callback payload contains:
+
+- `original_message_id`
+- `original_command`
+- `status`
+- `succeeded`
+- `retryable`
+- `skipped`
+- `error_class`
+- `error_message`
+- `result`
+- `meta`
+
+Example payload:
 
 ```json
 {
-  "message_id": "source-message-id",
-  "source": "<destination-service>",
-  "target": "<source-service>",
-  "command": "example:sync-record",
+  "original_message_id": "source-message-id",
+  "original_command": "domain.command",
   "status": "succeeded",
+  "succeeded": true,
+  "retryable": false,
+  "skipped": false,
+  "error_class": null,
+  "error_message": null,
   "result": {
     "processed": true
   },
-  "correlation_id": "correlation-id"
+  "meta": {}
 }
 ```
 
-The callback should include enough data to match the original source message and update the source-side lifecycle. It should not include secrets or unredacted internal data.
+## Valid Callback Statuses
 
-## Result Statuses
-
-Use a small status set:
+The runtime accepts these callback statuses:
 
 - `succeeded`
-- `failed`
-- `rejected`
-- `retryable`
+- `skipped`
+- `failed_retryable`
+- `failed_final`
 
-Document exactly what each status means for the source service.
+Unknown statuses are rejected.
 
 ## Signature And Hash Verification
 
-The source service must verify the callback signature, timestamp, message id, source service, target service, command, and payload hash before changing source-side state.
+The source service verifies the callback signature, timestamp, message id, source service, target service, command, and payload hash before changing source-side state.
 
-Reject callbacks with invalid signatures, stale timestamps, unknown source services, unknown message ids, or payload hash mismatches.
+Callbacks with invalid signatures, stale timestamps, unknown source services, unknown message ids, command mismatches, parent message mismatches, or payload hash mismatches are rejected.
 
 ## Source Message Matching
 
-Match callbacks to the original outgoing message by message id and expected peer service. The command and correlation id should also match when available.
+The runtime matches callbacks to the original outgoing message by `payload.original_message_id` and expected peer services. The callback `payload.original_command` must match the original message command. When `parent_message_id` is present, it must match the original message id.
 
-If no source message exists, record a redacted failure event and return the host-approved response. Do not create a source message from an unexpected callback.
+If no source message exists, the runtime returns a rejected response and does not create a source message from the callback.
 
 ## Duplicate Callback Handling
 
-Callbacks must be idempotent. A duplicate callback for the same final state should not run side effects twice. If a duplicate carries conflicting data, mark it for review.
+Callbacks are idempotent. A duplicate callback for the same final state is accepted as a duplicate and does not apply the same source-side state transition twice.
 
-## Callback Failure And Retry Handling
+## Host Side Effects
 
-The destination may retry callback delivery for temporary failures. The source should return clear status codes and avoid exposing secrets in response bodies.
-
-Classify failures:
-
-- Retryable: timeout, temporary queue issue, temporary unavailable source.
-- Review first: message not found, command mismatch, unexpected state.
-- Do not retry automatically: invalid signature, payload hash mismatch, unknown peer.
+The package updates Talkto message state after a valid callback is applied. Host apps still own any business side effects that happen after the callback state is applied.
 
 ## Redaction And Logging Rules
 

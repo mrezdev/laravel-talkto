@@ -45,6 +45,25 @@ class TalktoOutgoingTarget
         return rtrim($url, '/').'/'.ltrim($this->endpoint(), '/');
     }
 
+    public function callbackEndpoint(): string
+    {
+        $endpoint = $this->config['callback_endpoint']
+            ?? config('talkto.callbacks.endpoint', '/api/talkto/callback');
+
+        return is_string($endpoint) && $endpoint !== '' ? $endpoint : '/api/talkto/callback';
+    }
+
+    public function callbackEndpointUrl(): string
+    {
+        $url = $this->url();
+
+        if ($url === null) {
+            throw InvalidTalktoOutgoingTarget::forTarget($this->name, 'URL is not configured');
+        }
+
+        return rtrim($url, '/').'/'.ltrim($this->callbackEndpoint(), '/');
+    }
+
     public function secret(): ?string
     {
         $secret = $this->config['secret'] ?? $this->config['signing_secret'] ?? null;
@@ -84,6 +103,7 @@ class TalktoOutgoingTarget
             'base_url',
             'rm_url',
             'endpoint',
+            'callback_endpoint',
             'secret',
             'signing_secret',
             'headers',

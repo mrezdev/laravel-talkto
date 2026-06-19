@@ -8,7 +8,16 @@ return [
         'prefix' => 'api',
         'receive_uri' => 'talkto/receive',
         'receive_name' => 'talkto.receive',
+        'callback_uri' => 'talkto/callback',
+        'callback_name' => 'talkto.callback',
         'middleware' => ['api'],
+    ],
+
+    'callbacks' => [
+        'enabled' => true,
+        'command' => 'talkto.result',
+        'endpoint' => '/api/talkto/callback',
+        'timeout_seconds' => 20,
     ],
 
     'migrations' => [
@@ -19,6 +28,7 @@ return [
         '<destination-service>' => [
             'url' => env('TALKTO_DESTINATION_URL', 'http://127.0.0.1:<port>'),
             'endpoint' => env('TALKTO_DESTINATION_ENDPOINT', '/api/talkto/receive'),
+            'callback_endpoint' => env('TALKTO_DESTINATION_CALLBACK_ENDPOINT', '/api/talkto/callback'),
             'secret' => env('TALKTO_SECRET', '<local-test-secret>'),
             'mode' => 'reliable',
             'queue' => env('TALKTO_QUEUE', 'default'),
@@ -33,6 +43,9 @@ return [
                     'driver' => 'handler',
                     'handler' => App\Services\Talkto\Handlers\ExampleCommandHandler::class,
                     'idempotency' => 'required',
+                ],
+                'talkto.result' => [
+                    'driver' => 'none',
                 ],
             ],
         ],

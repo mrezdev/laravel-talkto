@@ -1,14 +1,18 @@
 # Result Callbacks
 
-Result callbacks let the destination report command outcomes back to the source. P.46 defines public contracts for callback senders and receivers while leaving concrete host implementations in applications.
+Result callbacks let the destination report command outcomes back to the source. Laravel Talkto provides a generic signed callback sender and receiver while keeping host business side effects in the host application.
 
-## Sender Contract
+## Sender
 
-`ResultCallbackSenderContract` accepts a message, a generic command result, and optional transport settings. Destination apps can bind this contract to their callback sender.
+`ResultCallbackSenderContract` accepts a destination-side incoming message, an `IncomingCommandResultContract`, and optional transport settings. The default `TalktoResultCallbackSender` builds a signed callback envelope and posts it to the source service callback endpoint.
 
-## Receiver Contract
+Destination apps must configure the source service under `talkto.outgoing` with `url`, `secret`, and `callback_endpoint`.
 
-`ResultCallbackReceiverContract` accepts a signed callback envelope and headers. Source apps can bind this contract to their callback receiver.
+## Receiver
+
+`ResultCallbackReceiverContract` accepts a signed callback envelope and headers. The default `TalktoResultCallbackReceiver` verifies the envelope, matches the original outgoing message, applies the callback status, and records callback events.
+
+Source apps must configure the destination service under `talkto.incoming` and allow the callback command. The default callback command is `talkto.result`.
 
 ## Result Contract
 
@@ -30,4 +34,4 @@ Result callbacks let the destination report command outcomes back to the source.
 
 ## Boundary
 
-Callback envelopes, signing, verification, and lifecycle transitions are generic package candidates. Deciding what a result means for a host business process remains the host application's job.
+Callback envelopes, signing, verification, lifecycle transitions, and basic event recording are generic package behavior. Deciding what a result means for a host business process remains the host application's job. Hosts can override `ResultCallbackSenderContract` or `ResultCallbackReceiverContract` when they need custom transport or custom side-effect handling.

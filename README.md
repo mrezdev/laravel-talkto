@@ -1,6 +1,6 @@
 # Laravel Talkto
 
-Laravel Talkto is a generic Laravel package for secure service-to-service command delivery. It gives Laravel applications a common transport layer for signed envelopes, outbox/inbox persistence, handler execution, retries, attempts, dead letters, idempotency, replay protection, source action lifecycle hooks, and callback contracts.
+Laravel Talkto is a generic Laravel package for secure service-to-service command delivery. It gives Laravel applications a common transport layer for signed envelopes, outbox/inbox persistence, handler execution, retries, attempts, dead letters, idempotency, replay protection, source action lifecycle hooks, and signed result callbacks.
 
 The package intentionally stops at the communication boundary. Host applications keep their own domain rules, model lookups, validation, writes, dashboards, rollout decisions, and callback side effects.
 
@@ -16,7 +16,7 @@ flowchart LR
     B --> C["Target receive route"]
     C --> D["Inbox message + handler"]
     D --> E["Result object"]
-    E -. "Callback contract" .-> A
+    E -. "Signed result callback" .-> A
 ```
 
 ## When To Use It
@@ -34,7 +34,7 @@ flowchart LR
 - You need a general event bus, stream processor, or pub/sub platform.
 - You need a UI dashboard included with the package.
 - You want the package to own host domain logic, permissions, or data mapping.
-- You need generic callback runtime out of the box today; this package currently exposes callback contracts for host-owned implementations.
+- You want the package to decide what callback results mean for host business side effects.
 
 ## Core Features
 
@@ -50,7 +50,7 @@ flowchart LR
 - Retry/backoff state and retry command.
 - Dead Letter Queue storage and reprocess command.
 - Read-only metrics, health summaries, and report command.
-- Callback sender and receiver contracts for host-bound implementations.
+- Signed result callback sender and receiver runtime, with contracts that hosts can override.
 
 ## 60-Second Architecture Overview
 
@@ -60,7 +60,7 @@ flowchart LR
 4. The target app stores an incoming message and queues handler processing.
 5. The configured handler returns a `TalktoIncomingCommandResult`.
 6. The package updates message status, attempts, events, retry state, and DLQ state.
-7. If the host has bound callback services, callback contracts can be used to report the result back to the source.
+7. The destination can send a signed result callback to the source through `ResultCallbackSenderContract`.
 
 Routes and migrations are disabled by default. Hosts opt in only after confirming route ownership and table ownership.
 
@@ -206,9 +206,11 @@ Observability is read-only: `TalktoMetricsCollector`, `TalktoHealthChecker`, and
 
 Read more in [docs/recovery-monitoring-template.md](docs/recovery-monitoring-template.md), [docs/production-readiness.md](docs/production-readiness.md), and [docs/troubleshooting.md](docs/troubleshooting.md).
 
-## Result Callback Contracts
+## Result Callback Runtime
 
-The package exposes `ResultCallbackSenderContract` and `ResultCallbackReceiverContract`. Generic callback runtime is a later phase, so host apps may bind their own sender and receiver implementations while relying on the package contracts.
+The package provides a generic signed callback runtime through `ResultCallbackSenderContract` and `ResultCallbackReceiverContract`. Host apps may still override either contract and still decide what callback outcomes mean for their own side effects.
+
+Source apps must configure the destination service under `talkto.incoming` and allow the callback command, which defaults to `talkto.result`. Destination apps must configure the source service under `talkto.outgoing` with a callback endpoint and shared secret.
 
 ```php
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;

@@ -8,7 +8,7 @@ This page lists the package surfaces intended for host applications to depend on
 - `Mrezdev\LaravelTalkto\Contracts\TalktoIncomingHandlerRegistryContract`
 - `Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract`
 - `Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract`
-- Callback contracts under `Mrezdev\LaravelTalkto\Contracts` for host-owned result callback implementations.
+- Callback contracts under `Mrezdev\LaravelTalkto\Contracts` for the generic result callback runtime and host overrides.
 
 `IncomingCommandResultContract` exposes non-conflicting instance accessors: `isSucceeded()`, `isRetryable()`, `isSkipped()`, `errorClass()`, `errorMessage()`, `result()`, and `meta()`.
 
@@ -20,6 +20,7 @@ This page lists the package surfaces intended for host applications to depend on
 - `TalktoHealthChecker` for read-only health summaries.
 - `TalktoOutgoingMessageFactory` and `TalktoFlowFactory` for creating outgoing messages.
 - `TalktoIncomingCommandResult` for incoming handler outcomes through the `succeeded`, `failedRetryable`, `failedFinal`, and `skipped` factories.
+- `TalktoResultCallbackSender`, `TalktoResultCallbackReceiver`, and `TalktoResultCallbackEnvelopeBuilder` for signed result callback runtime behavior.
 
 ## Data Objects
 
@@ -51,6 +52,7 @@ These data objects are additive. Existing array-based APIs remain supported and 
 ## Main Behavior
 
 - Incoming receive endpoint is opt-in through `talkto.routes.enabled`.
+- Callback receive endpoint is opt-in through `talkto.routes.enabled` and uses `talkto.routes.callback_uri`.
 - Outgoing targets resolve from config, aliases, and `TalktoOutgoingTargetRegistryContract`.
 - Signatures use backward-compatible v1 by default; v2 is opt-in for sending and accepted by default for receiving.
 - Retry/backoff state is stored on `talkto_messages`.

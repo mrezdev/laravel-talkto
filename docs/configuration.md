@@ -24,6 +24,7 @@ Outgoing peer config contains the destination URL, endpoint, secret, and mode. I
         'url' => env('TALKTO_TARGET_SERVICE_URL'),
         'secret' => env('TALKTO_TO_TARGET_SERVICE_SECRET'),
         'endpoint' => '/api/talkto/receive',
+        'callback_endpoint' => '/api/talkto/callback',
     ],
 ],
 
@@ -36,10 +37,17 @@ Outgoing peer config contains the destination URL, endpoint, secret, and mode. I
                 'handler' => App\Talkto\Handlers\DomainCommandHandler::class,
                 'idempotency' => 'required',
             ],
+            'talkto.result' => [
+                'driver' => 'none',
+            ],
         ],
     ],
 ],
 ```
+
+## Callbacks
+
+`talkto.callbacks.command` defaults to `talkto.result`, and `talkto.callbacks.endpoint` defaults to `/api/talkto/callback`. Source apps should allow the callback command under the destination service in `talkto.incoming`. Destination apps should configure the source service in `talkto.outgoing` with a shared secret and callback endpoint.
 
 ## Aliases
 

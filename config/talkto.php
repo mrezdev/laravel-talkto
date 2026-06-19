@@ -39,6 +39,13 @@ return [
         'timeout_seconds' => (int) env('TALKTO_HTTP_TIMEOUT_SECONDS', 20),
     ],
 
+    'callbacks' => [
+        'enabled' => env('TALKTO_CALLBACKS_ENABLED', true),
+        'command' => env('TALKTO_CALLBACK_COMMAND', 'talkto.result'),
+        'endpoint' => env('TALKTO_CALLBACK_ENDPOINT', '/api/talkto/callback'),
+        'timeout_seconds' => (int) env('TALKTO_CALLBACK_TIMEOUT_SECONDS', env('TALKTO_HTTP_TIMEOUT_SECONDS', 20)),
+    ],
+
     'migrations' => [
         // Disabled by default so hosts can publish and review table ownership.
         'enabled' => env('TALKTO_MIGRATIONS_ENABLED', false),
@@ -51,6 +58,8 @@ return [
         'middleware' => ['api'],
         'receive_uri' => env('TALKTO_RECEIVE_URI', 'talkto/receive'),
         'receive_name' => env('TALKTO_RECEIVE_NAME', 'talkto.receive'),
+        'callback_uri' => env('TALKTO_CALLBACK_URI', 'talkto/callback'),
+        'callback_name' => env('TALKTO_CALLBACK_NAME', 'talkto.callback'),
     ],
 
     'jobs' => [
@@ -108,6 +117,7 @@ return [
         //     'url' => env('TALKTO_PEER_SERVICE_URL'),
         //     'secret' => env('TALKTO_TO_PEER_SERVICE_SECRET'),
         //     'endpoint' => env('TALKTO_PEER_SERVICE_ENDPOINT', '/api/talkto/receive'),
+        //     'callback_endpoint' => env('TALKTO_PEER_SERVICE_CALLBACK_ENDPOINT', '/api/talkto/callback'),
         //     'headers' => [],
         //     'timeout' => 20,
         //     'mode' => env('TALKTO_PEER_SERVICE_MODE', 'reliable'),
@@ -130,6 +140,9 @@ return [
         //         'domain.command' => [
         //             'driver' => 'none',
         //             'idempotency' => 'required',
+        //         ],
+        //         'talkto.result' => [
+        //             'driver' => 'none',
         //         ],
         //     ],
         // ],
