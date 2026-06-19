@@ -66,6 +66,19 @@ php artisan talkto:audit-security --json
 
 The command can be used manually or in CI. Treat `FAIL` checks as deployment blockers. Review every `WARN` check intentionally, especially accepted v1 signatures, missing v2 nonce enforcement, broad command allowlists, exposed routes without throttling, and panel exposure.
 
+## Stale Message Recovery
+
+Use stale recovery when a worker crashes or a message remains stuck in `sending` or `processing` with an old lock:
+
+```bash
+php artisan talkto:recover-stale --dry-run
+php artisan talkto:recover-stale --direction=outgoing
+php artisan talkto:recover-stale --older-than=30
+php artisan talkto:recover-stale --limit=50
+```
+
+Always run `--dry-run` first in production. This command does not replace normal retry behavior; it is an operator tool for stale in-flight locks. Schedule it only when your operators want automated stale-lock recovery, and keep the limit small enough for safe review.
+
 ## Panel
 
 Keep the panel disabled in production unless the host has authenticated middleware, a narrow authorization gate, payload visibility rules, and operator procedures in place:

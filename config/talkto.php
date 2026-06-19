@@ -207,6 +207,12 @@ return [
         ],
     ],
 
+    'recovery' => [
+        // Stale in-flight locks older than this can be recovered by
+        // talkto:recover-stale. Operators can override per run.
+        'stale_after_minutes' => (int) env('TALKTO_STALE_AFTER_MINUTES', 15),
+    ],
+
     'panel' => [
         'enabled' => env('TALKTO_PANEL_ENABLED', false),
 
