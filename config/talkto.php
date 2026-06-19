@@ -169,6 +169,12 @@ return [
         'health' => [
             'window_minutes' => (int) env('TALKTO_PANEL_HEALTH_WINDOW_MINUTES', 60),
             'cache_seconds' => (int) env('TALKTO_PANEL_HEALTH_CACHE_SECONDS', 30),
+            'active_checks' => [
+                'enabled' => env('TALKTO_PANEL_ACTIVE_HEALTH_CHECKS_ENABLED', false),
+                'timeout_seconds' => (int) env('TALKTO_PANEL_HEALTH_TIMEOUT_SECONDS', 3),
+                'cache_seconds' => (int) env('TALKTO_PANEL_HEALTH_CACHE_SECONDS', 30),
+                'allowed_methods' => ['GET', 'HEAD'],
+            ],
         ],
 
         'views' => [

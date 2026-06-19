@@ -14,3 +14,4 @@ Route::get('/messages/{message}/trace', [TalktoPanelMessageActionsController::cl
 Route::get('/messages/{message}', [TalktoPanelMessagesController::class, 'show'])->name('messages.show');
 Route::post('/dead-letters/{deadLetter}/reprocess', [TalktoPanelDeadLetterActionsController::class, 'reprocess'])->name('dead-letters.reprocess');
 Route::get('/connections', [TalktoPanelConnectionsController::class, 'index'])->name('connections.index');
+Route::post('/connections/{direction}/{service}/check', [TalktoPanelConnectionsController::class, 'check'])->name('connections.check');

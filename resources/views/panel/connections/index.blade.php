@@ -3,10 +3,16 @@
 @section('title', 'Talkto Connections')
 
 @section('content')
+@php
+    $routePrefix = config('talkto.panel.route.name', 'talkto.panel.');
+    $activeHealthByConnection = collect($active_health ?? [])->keyBy(fn ($result) => ($result['direction'] ?? '').'|'.($result['service'] ?? ''));
+    $activeHealthEnabled = (bool) ($active_health_enabled ?? false);
+@endphp
+
 <div class="space-y-8">
     <div>
         <h2 class="text-2xl font-semibold text-slate-950">Connections</h2>
-        <p class="mt-1 text-sm text-slate-600">Configured services and passive local health. Unknown means no recent local evidence, not a confirmed connection.</p>
+        <p class="mt-1 text-sm text-slate-600">Configured services, passive local health, and optional active endpoint checks. Unknown means no recent local evidence, not a confirmed connection.</p>
     </div>
 
     @foreach (['Outgoing connections' => $outgoing, 'Incoming connections' => $incoming] as $heading => $connections)
@@ -19,6 +25,9 @@
             @else
                 <div class="grid gap-4 p-5 lg:grid-cols-2">
                     @foreach ($connections as $connection)
+                        @php
+                            $active = $activeHealthByConnection->get(($connection['direction'] ?? '').'|'.($connection['service'] ?? ''));
+                        @endphp
                         <div class="rounded-lg border border-slate-200 p-4">
                             <div class="flex items-start justify-between gap-3">
                                 <div>
@@ -39,6 +48,24 @@
                                 <div class="sm:col-span-2">
                                     <dt class="text-slate-500">Endpoint</dt>
                                     <dd class="break-words font-medium text-slate-950">{{ $connection['endpoint'] ?? 'none' }}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-slate-500">Active health</dt>
+                                    <dd class="mt-1">
+                                        @include('talkto::panel.partials.active-health-badge', [
+                                            'status' => $active['status'] ?? 'unknown',
+                                            'enabled' => $active['enabled'] ?? false,
+                                            'configured' => $connection['active_health_configured'] ?? false,
+                                        ])
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt class="text-slate-500">Health method</dt>
+                                    <dd class="font-medium text-slate-950">{{ $connection['active_health_method'] ?? 'none' }}</dd>
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <dt class="text-slate-500">Health URL</dt>
+                                    <dd class="break-words font-medium text-slate-950">{{ $connection['active_health_url'] ?? 'none' }}</dd>
                                 </div>
                                 <div class="sm:col-span-2">
                                     <dt class="text-slate-500">Commands</dt>
@@ -65,6 +92,34 @@
                                     </ul>
                                 </div>
                             @endif
+                            <div class="mt-4 rounded-md bg-slate-50 p-3 text-sm text-slate-700">
+                                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                    <div>
+                                        <p class="font-medium text-slate-950">Active endpoint check</p>
+                                        <dl class="mt-2 grid gap-2 sm:grid-cols-2">
+                                            <div><dt class="text-slate-500">Checked at</dt><dd class="font-medium text-slate-950">{{ $active['checked_at'] ?? 'none' }}</dd></div>
+                                            <div><dt class="text-slate-500">HTTP status</dt><dd class="font-medium text-slate-950">{{ $active['http_status'] ?? 'none' }}</dd></div>
+                                            <div><dt class="text-slate-500">Duration</dt><dd class="font-medium text-slate-950">{{ isset($active['duration_ms']) ? $active['duration_ms'].' ms' : 'none' }}</dd></div>
+                                        </dl>
+                                    </div>
+                                    @if ($activeHealthEnabled && ($connection['active_health_configured'] ?? false))
+                                        <form method="POST" action="{{ route($routePrefix.'connections.check', ['direction' => $connection['direction'], 'service' => $connection['service']]) }}">
+                                            @csrf
+                                            <button type="submit" class="rounded-md bg-slate-950 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">Check now</button>
+                                        </form>
+                                    @endif
+                                </div>
+                                @if (! empty($active['warnings']))
+                                    <div class="mt-3 rounded-md bg-amber-50 p-3 text-amber-800">
+                                        <p class="font-medium">Active warnings</p>
+                                        <ul class="mt-1 list-inside list-disc">
+                                            @foreach ($active['warnings'] as $warning)
+                                                <li>{{ $warning }}</li>
+                                            @endforeach
+                                        </ul>
+                                    </div>
+                                @endif
+                            </div>
                         </div>
                     @endforeach
                 </div>

@@ -3,10 +3,13 @@
 namespace Mrezdev\LaravelTalkto\Http\Controllers\Panel;
 
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelActiveHealthChecker;
 use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelConnectionHealthChecker;
 use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelConnectionRegistry;
+use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelConnection;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelAuthorizer;
 
 class TalktoPanelConnectionsController
@@ -16,9 +19,11 @@ class TalktoPanelConnectionsController
         TalktoPanelAuthorizer $authorizer,
         TalktoPanelConnectionRegistry $connections,
         TalktoPanelConnectionHealthChecker $healthChecker,
+        TalktoPanelActiveHealthChecker $activeHealthChecker,
     ): JsonResponse|View {
         $authorizer->authorize();
         $windowMinutes = (int) config('talkto.panel.health.window_minutes', 60);
+        $activeHealth = $activeHealthChecker->checkAll();
 
         $data = [
             'outgoing' => $connections->outgoing()
@@ -30,6 +35,10 @@ class TalktoPanelConnectionsController
             'health' => $healthChecker->checkAll($windowMinutes)
                 ->map(fn ($health): array => $health->toArray())
                 ->values(),
+            'active_health' => $activeHealth
+                ->map(fn ($health): array => $health->toArray())
+                ->values(),
+            'active_health_enabled' => $activeHealthChecker->enabled(),
         ];
 
         if ($request->expectsJson()) {
@@ -37,5 +46,57 @@ class TalktoPanelConnectionsController
         }
 
         return view('talkto::panel.connections.index', $data);
+    }
+
+    public function check(
+        string $direction,
+        string $service,
+        Request $request,
+        TalktoPanelAuthorizer $authorizer,
+        TalktoPanelConnectionRegistry $connections,
+        TalktoPanelActiveHealthChecker $activeHealthChecker,
+    ): JsonResponse|RedirectResponse {
+        $authorizer->authorize();
+
+        abort_unless(in_array($direction, ['incoming', 'outgoing'], true), 404);
+
+        $connection = $this->findConnection($connections, $direction, $service);
+
+        abort_if($connection === null, 404);
+
+        $result = $activeHealthChecker->check($connection, force: true);
+        $status = $result->enabled ? 200 : 422;
+
+        if ($request->expectsJson()) {
+            return response()->json($result->toArray(), $status);
+        }
+
+        $message = $this->flashMessage($result->toArray());
+
+        return redirect()
+            ->back()
+            ->with($result->status === 'healthy' ? 'talkto_panel_status' : 'talkto_panel_error', $message);
+    }
+
+    private function findConnection(TalktoPanelConnectionRegistry $connections, string $direction, string $service): ?TalktoPanelConnection
+    {
+        return $connections->all()
+            ->first(fn (TalktoPanelConnection $connection): bool => $connection->direction === $direction && $connection->service === $service);
+    }
+
+    private function flashMessage(array $result): string
+    {
+        $status = (string) ($result['status'] ?? 'unknown');
+        $service = (string) ($result['service'] ?? 'unknown');
+
+        if ($status === 'healthy') {
+            return "Active health check for {$service} is healthy.";
+        }
+
+        if (($result['enabled'] ?? false) === false) {
+            return 'Active health checks are disabled.';
+        }
+
+        return "Active health check for {$service} returned {$status}.";
     }
 }

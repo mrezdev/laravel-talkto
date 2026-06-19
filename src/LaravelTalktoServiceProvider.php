@@ -27,6 +27,7 @@ use Mrezdev\LaravelTalkto\Services\TalktoResultCallbackSender;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 use Mrezdev\LaravelTalkto\Services\TalktoSecurityAuditor;
 use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelActionExecutor;
+use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelActiveHealthChecker;
 use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelConnectionHealthChecker;
 use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelConnectionRegistry;
 use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelMessageQuery;
@@ -56,6 +57,7 @@ class LaravelTalktoServiceProvider extends ServiceProvider
         $this->app->bind(TalktoMetricsCollector::class);
         $this->app->bind(TalktoHealthChecker::class);
         $this->app->bind(TalktoPanelActionExecutor::class);
+        $this->app->bind(TalktoPanelActiveHealthChecker::class);
         $this->app->bind(TalktoPanelMessageQuery::class);
         $this->app->bind(TalktoPanelConnectionRegistry::class);
         $this->app->bind(TalktoPanelConnectionHealthChecker::class);
