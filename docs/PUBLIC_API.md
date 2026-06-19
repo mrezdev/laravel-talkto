@@ -7,6 +7,7 @@ This page lists the package surfaces intended for host applications to depend on
 - `Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler`
 - `Mrezdev\LaravelTalkto\Contracts\TalktoIncomingHandlerRegistryContract`
 - `Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract`
+- `Mrezdev\LaravelTalkto\Contracts\TalktoHttpClient`
 - `Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract`
 - Callback contracts under `Mrezdev\LaravelTalkto\Contracts` for the generic result callback runtime and host overrides.
 
@@ -21,6 +22,7 @@ This page lists the package surfaces intended for host applications to depend on
 - `TalktoTraceReporter` for read-only message and correlation trace snapshots.
 - `TalktoSecurityRedactor` for centralized safe redaction of secret-like values, configured Talkto shared secrets, and sensitive headers.
 - `TalktoSecurityAuditor` for read-only security posture snapshots.
+- `LaravelTalktoHttpClient` as the default outgoing transport implementation behind `TalktoHttpClient`.
 - `TalktoOutgoingMessageFactory` and `TalktoFlowFactory` for creating outgoing messages.
 - `TalktoIncomingCommandResult` for incoming handler outcomes through the `succeeded`, `failedRetryable`, `failedFinal`, and `skipped` factories.
 - `TalktoResultCallbackSender`, `TalktoResultCallbackReceiver`, and `TalktoResultCallbackEnvelopeBuilder` for signed result callback runtime behavior.
@@ -28,6 +30,7 @@ This page lists the package surfaces intended for host applications to depend on
 ## Data Objects
 
 - `TalktoEnvelopeData` provides an immutable snapshot of the envelope array shape and can be created from an envelope array or compatible message model.
+- `TalktoHttpResponse` provides the response shape returned by `TalktoHttpClient` implementations.
 - `TalktoIncomingCommandResultData` provides an immutable snapshot of an `IncomingCommandResultContract`.
 - `TalktoResultCallbackData` provides an immutable snapshot of the signed result callback envelope shape.
 - `TalktoTraceSnapshot` provides a stable array shape for read-only trace reports.
@@ -67,6 +70,7 @@ These data objects are additive. Existing array-based APIs remain supported and 
 - Incoming receive endpoint is opt-in through `talkto.routes.enabled`.
 - Callback receive endpoint is opt-in through `talkto.routes.enabled` and `talkto.callbacks.enabled`, and uses `talkto.routes.callback_uri`.
 - Outgoing targets resolve from config, aliases, and `TalktoOutgoingTargetRegistryContract`.
+- Outgoing HTTP transport resolves through `TalktoHttpClient`; signing and envelope creation remain package-owned.
 - Signatures use backward-compatible v1 by default; v2 is opt-in for sending and accepted by default for receiving.
 - Retry/backoff state is stored on `talkto_messages`.
 - Dead letters use `talkto_dead_letters` when enabled and migrated.

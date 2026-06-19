@@ -244,6 +244,8 @@ app/Talkto/
 
 Read more in [docs/scaffolding.md](docs/scaffolding.md) and [docs/transactional-outgoing.md](docs/transactional-outgoing.md).
 
+Hosts that need custom proxy, TLS, tracing, circuit breaker, or test transport behavior can override the outgoing HTTP client through `TalktoHttpClient`. See [docs/http-client.md](docs/http-client.md).
+
 ## Security Model Summary
 
 Laravel Talkto signs canonical message fields using HMAC SHA-256. Incoming requests can be verified for signature, timestamp tolerance, target service, known source service, command allowlist, payload hash, and replay protection.
@@ -288,6 +290,7 @@ Common next stops:
 - [docs/installation.md](docs/installation.md)
 - [docs/configuration.md](docs/configuration.md)
 - [docs/sending-commands.md](docs/sending-commands.md)
+- [docs/http-client.md](docs/http-client.md)
 - [docs/handling-commands.md](docs/handling-commands.md)
 - [docs/scaffolding.md](docs/scaffolding.md)
 - [docs/transactional-outgoing.md](docs/transactional-outgoing.md)
@@ -320,6 +323,7 @@ Host applications should depend on documented contracts and services rather than
 - `TalktoIncomingCommandHandler`
 - `TalktoIncomingHandlerRegistryContract`
 - `TalktoOutgoingTargetRegistryContract`
+- `TalktoHttpClient`
 - `IncomingCommandResultContract`
 - `ResultCallbackSenderContract`
 - `ResultCallbackReceiverContract`

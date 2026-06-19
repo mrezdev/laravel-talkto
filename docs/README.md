@@ -12,11 +12,13 @@ Use this page as the documentation map for Laravel Talkto. The root [README](../
 ## Configuration
 
 - [Configuration](configuration.md)
+- [HTTP client extension](http-client.md)
 - [Host integration template](host-integration-template.md)
 
 ## Sending Commands
 
 - [Sending commands](sending-commands.md)
+- [HTTP client extension](http-client.md)
 - [Scaffolding generators](scaffolding.md)
 - [Transactional outgoing](transactional-outgoing.md)
 - [Command contract template](command-contract-template.md)

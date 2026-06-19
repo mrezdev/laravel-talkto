@@ -2,6 +2,7 @@
 
 namespace Mrezdev\LaravelTalkto\Pipelines;
 
+use Mrezdev\LaravelTalkto\Contracts\TalktoHttpClient;
 use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
@@ -9,12 +10,15 @@ use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
 use Mrezdev\LaravelTalkto\Services\TalktoOutgoingEnvelopeBuilder;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 use Throwable;
 
 class SendOutgoingTalktoMessagePipeline
 {
     private int $talktoMessageId;
+
+    public function __construct(private ?TalktoHttpClient $httpClient = null)
+    {
+    }
 
     public function send(int $talktoMessageId, TalktoOutgoingEnvelopeBuilder $builder, ?TalktoRetryPolicy $retryPolicy = null): void
     {
@@ -59,10 +63,9 @@ class SendOutgoingTalktoMessagePipeline
             $endpoint = $builder->endpointFor($message);
             $envelope = $builder->buildEnvelope($message);
             $headers = $builder->buildHeaders($message);
+            $timeout = $builder->timeoutFor($message);
 
-            $response = Http::withHeaders($headers)
-                ->timeout($builder->timeoutFor($message))
-                ->post($endpoint, $envelope);
+            $response = $this->httpClient()->post($endpoint, $headers, $envelope, $timeout);
 
             if ($response->successful()) {
                 $this->applySuccessfulResponse($message, $attempt, $response);
@@ -93,6 +96,11 @@ class SendOutgoingTalktoMessagePipeline
         $processId = function_exists('getmypid') ? getmypid() : false;
 
         return 'sender:'.($hostname ?: 'unknown-host').':'.($processId ?: 'unknown-process');
+    }
+
+    private function httpClient(): TalktoHttpClient
+    {
+        return $this->httpClient ??= app(TalktoHttpClient::class);
     }
 
     private function createSkippedAttempt(TalktoMessage $message, string $errorClass, string $errorMessage): void
