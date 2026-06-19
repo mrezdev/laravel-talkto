@@ -78,15 +78,15 @@ test('docs avoid stale fake public api examples and forbidden host terms', funct
         ->and($contents)->not->toContain('composer validate --no-check'.'-publish')
         ->and($contents)->toContain('composer validate --strict');
 
+    // Generic public documentation examples such as inventory, invoice,
+    // billing, shipping, website, verify-invoice, and receive-bulk are allowed.
+    // Host-app business class names and private project terms stay forbidden.
     $forbidden = [
-        'inven'.'tory',
-        'in'.'voice',
         'de'.'mand',
         'ap'.'peal',
         'hy'.'brid',
         'material'.' detail',
         'i'.'bake',
-        'ware'.'house',
         'material'.' mapping',
         'product'.' mapping',
     ];

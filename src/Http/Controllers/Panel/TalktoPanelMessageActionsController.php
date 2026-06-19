@@ -9,6 +9,7 @@ use Illuminate\View\View;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelActionExecutor;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelAuthorizer;
+use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelJsonPresenter;
 
 class TalktoPanelMessageActionsController
 {
@@ -39,6 +40,7 @@ class TalktoPanelMessageActionsController
         Request $request,
         TalktoPanelAuthorizer $authorizer,
         TalktoPanelActionExecutor $actions,
+        TalktoPanelJsonPresenter $presenter,
     ): JsonResponse|View {
         $authorizer->authorize();
         $talktoMessage = $this->findMessage($message);
@@ -57,7 +59,10 @@ class TalktoPanelMessageActionsController
         ];
 
         if ($request->expectsJson()) {
-            return response()->json($snapshot->toArray());
+            return response()->json($presenter->trace(
+                $snapshot->toArray(),
+                $includePayload && (bool) config('talkto.panel.messages.show_payload', false)
+            ));
         }
 
         return view('talkto::panel.messages.trace', $data);

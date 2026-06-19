@@ -8,6 +8,7 @@ use Illuminate\View\View;
 use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelConnectionHealthChecker;
 use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelMessageQuery;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelAuthorizer;
+use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelJsonPresenter;
 
 class TalktoPanelController
 {
@@ -16,6 +17,7 @@ class TalktoPanelController
         TalktoPanelAuthorizer $authorizer,
         TalktoPanelMessageQuery $messages,
         TalktoPanelConnectionHealthChecker $healthChecker,
+        TalktoPanelJsonPresenter $presenter,
     ): JsonResponse|View {
         $authorizer->authorize();
 
@@ -28,7 +30,10 @@ class TalktoPanelController
         ];
 
         if ($request->expectsJson()) {
-            return response()->json($data);
+            return response()->json([
+                'latest_messages' => $presenter->messages($data['latest_messages']),
+                'connections_health' => $data['connections_health'],
+            ]);
         }
 
         return view('talkto::panel.index', $data);

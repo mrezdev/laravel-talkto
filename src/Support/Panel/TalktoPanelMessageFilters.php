@@ -21,16 +21,16 @@ class TalktoPanelMessageFilters
     public static function fromArray(array $input): self
     {
         return new self(
-            direction: self::stringOrNull($input['direction'] ?? null),
-            status: self::stringOrNull($input['status'] ?? null),
-            service: self::stringOrNull($input['service'] ?? null),
-            command: self::stringOrNull($input['command'] ?? null),
-            messageId: self::stringOrNull($input['message_id'] ?? $input['messageId'] ?? null),
-            correlationId: self::stringOrNull($input['correlation_id'] ?? $input['correlationId'] ?? null),
-            businessKey: self::stringOrNull($input['business_key'] ?? $input['businessKey'] ?? null),
-            idempotencyKey: self::stringOrNull($input['idempotency_key'] ?? $input['idempotencyKey'] ?? null),
-            createdFrom: self::stringOrNull($input['created_from'] ?? $input['createdFrom'] ?? null),
-            createdTo: self::stringOrNull($input['created_to'] ?? $input['createdTo'] ?? null),
+            self::stringOrNull($input['direction'] ?? null),
+            self::stringOrNull($input['status'] ?? null),
+            self::stringOrNull($input['service'] ?? null),
+            self::stringOrNull($input['command'] ?? null),
+            self::stringOrNull($input['message_id'] ?? $input['messageId'] ?? null),
+            self::stringOrNull($input['correlation_id'] ?? $input['correlationId'] ?? null),
+            self::stringOrNull($input['business_key'] ?? $input['businessKey'] ?? null),
+            self::stringOrNull($input['idempotency_key'] ?? $input['idempotencyKey'] ?? null),
+            self::stringOrNull($input['created_from'] ?? $input['createdFrom'] ?? null),
+            self::stringOrNull($input['created_to'] ?? $input['createdTo'] ?? null),
         );
     }
 

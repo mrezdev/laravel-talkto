@@ -129,6 +129,13 @@ test('panel mutating action routes are post only', function (): void {
         ->and($routes->getByName('talkto.panel.connections.check')?->methods())->not->toContain('GET');
 });
 
+test('panel route loading is guarded for route cache friendliness', function (): void {
+    $provider = file_get_contents(__DIR__.'/../../src/LaravelTalktoServiceProvider.php') ?: '';
+
+    expect($provider)->toContain('routesAreCached()')
+        ->and($provider)->toContain('loadPanelRoutes');
+});
+
 test('panel authorization denies access when enabled and gate does not allow', function (): void {
     ($this->bootPanelApp)(['TALKTO_PANEL_ENABLED' => 'true']);
 

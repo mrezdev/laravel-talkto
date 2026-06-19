@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Scaffolding Generators And Optional Panel
+
+- Added Artisan scaffolding generators for outgoing commands, transactional outgoing commands, incoming commands, and integration shortcut flows.
+- Added the optional Talkto Panel with message dashboard, message detail and trace views, safe retry and dead-letter reprocess actions, connection health, optional active health checks, and publishable Blade/Tailwind views.
+- Kept the panel disabled by default and active health checks opt-in only.
+- Hardened panel JSON responses so payloads and responses are hidden by default and sensitive values are redacted when display is explicitly enabled.
+- Made panel route loading route-cache friendly.
+
 ### Private Release Readiness Summary
 
 - Aligned public contracts, README examples, host stubs, and docs with the real incoming result and outgoing factory APIs.

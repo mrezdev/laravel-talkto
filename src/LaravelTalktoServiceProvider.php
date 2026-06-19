@@ -37,6 +37,7 @@ use Mrezdev\LaravelTalkto\Services\Scaffolding\TalktoScaffoldWriter;
 use Mrezdev\LaravelTalkto\Services\Scaffolding\TalktoStubRenderer;
 use Mrezdev\LaravelTalkto\Services\Scaffolding\TalktoIncomingScaffolder;
 use Mrezdev\LaravelTalkto\Services\Scaffolding\TalktoOutgoingScaffolder;
+use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelJsonPresenter;
 use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
@@ -61,6 +62,7 @@ class LaravelTalktoServiceProvider extends ServiceProvider
         $this->app->bind(TalktoPanelMessageQuery::class);
         $this->app->bind(TalktoPanelConnectionRegistry::class);
         $this->app->bind(TalktoPanelConnectionHealthChecker::class);
+        $this->app->bind(TalktoPanelJsonPresenter::class);
         $this->app->bind(ResultCallbackSenderContract::class, TalktoResultCallbackSender::class);
         $this->app->bind(ResultCallbackReceiverContract::class, TalktoResultCallbackReceiver::class);
         $this->app->bind(ReceiveIncomingTalktoMessagePipeline::class);
@@ -124,6 +126,10 @@ class LaravelTalktoServiceProvider extends ServiceProvider
 
     private function loadPanelRoutes(): void
     {
+        if ($this->app->routesAreCached()) {
+            return;
+        }
+
         $prefix = config('talkto.panel.route.prefix', 'talkto');
         $domain = config('talkto.panel.route.domain');
         $middleware = config('talkto.panel.route.middleware', ['web', 'auth']);
