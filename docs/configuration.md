@@ -49,6 +49,21 @@ Outgoing peer config contains the destination URL, endpoint, secret, and mode. I
 
 `talkto.callbacks.command` defaults to `talkto.result`, and `talkto.callbacks.endpoint` defaults to `/api/talkto/callback`. Source apps should allow the callback command under the destination service in `talkto.incoming`. Destination apps should configure the source service in `talkto.outgoing` with a shared secret and callback endpoint.
 
+## Retry Policy
+
+Global retry keys remain the base policy: `talkto.retry.enabled`, `max_attempts`, `backoff_seconds`, direction enablement, retryable statuses, final failure status, retryable HTTP statuses, and server-error retry behavior.
+
+Optional overrides are resolved in this order:
+
+1. Global `talkto.retry` values.
+2. `talkto.retry.directions.outgoing` or `talkto.retry.directions.incoming`.
+3. `talkto.retry.targets.<peer>`, where outgoing uses `target_service` and incoming uses `source_service`.
+4. `talkto.retry.commands.<command>`.
+
+Supported override keys include `enabled`, `max_attempts`, `backoff_seconds`, `retryable_statuses`, `final_failure_status`, `retryable_http_statuses`, `retry_server_errors`, and `jitter_seconds`. A positive message-level `max_attempts` still wins over config.
+
+`jitter_seconds` defaults to `0`, preserving deterministic backoff unless a host explicitly configures jitter.
+
 ## Aliases
 
 `talkto.aliases` is optional. Use it only for host-local shortcuts that resolve to canonical peer names.

@@ -201,7 +201,7 @@ Read more in [docs/security.md](docs/security.md).
 
 ## Retry, DLQ, And Observability Summary
 
-Retry state is stored on message records and processed through `talkto:retry-failed`. Final or exhausted failures can be stored in `talkto_dead_letters` when DLQ support is enabled and migrated. `talkto:dlq-reprocess` lets operators reprocess eligible dead letters deliberately.
+Retry state is stored on message records and processed through `talkto:retry-failed`. Retry policy starts with global defaults and can be overridden by direction, peer/target, and command. Final or exhausted failures can be stored in `talkto_dead_letters` when DLQ support is enabled and migrated. `talkto:dlq-reprocess` lets operators reprocess eligible dead letters deliberately.
 
 Observability is read-only: `TalktoMetricsCollector`, `TalktoHealthChecker`, `talkto:report`, and `talkto:trace` summarize existing message state without dispatching jobs or mutating rows. Use `talkto:trace <message-id>` or `talkto:trace --correlation=<correlation-id>` to inspect one flow across related messages, attempts, events, dead letters, and callbacks with payload redacted by default.
 

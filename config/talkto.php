@@ -83,6 +83,35 @@ return [
         'final_failure_status' => 'failed_final',
         'retryable_http_statuses' => [408, 425, 429],
         'retry_server_errors' => true,
+        'jitter_seconds' => 0,
+        'directions' => [
+            // Optional per-direction overrides. Global values above remain the
+            // base; direction values override only the keys they define.
+            // 'outgoing' => [
+            //     'enabled' => true,
+            //     'max_attempts' => 5,
+            //     'backoff_seconds' => [10, 30, 60, 120, 300],
+            // ],
+            // 'incoming' => [
+            //     'enabled' => false,
+            // ],
+        ],
+        'targets' => [
+            // Optional peer overrides. Outgoing uses target_service; incoming
+            // uses source_service.
+            // 'peer-service' => [
+            //     'max_attempts' => 3,
+            //     'backoff_seconds' => [30, 120, 300],
+            // ],
+        ],
+        'commands' => [
+            // Optional command overrides. These have the highest config
+            // precedence.
+            // 'domain.command' => [
+            //     'max_attempts' => 2,
+            //     'backoff_seconds' => [60, 300],
+            // ],
+        ],
     ],
 
     'dead_letter' => [

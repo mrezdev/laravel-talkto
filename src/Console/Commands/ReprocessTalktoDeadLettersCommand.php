@@ -32,7 +32,14 @@ class ReprocessTalktoDeadLettersCommand extends Command
             return self::FAILURE;
         }
 
-        $limit = max(1, (int) $this->option('limit'));
+        $limit = filter_var($this->option('limit'), FILTER_VALIDATE_INT);
+
+        if (! is_int($limit) || $limit < 1 || $limit > 1000) {
+            $this->error('Invalid --limit. Use a value between 1 and 1000.');
+
+            return self::FAILURE;
+        }
+
         $dryRun = (bool) $this->option('dry-run');
         $force = (bool) $this->option('force');
         $deadLetterClass = $this->deadLetterModelClass();
@@ -52,6 +59,9 @@ class ReprocessTalktoDeadLettersCommand extends Command
         $dispatched = 0;
         $skipped = 0;
         $missingOriginal = 0;
+        $claimedCount = 0;
+        $failedClaim = 0;
+        $failedDispatch = 0;
 
         foreach ($query->get() as $deadLetter) {
             $scanned++;
@@ -112,14 +122,26 @@ class ReprocessTalktoDeadLettersCommand extends Command
 
             if (! $claimed) {
                 $skipped++;
+                $failedClaim++;
 
                 continue;
             }
 
+            $claimedCount++;
             $eligible++;
             $this->prepareOriginalMessageForReprocess($message);
 
-            if ($this->dispatchReprocessJob($message)) {
+            $failureMarked = false;
+
+            try {
+                $dispatchedSuccessfully = $this->dispatchReprocessJob($message);
+            } catch (\Throwable $throwable) {
+                $dispatchedSuccessfully = false;
+                $deadLetterQueue->markFailedReprocess($claimed, 'Dispatch failed.', $throwable);
+                $failureMarked = true;
+            }
+
+            if ($dispatchedSuccessfully) {
                 $deadLetterQueue->recordEvent($message, 'dead_letter_reprocess_dispatched', [
                     'dead_letter_id' => $claimed->id,
                     'direction' => $message->direction,
@@ -131,6 +153,10 @@ class ReprocessTalktoDeadLettersCommand extends Command
             }
 
             $skipped++;
+            $failedDispatch++;
+            if (! $failureMarked) {
+                $deadLetterQueue->markFailedReprocess($claimed, 'Dispatch failed.');
+            }
             $deadLetterQueue->recordEvent($message, 'dead_letter_reprocess_skipped', [
                 'dead_letter_id' => $claimed->id,
                 'reason' => 'unsupported_direction',
@@ -140,7 +166,7 @@ class ReprocessTalktoDeadLettersCommand extends Command
 
         $dryRunValue = $dryRun ? 'true' : 'false';
 
-        $this->line("scanned={$scanned} eligible={$eligible} dispatched={$dispatched} skipped={$skipped} missing_original={$missingOriginal} dry_run={$dryRunValue} direction={$direction}");
+        $this->line("scanned={$scanned} eligible={$eligible} dispatched={$dispatched} skipped={$skipped} missing_original={$missingOriginal} claimed={$claimedCount} failed_claim={$failedClaim} failed_dispatch={$failedDispatch} dry_run={$dryRunValue} direction={$direction}");
 
         return self::SUCCESS;
     }

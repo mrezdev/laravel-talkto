@@ -250,6 +250,8 @@ class SendOutgoingTalktoMessagePipeline
                     'destination_status' => $destinationStatus,
                 ], fn (mixed $value): bool => $value !== null),
             ]);
+
+            app(TalktoDeadLetterQueue::class)->markReprocessedForMessage($message);
         });
     }
 
@@ -268,7 +270,7 @@ class SendOutgoingTalktoMessagePipeline
                 return;
             }
 
-            $retryableHttpStatus = $retryPolicy->isRetryableHttpStatus($status);
+            $retryableHttpStatus = $retryPolicy->isRetryableHttpStatus($status, $message);
             $retryable = $retryableHttpStatus && $retryPolicy->canScheduleRetry($message);
             $retryable
                 ? $retryPolicy->markRetryableFailure($message, 'transport_status', $errorMessage, $status)
@@ -377,12 +379,42 @@ class SendOutgoingTalktoMessagePipeline
             'event_type' => $eventType,
             'old_status' => 'sending',
             'new_status' => $message->overall_status,
-            'meta' => [
-                'direction' => $message->direction,
-                'retry_count' => (int) ($message->retry_count ?? 0),
-                'next_retry_at' => optional($message->next_retry_at)->toIso8601String(),
-            ],
+            'meta' => $this->retryEventMeta($message, $eventType),
         ]);
+    }
+
+    private function retryEventMeta(TalktoMessage $message, string $eventType): array
+    {
+        $decision = app(TalktoRetryPolicy::class)->decisionFor($message, ['ignore_status' => true])->toArray();
+        $reason = $decision['reason'] ?? null;
+        $backoffSeconds = $decision['backoff_seconds'] ?? null;
+
+        if ($eventType === 'retry_scheduled') {
+            $reason = 'scheduled';
+            $backoffSeconds = $this->scheduledBackoffSeconds($message);
+        } elseif ($eventType === 'retry_not_scheduled' && in_array($reason, ['eligible', 'not_due'], true)) {
+            $reason = 'non_retryable_status';
+        } elseif ($eventType === 'retry_exhausted' && in_array($reason, ['eligible', 'not_due'], true)) {
+            $reason = 'max_attempts_exhausted';
+        }
+
+        return [
+            'direction' => $message->direction,
+            'retry_count' => (int) ($message->retry_count ?? 0),
+            'max_attempts' => $decision['max_attempts'] ?? null,
+            'backoff_seconds' => $backoffSeconds,
+            'next_retry_at' => optional($message->next_retry_at)->toIso8601String(),
+            'reason' => $reason,
+        ];
+    }
+
+    private function scheduledBackoffSeconds(TalktoMessage $message): ?int
+    {
+        if (($message->last_attempted_at ?? null) === null || ($message->next_retry_at ?? null) === null) {
+            return null;
+        }
+
+        return max(0, (int) $message->last_attempted_at->diffInSeconds($message->next_retry_at, false));
     }
 
     protected function messageModelClass(): string

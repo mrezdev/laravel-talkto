@@ -139,6 +139,55 @@ test('trace redacts payload by default and keeps secret-like values redacted whe
         ->and($withPayload['attempts'][0]['meta']['note'])->toBe('[redacted]');
 });
 
+test('trace payload option applies to dead letter payloads while headers stay redacted', function (): void {
+    p05TraceMessage('trace-dead-letter-payload');
+    p05TraceDeadLetter('trace-dead-letter-payload', [
+        'payload' => [
+            'visible' => 'safe-dead-letter-value',
+            'token' => 'token-secret',
+            'secret' => 'plain-secret',
+            'password' => 'password-secret',
+            'signature' => 'signature-secret',
+            'authorization' => 'Bearer secret',
+            'api_key' => 'api-key-secret',
+            'key' => 'generic-key-secret',
+        ],
+        'headers' => [
+            'authorization' => 'Bearer raw',
+            'X-Talkto-Signature' => 'raw-signature',
+        ],
+    ]);
+
+    $default = app(TalktoTraceReporter::class)->traceByMessageId('trace-dead-letter-payload')->toArray();
+    $withPayload = app(TalktoTraceReporter::class)->traceByMessageId('trace-dead-letter-payload', 100, true)->toArray();
+
+    expect($default['dead_letters'][0]['payload'])->toBe([
+        'redacted' => true,
+        'keys' => ['visible', 'token', 'secret', 'password', 'signature', 'authorization', 'api_key', 'key'],
+    ])->and($default['dead_letters'][0]['headers'])->toBe('[redacted]')
+        ->and($withPayload['dead_letters'][0]['payload']['visible'])->toBe('safe-dead-letter-value')
+        ->and($withPayload['dead_letters'][0]['payload']['token'])->toBe('[redacted]')
+        ->and($withPayload['dead_letters'][0]['payload']['secret'])->toBe('[redacted]')
+        ->and($withPayload['dead_letters'][0]['payload']['password'])->toBe('[redacted]')
+        ->and($withPayload['dead_letters'][0]['payload']['signature'])->toBe('[redacted]')
+        ->and($withPayload['dead_letters'][0]['payload']['authorization'])->toBe('[redacted]')
+        ->and($withPayload['dead_letters'][0]['payload']['api_key'])->toBe('[redacted]')
+        ->and($withPayload['dead_letters'][0]['payload']['key'])->toBe('[redacted]')
+        ->and($withPayload['dead_letters'][0]['headers'])->toBe('[redacted]');
+
+    expect(Artisan::call('talkto:trace', [
+        'message_id' => 'trace-dead-letter-payload',
+        '--json' => true,
+        '--payload' => true,
+    ]))->toBe(0);
+
+    $json = json_decode(Artisan::output(), true);
+
+    expect($json['dead_letters'][0]['payload']['visible'])->toBe('safe-dead-letter-value')
+        ->and($json['dead_letters'][0]['payload']['token'])->toBe('[redacted]')
+        ->and($json['dead_letters'][0]['headers'])->toBe('[redacted]');
+});
+
 test('trace returns warnings instead of throwing when optional tables are missing', function (): void {
     p05TraceMessage('trace-missing-tables');
 

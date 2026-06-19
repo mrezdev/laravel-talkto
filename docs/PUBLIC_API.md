@@ -28,6 +28,7 @@ This page lists the package surfaces intended for host applications to depend on
 - `TalktoEnvelopeData` provides an immutable snapshot of the envelope array shape and can be created from an envelope array or compatible message model.
 - `TalktoIncomingCommandResultData` provides an immutable snapshot of an `IncomingCommandResultContract`.
 - `TalktoTraceSnapshot` provides a stable array shape for read-only trace reports.
+- `TalktoRetryDecision` provides a stable array shape for retry eligibility and scheduling decisions.
 
 These data objects are additive. Existing array-based APIs remain supported and continue to return the same keys.
 
@@ -37,6 +38,7 @@ These data objects are additive. Existing array-based APIs remain supported and 
 - `talkto:dlq-reprocess` with `--id`, `--message-id`, `--direction`, `--limit`, `--dry-run`, and `--force`.
 - `talkto:report` with `--hours`, `--from`, `--to`, `--json`, `--direction`, and `--limit`.
 - `talkto:trace` with `message_id`, `--correlation`, `--json`, `--limit`, and `--payload`.
+- `TalktoDeadLetterQueue::markReprocessedForMessage()`, `markFailedReprocess()`, and `markIgnored()` for DLQ lifecycle integration.
 
 ## Config Areas
 
@@ -55,7 +57,7 @@ These data objects are additive. Existing array-based APIs remain supported and 
 ## Main Behavior
 
 - Incoming receive endpoint is opt-in through `talkto.routes.enabled`.
-- Callback receive endpoint is opt-in through `talkto.routes.enabled` and uses `talkto.routes.callback_uri`.
+- Callback receive endpoint is opt-in through `talkto.routes.enabled` and `talkto.callbacks.enabled`, and uses `talkto.routes.callback_uri`.
 - Outgoing targets resolve from config, aliases, and `TalktoOutgoingTargetRegistryContract`.
 - Signatures use backward-compatible v1 by default; v2 is opt-in for sending and accepted by default for receiving.
 - Retry/backoff state is stored on `talkto_messages`.

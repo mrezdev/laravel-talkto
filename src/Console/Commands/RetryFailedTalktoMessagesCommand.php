@@ -28,7 +28,14 @@ class RetryFailedTalktoMessagesCommand extends Command
             return self::FAILURE;
         }
 
-        $limit = max(1, (int) $this->option('limit'));
+        $limit = filter_var($this->option('limit'), FILTER_VALIDATE_INT);
+
+        if (! is_int($limit) || $limit < 1 || $limit > 1000) {
+            $this->error('Invalid --limit. Use a value between 1 and 1000.');
+
+            return self::FAILURE;
+        }
+
         $dryRun = (bool) $this->option('dry-run');
         $messageClass = $this->messageModelClass();
         $query = $messageClass::query()
@@ -43,12 +50,18 @@ class RetryFailedTalktoMessagesCommand extends Command
         $eligible = 0;
         $dispatched = 0;
         $skipped = 0;
+        $skipReasons = [];
 
         foreach ($query->get() as $message) {
             $scanned++;
+            $decision = $retryPolicy->decisionFor($message);
 
-            if (! $retryPolicy->canRetry($message) || ! $retryPolicy->isDue($message)) {
+            if (! $decision->retryable || ! $retryPolicy->isDue($message)) {
                 $skipped++;
+                $reason = ! $retryPolicy->isDue($message) && $decision->reason === 'eligible'
+                    ? 'not_due'
+                    : $decision->reason;
+                $skipReasons[$reason] = ($skipReasons[$reason] ?? 0) + 1;
 
                 continue;
             }
@@ -57,14 +70,16 @@ class RetryFailedTalktoMessagesCommand extends Command
 
             if (! $dryRun) {
                 $this->dispatchRetryJob($message);
-                $this->recordRetryDispatched($message);
+                $this->recordRetryDispatched($message, $decision->toArray());
                 $dispatched++;
             }
         }
 
         $dryRunValue = $dryRun ? 'true' : 'false';
 
-        $this->line("scanned={$scanned} eligible={$eligible} dispatched={$dispatched} skipped={$skipped} dry_run={$dryRunValue} direction={$direction}");
+        $skipSummary = json_encode($skipReasons, JSON_UNESCAPED_SLASHES) ?: '{}';
+
+        $this->line("scanned={$scanned} eligible={$eligible} dispatched={$dispatched} skipped={$skipped} dry_run={$dryRunValue} direction={$direction} skip_reasons={$skipSummary}");
 
         return self::SUCCESS;
     }
@@ -84,7 +99,7 @@ class RetryFailedTalktoMessagesCommand extends Command
         }
     }
 
-    private function recordRetryDispatched(TalktoMessage $message): void
+    private function recordRetryDispatched(TalktoMessage $message, array $decision): void
     {
         $eventClass = $this->eventModelClass();
 
@@ -98,6 +113,10 @@ class RetryFailedTalktoMessagesCommand extends Command
             'meta' => [
                 'direction' => $message->direction,
                 'retry_count' => (int) ($message->retry_count ?? 0),
+                'max_attempts' => $decision['max_attempts'] ?? null,
+                'backoff_seconds' => $decision['backoff_seconds'] ?? null,
+                'next_retry_at' => optional($message->next_retry_at)->toIso8601String(),
+                'reason' => $decision['reason'] ?? null,
             ],
         ]);
     }

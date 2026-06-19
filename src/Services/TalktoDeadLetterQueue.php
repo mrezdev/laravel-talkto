@@ -127,6 +127,56 @@ class TalktoDeadLetterQueue
         return $deadLetter;
     }
 
+    public function markReprocessedForMessage(TalktoMessage $message): ?TalktoDeadLetter
+    {
+        $deadLetterClass = $this->deadLetterModelClass();
+        $deadLetter = $deadLetterClass::query()
+            ->where('status', self::STATUS_REPROCESSING)
+            ->where(function ($query) use ($message): void {
+                $query->where('message_id', $message->message_id);
+
+                if ($message->id !== null) {
+                    $query->orWhere('talkto_message_id', $message->id);
+                }
+            })
+            ->first();
+
+        if (! $deadLetter) {
+            return null;
+        }
+
+        $deadLetter = $this->markReprocessed($deadLetter);
+        $this->recordEvent($message, 'dead_letter_reprocessed', [
+            'dead_letter_id' => $deadLetter->id,
+            'reprocess_count' => (int) $deadLetter->reprocess_count,
+        ]);
+
+        return $deadLetter;
+    }
+
+    public function markFailedReprocess(TalktoDeadLetter $deadLetter, ?string $reason = null, ?Throwable $exception = null): TalktoDeadLetter
+    {
+        $deadLetter->forceFill([
+            'status' => self::STATUS_FAILED_REPROCESS,
+            'failure_reason' => $this->excerpt($reason ?: $deadLetter->failure_reason),
+            'exception_class' => $exception ? $exception::class : $deadLetter->exception_class,
+            'exception_message' => $exception ? $this->excerpt($exception->getMessage()) : $deadLetter->exception_message,
+            'reprocessed_at' => now(),
+        ])->save();
+
+        return $deadLetter->fresh();
+    }
+
+    public function markIgnored(TalktoDeadLetter $deadLetter, ?string $reason = null): TalktoDeadLetter
+    {
+        $deadLetter->forceFill([
+            'status' => self::STATUS_IGNORED,
+            'failure_reason' => $this->excerpt($reason ?: $deadLetter->failure_reason),
+        ])->save();
+
+        return $deadLetter->fresh();
+    }
+
     public function recordEvent(TalktoMessage $message, string $eventType, array $meta = []): void
     {
         $eventClass = $this->eventModelClass();

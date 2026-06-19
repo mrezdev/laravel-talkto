@@ -32,6 +32,18 @@ The trace output includes related messages, attempts, events, dead letters, and 
 
 Confirm the host queue connection is running in the intended environment. Inspect failed jobs, retry limits, backoff configuration, and any HTTP timeouts reported by the sender or receiver job.
 
+## Retry Disabled Or Not Scheduled
+
+Check `talkto.retry.enabled`, the direction flag, peer/target overrides, and command overrides. `talkto:retry-failed --dry-run` prints skip reasons, and `talkto:trace <message-id>` shows the stored retry count, next retry time, attempts, and events.
+
+## Max Attempts Exhausted
+
+When retry count reaches the resolved max attempts, the message should move to the configured final failure status. If DLQ auto-store is enabled, inspect the matching dead-letter row and its events.
+
+## Dead Letter Stuck Reprocessing
+
+A row in `reprocessing` means it was claimed for `talkto:dlq-reprocess`. If dispatch failed or the reprocess failed again, the row should move to `failed_reprocess`. Use `talkto:trace <message-id>` to inspect whether a successful reprocess marked the row `reprocessed`.
+
 ## Routes Disabled
 
 Routes are disabled by default. Enable `talkto.routes.enabled` only when the host wants the package receive route. Existing hosts may keep their own route and controller wrapper.

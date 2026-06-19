@@ -67,6 +67,20 @@ Use explicit classifications:
 - `blocked`: config, peer, route, or handler problem.
 - `not_retryable`: invalid signature, payload hash mismatch, unknown source, unsafe duplicate.
 
+## Retry And DLQ Lifecycle
+
+Use `php artisan talkto:retry-failed --dry-run` before dispatching retries. The command reports eligible and skipped messages with compact skip reasons such as retry disabled, direction disabled, max attempts exhausted, or not due.
+
+Dead letters move through a small lifecycle:
+
+- `open`: stored final failure.
+- `reprocessing`: claimed by `talkto:dlq-reprocess`.
+- `reprocessed`: a reprocess completed successfully or was skipped as an accepted terminal result.
+- `failed_reprocess`: the claimed reprocess failed again or dispatch could not happen.
+- `ignored`: deliberately set aside by operator policy.
+
+Use `php artisan talkto:trace <message-id>` to inspect attempts, events, and DLQ transitions before running recovery commands.
+
 ## Recovery Action Safety Gates
 
 Recovery actions should require:

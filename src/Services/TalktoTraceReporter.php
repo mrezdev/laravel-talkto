@@ -131,7 +131,7 @@ class TalktoTraceReporter
 
         $attempts = $this->attempts($messageIds, $databaseIds, $limit, $warnings, $truncated);
         $events = $this->events($messageIds, $databaseIds, $limit, $warnings, $truncated);
-        $deadLetters = $this->deadLetters($messageIds, $databaseIds, $limit, $warnings, $truncated);
+        $deadLetters = $this->deadLetters($messageIds, $databaseIds, $limit, $includePayload, $warnings, $truncated);
 
         $related = $relatedMessages
             ->map(fn (Model $message): array => $this->messageArray($message, $includePayload))
@@ -232,7 +232,7 @@ class TalktoTraceReporter
         ])->all();
     }
 
-    private function deadLetters(array $messageIds, array $databaseIds, int $limit, array &$warnings, bool &$truncated): array
+    private function deadLetters(array $messageIds, array $databaseIds, int $limit, bool $includePayload, array &$warnings, bool &$truncated): array
     {
         if (($messageIds === [] && $databaseIds === []) || ! $this->tableExists($this->deadLetterModelClass(), 'dead_letters', $warnings)) {
             return [];
@@ -262,7 +262,7 @@ class TalktoTraceReporter
             'source' => $deadLetter->source,
             'target' => $deadLetter->target,
             'command' => $deadLetter->command,
-            'payload' => $this->payload($deadLetter->payload ?? [], false),
+            'payload' => $this->payload($deadLetter->payload ?? [], $includePayload),
             'headers' => '[redacted]',
             'failure_reason' => $this->redactText($deadLetter->failure_reason),
             'exception_class' => $deadLetter->exception_class,
