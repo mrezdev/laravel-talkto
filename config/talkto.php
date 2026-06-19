@@ -144,6 +144,40 @@ return [
         ],
     ],
 
+    'panel' => [
+        'enabled' => env('TALKTO_PANEL_ENABLED', false),
+
+        'route' => [
+            'prefix' => env('TALKTO_PANEL_PREFIX', 'talkto'),
+            'domain' => env('TALKTO_PANEL_DOMAIN'),
+            'middleware' => ['web', 'auth'],
+            'name' => env('TALKTO_PANEL_ROUTE_NAME', 'talkto.panel.'),
+        ],
+
+        'authorization' => [
+            'enabled' => env('TALKTO_PANEL_AUTHORIZATION_ENABLED', true),
+            'gate' => env('TALKTO_PANEL_GATE', 'viewTalktoPanel'),
+        ],
+
+        'messages' => [
+            'per_page' => (int) env('TALKTO_PANEL_MESSAGES_PER_PAGE', 25),
+            'show_payload' => env('TALKTO_PANEL_SHOW_PAYLOAD', false),
+            'show_response' => env('TALKTO_PANEL_SHOW_RESPONSE', false),
+            'redact_sensitive_values' => true,
+        ],
+
+        'health' => [
+            'window_minutes' => (int) env('TALKTO_PANEL_HEALTH_WINDOW_MINUTES', 60),
+            'cache_seconds' => (int) env('TALKTO_PANEL_HEALTH_CACHE_SECONDS', 30),
+        ],
+
+        'actions' => [
+            'retry_enabled' => env('TALKTO_PANEL_RETRY_ENABLED', true),
+            'dead_letter_reprocess_enabled' => env('TALKTO_PANEL_DLQ_REPROCESS_ENABLED', true),
+            'active_health_checks_enabled' => env('TALKTO_PANEL_ACTIVE_HEALTH_CHECKS_ENABLED', false),
+        ],
+    ],
+
     'outgoing' => [
         // Outgoing targets can also be registered programmatically through
         // TalktoOutgoingTargetRegistryContract. Programmatic targets override

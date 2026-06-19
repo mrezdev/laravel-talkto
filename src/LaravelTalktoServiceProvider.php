@@ -36,6 +36,7 @@ use Mrezdev\LaravelTalkto\Services\Scaffolding\TalktoStubRenderer;
 use Mrezdev\LaravelTalkto\Services\Scaffolding\TalktoIncomingScaffolder;
 use Mrezdev\LaravelTalkto\Services\Scaffolding\TalktoOutgoingScaffolder;
 use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
 class LaravelTalktoServiceProvider extends ServiceProvider
@@ -105,5 +106,27 @@ class LaravelTalktoServiceProvider extends ServiceProvider
         if (config('talkto.routes.enabled', true)) {
             $this->loadRoutesFrom(__DIR__.'/../routes/api.php');
         }
+
+        if (config('talkto.panel.enabled', false) === true) {
+            $this->loadPanelRoutes();
+        }
+    }
+
+    private function loadPanelRoutes(): void
+    {
+        $prefix = config('talkto.panel.route.prefix', 'talkto');
+        $domain = config('talkto.panel.route.domain');
+        $middleware = config('talkto.panel.route.middleware', ['web', 'auth']);
+        $name = config('talkto.panel.route.name', 'talkto.panel.');
+
+        $route = Route::prefix(is_string($prefix) ? $prefix : 'talkto')
+            ->as(is_string($name) ? $name : 'talkto.panel.')
+            ->middleware(is_array($middleware) ? $middleware : [$middleware]);
+
+        if (is_string($domain) && $domain !== '') {
+            $route->domain($domain);
+        }
+
+        $route->group(__DIR__.'/../routes/panel.php');
     }
 }
