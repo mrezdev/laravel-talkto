@@ -10,7 +10,6 @@ use Mrezdev\LaravelTalkto\Services\TalktoHealthChecker;
 use Mrezdev\LaravelTalkto\Services\TalktoMetricsCollector;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 class ReportTalktoMessagesCommand extends Command
@@ -183,12 +182,19 @@ class ReportTalktoMessagesCommand extends Command
 
     private function messagesTableExists(): bool
     {
-        return Schema::hasTable((new ($this->messageModelClass()))->getTable());
+        return $this->tableExists($this->messageModelClass());
     }
 
     private function eventsTableExists(): bool
     {
-        return Schema::hasTable((new ($this->eventModelClass()))->getTable());
+        return $this->tableExists($this->eventModelClass());
+    }
+
+    private function tableExists(string $modelClass): bool
+    {
+        $model = new $modelClass;
+
+        return $model->getConnection()->getSchemaBuilder()->hasTable($model->getTable());
     }
 
     private function messageModelClass(): string

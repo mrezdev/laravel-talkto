@@ -4,10 +4,11 @@ namespace Mrezdev\LaravelTalkto\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Mrezdev\LaravelTalkto\Models\Concerns\UsesTalktoDatabase;
 
 class TalktoEvent extends Model
 {
-    protected $table = 'talkto_events';
+    use UsesTalktoDatabase;
 
     protected $fillable = [
         'talkto_message_id',
@@ -28,6 +29,11 @@ class TalktoEvent extends Model
     public function message(): BelongsTo
     {
         return $this->belongsTo($this->messageModelClass(), 'talkto_message_id');
+    }
+
+    public function getTable()
+    {
+        return $this->talktoTable('events', 'talkto_events');
     }
 
     protected function messageModelClass(): string

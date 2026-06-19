@@ -4,10 +4,11 @@ namespace Mrezdev\LaravelTalkto\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Mrezdev\LaravelTalkto\Models\Concerns\UsesTalktoDatabase;
 
 class TalktoMessage extends Model
 {
-    protected $table = 'talkto_messages';
+    use UsesTalktoDatabase;
 
     protected $fillable = [
         'message_id',
@@ -61,6 +62,11 @@ class TalktoMessage extends Model
     public function attempts(): HasMany
     {
         return $this->hasMany($this->attemptModelClass(), 'talkto_message_id');
+    }
+
+    public function getTable()
+    {
+        return $this->talktoTable('messages', 'talkto_messages');
     }
 
     public function events(): HasMany

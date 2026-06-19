@@ -5,7 +5,6 @@ namespace Mrezdev\LaravelTalkto\Services\Panel;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Pagination\LengthAwarePaginator as LaravelLengthAwarePaginator;
 use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
@@ -170,7 +169,9 @@ class TalktoPanelMessageQuery
 
     private function tableExists(string $modelClass): bool
     {
-        return Schema::hasTable((new $modelClass)->getTable());
+        $model = new $modelClass;
+
+        return $model->getConnection()->getSchemaBuilder()->hasTable($model->getTable());
     }
 
     private function messagesTableExists(): bool

@@ -15,6 +15,23 @@ return [
         'dead_letter' => \Mrezdev\LaravelTalkto\Models\TalktoDeadLetter::class,
     ],
 
+    'database' => [
+        /*
+         * Database connection used by Talkto models, panel queries,
+         * retry/DLQ, trace, metrics, health, and future migrations.
+         *
+         * null means the Laravel default database connection.
+         */
+        'connection' => env('TALKTO_DB_CONNECTION'),
+
+        'tables' => [
+            'messages' => env('TALKTO_MESSAGES_TABLE', 'talkto_messages'),
+            'attempts' => env('TALKTO_ATTEMPTS_TABLE', 'talkto_attempts'),
+            'events' => env('TALKTO_EVENTS_TABLE', 'talkto_events'),
+            'dead_letters' => env('TALKTO_DEAD_LETTERS_TABLE', 'talkto_dead_letters'),
+        ],
+    ],
+
     'security' => [
         // v1 remains the default for backward compatibility. Enable v2 only
         // after both peers understand the version and nonce headers. New peer

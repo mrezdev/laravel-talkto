@@ -5,7 +5,6 @@ namespace Mrezdev\LaravelTalkto\Services\Panel;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Schema;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelConnection;
@@ -165,12 +164,19 @@ class TalktoPanelConnectionHealthChecker
 
     private function messagesTableExists(): bool
     {
-        return Schema::hasTable((new ($this->messageModelClass()))->getTable());
+        return $this->tableExists($this->messageModelClass());
     }
 
     private function deadLettersTableExists(): bool
     {
-        return Schema::hasTable((new ($this->deadLetterModelClass()))->getTable());
+        return $this->tableExists($this->deadLetterModelClass());
+    }
+
+    private function tableExists(string $modelClass): bool
+    {
+        $model = new $modelClass;
+
+        return $model->getConnection()->getSchemaBuilder()->hasTable($model->getTable());
     }
 
     private function messageModelClass(): string

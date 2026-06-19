@@ -4,9 +4,12 @@ namespace Mrezdev\LaravelTalkto\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Mrezdev\LaravelTalkto\Models\Concerns\UsesTalktoDatabase;
 
 class TalktoDeadLetter extends Model
 {
+    use UsesTalktoDatabase;
+
     protected $fillable = [
         'talkto_message_id',
         'message_id',
@@ -32,20 +35,14 @@ class TalktoDeadLetter extends Model
         'reprocessed_at' => 'datetime',
     ];
 
-    public function __construct(array $attributes = [])
-    {
-        parent::__construct($attributes);
-
-        $table = config('talkto.dead_letter.table', 'talkto_dead_letters');
-
-        if (is_string($table) && $table !== '') {
-            $this->setTable($table);
-        }
-    }
-
     public function message(): BelongsTo
     {
         return $this->belongsTo($this->messageModelClass(), 'talkto_message_id');
+    }
+
+    public function getTable()
+    {
+        return $this->talktoDeadLetterTable();
     }
 
     protected function messageModelClass(): string

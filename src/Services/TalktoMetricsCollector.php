@@ -9,7 +9,6 @@ use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Support\TalktoMetricsSnapshot;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\Schema;
 
 class TalktoMetricsCollector
 {
@@ -175,22 +174,29 @@ class TalktoMetricsCollector
 
     private function messagesTableExists(): bool
     {
-        return Schema::hasTable((new ($this->messageModelClass()))->getTable());
+        return $this->tableExists($this->messageModelClass());
     }
 
     private function deadLettersTableExists(): bool
     {
-        return Schema::hasTable((new ($this->deadLetterModelClass()))->getTable());
+        return $this->tableExists($this->deadLetterModelClass());
     }
 
     private function attemptsTableExists(): bool
     {
-        return Schema::hasTable((new ($this->attemptModelClass()))->getTable());
+        return $this->tableExists($this->attemptModelClass());
     }
 
     private function eventsTableExists(): bool
     {
-        return Schema::hasTable((new ($this->eventModelClass()))->getTable());
+        return $this->tableExists($this->eventModelClass());
+    }
+
+    private function tableExists(string $modelClass): bool
+    {
+        $model = new $modelClass;
+
+        return $model->getConnection()->getSchemaBuilder()->hasTable($model->getTable());
     }
 
     private function attemptModelClass(): string

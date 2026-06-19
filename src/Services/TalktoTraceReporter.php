@@ -5,7 +5,6 @@ namespace Mrezdev\LaravelTalkto\Services;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Schema;
 use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
@@ -413,13 +412,12 @@ class TalktoTraceReporter
     private function tableExists(string $modelClass, string $section, array &$warnings): bool
     {
         try {
-            $table = (new $modelClass)->getTable();
+            $model = new $modelClass;
 
-            if (Schema::hasTable($table)) {
+            if ($model->getConnection()->getSchemaBuilder()->hasTable($model->getTable())) {
                 return true;
             }
         } catch (Throwable) {
-            $table = 'unknown';
         }
 
         $warnings[] = $section.'_table_missing';
