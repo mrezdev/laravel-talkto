@@ -35,6 +35,7 @@ class TalktoPanelMessageQuery
         return $query
             ->orderByDesc('created_at')
             ->orderByDesc('id')
+            ->select($this->listMessageColumns())
             ->paginate($perPage);
     }
 
@@ -50,6 +51,7 @@ class TalktoPanelMessageQuery
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->limit($limit)
+            ->select($this->listMessageColumns())
             ->get();
     }
 
@@ -178,6 +180,48 @@ class TalktoPanelMessageQuery
             $query->where('source_service', $currentService)
                 ->orWhere('target_service', $currentService);
         });
+    }
+
+    /**
+     * Keep list queries small and avoid loading sensitive/heavy fields that are
+     * only needed by detail, trace, or action flows.
+     *
+     * @return array<int, string>
+     */
+    private function listMessageColumns(): array
+    {
+        return [
+            'id',
+            'message_id',
+            'correlation_id',
+            'direction',
+            'source_service',
+            'target_service',
+            'command',
+            'business_key',
+            'idempotency_key',
+            'payload_hash',
+            'schema_version',
+            'source_action_status',
+            'transport_status',
+            'destination_receive_status',
+            'destination_action_status',
+            'overall_status',
+            'attempts',
+            'retry_count',
+            'max_attempts',
+            'next_attempt_at',
+            'next_retry_at',
+            'last_http_status',
+            'sent_at',
+            'received_at',
+            'processing_started_at',
+            'last_attempted_at',
+            'completed_at',
+            'failed_at',
+            'created_at',
+            'updated_at',
+        ];
     }
 
     private function tableExists(string $modelClass): bool

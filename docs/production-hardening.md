@@ -102,3 +102,21 @@ Keep the panel disabled in production unless the host has authenticated middlewa
 ```dotenv
 TALKTO_PANEL_ENABLED=false
 ```
+
+When enabling it for trusted operators, keep every panel route, including POST actions, behind host-owned auth or stricter admin middleware:
+
+```php
+'panel' => [
+    'route' => [
+        'middleware' => ['web', 'auth'],
+    ],
+],
+```
+
+Keep `TALKTO_PANEL_SHOW_PAYLOAD=false` and `TALKTO_PANEL_SHOW_RESPONSE=false` unless operators are explicitly allowed to inspect those values. List views avoid loading heavy payload/response columns, and detail/trace views redact common secrets such as authorization headers, cookies, API keys, Talkto signatures, tokens, secrets, and passwords. Redaction is only a safety layer; it is not a substitute for access control.
+
+Run the audit command after panel config changes:
+
+```bash
+php artisan talkto:audit-security
+```

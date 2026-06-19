@@ -57,6 +57,7 @@ class TalktoPanelMessagesController
 
         $data = [
             'message' => $talktoMessage,
+            'message_data' => $presenter->message($talktoMessage),
             'attempts' => $messages->attemptsFor($talktoMessage)->values(),
             'events' => $messages->eventsFor($talktoMessage)->values(),
             'dead_letter' => $messages->deadLetterFor($talktoMessage),

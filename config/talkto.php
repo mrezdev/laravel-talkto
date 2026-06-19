@@ -221,11 +221,19 @@ return [
     ],
 
     'panel' => [
+        /*
+         * Disabled by default. Enable the panel only for trusted/admin
+         * operators and keep it behind host-owned authentication middleware.
+         */
         'enabled' => env('TALKTO_PANEL_ENABLED', false),
 
         'route' => [
             'prefix' => env('TALKTO_PANEL_PREFIX', 'talkto'),
             'domain' => env('TALKTO_PANEL_DOMAIN'),
+            /*
+             * These middleware wrap every panel route, including POST action
+             * routes. Keep auth or stricter admin middleware in production.
+             */
             'middleware' => ['web', 'auth'],
             'name' => env('TALKTO_PANEL_ROUTE_NAME', 'talkto.panel.'),
         ],
@@ -244,10 +252,26 @@ return [
         ],
 
         'messages' => [
+            /*
+             * List pages use a small safe column set and do not load payloads
+             * or response bodies. Detail/trace visibility is controlled below.
+             *
+             * Payload and response bodies can contain sensitive host data.
+             * Keep both false unless operators are explicitly allowed to view
+             * them. Redaction is a safety layer, not access control.
+             */
             'per_page' => (int) env('TALKTO_PANEL_MESSAGES_PER_PAGE', 25),
             'show_payload' => env('TALKTO_PANEL_SHOW_PAYLOAD', false),
             'show_response' => env('TALKTO_PANEL_SHOW_RESPONSE', false),
             'redact_sensitive_values' => true,
+            'redacted_keys' => [
+                'authorization',
+                'cookie',
+                'x-api-key',
+                'x-talkto-signature',
+                'token',
+                'password',
+            ],
         ],
 
         'health' => [

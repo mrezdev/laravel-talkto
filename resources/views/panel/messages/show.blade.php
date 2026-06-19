@@ -73,7 +73,7 @@
     <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <h3 class="text-base font-semibold text-slate-950">Payload</h3>
         @if ($showPayload)
-            <pre class="mt-4 overflow-x-auto rounded-md bg-slate-950 p-4 text-xs text-slate-100">{{ json_encode($message->payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
+            <pre class="mt-4 overflow-x-auto rounded-md bg-slate-950 p-4 text-xs text-slate-100">{{ json_encode($message_data['payload'] ?? null, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
         @else
             <p class="mt-3 rounded-md bg-slate-100 p-3 text-sm text-slate-600">Payload is hidden by panel config.</p>
         @endif
@@ -82,7 +82,7 @@
     <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <h3 class="text-base font-semibold text-slate-950">Response</h3>
         @if ($showResponse)
-            <pre class="mt-4 overflow-x-auto rounded-md bg-slate-950 p-4 text-xs text-slate-100">{{ json_encode($message->last_response, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
+            <pre class="mt-4 overflow-x-auto rounded-md bg-slate-950 p-4 text-xs text-slate-100">{{ json_encode($message_data['last_response'] ?? null, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
         @else
             <p class="mt-3 rounded-md bg-slate-100 p-3 text-sm text-slate-600">Response is hidden by panel config.</p>
         @endif

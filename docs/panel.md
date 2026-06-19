@@ -27,7 +27,7 @@ The package message tables must exist for message dashboards, detail pages, trac
 The panel defaults are conservative:
 
 - Disabled unless `TALKTO_PANEL_ENABLED=true`.
-- Protected by the configured route middleware.
+- Protected by the configured route middleware, including POST action routes.
 - Authorization gate checks are enabled by default.
 - Payload and response display are disabled by default.
 - Tailwind CDN is disabled by default.
@@ -63,6 +63,8 @@ Panel routes use the configured panel middleware. The default config uses Larave
 ```
 
 Use host middleware for authentication, session handling, IP restrictions, or admin-only access. Keep the panel behind authentication in production.
+
+Do not expose the panel publicly. If the middleware stack is empty or only contains `web`, the package cannot know who is allowed to inspect or mutate local Talkto rows. Run `php artisan talkto:audit-security` before enabling the panel in shared or production environments; it warns when the panel is enabled without auth-like middleware.
 
 ## Authorization Gate
 
@@ -107,6 +109,8 @@ If the host app already compiles Tailwind, keep the CDN disabled and style publi
 ## Message Dashboard
 
 The dashboard shows recent local Talkto messages and passive connection health. It reads local database records only. It does not send commands, dispatch jobs, or call remote services.
+
+Dashboard and message list queries use a small list-safe column set. They intentionally avoid loading payloads, response bodies, large error text, lock fields, or full heavy records that are only needed by detail, trace, or action flows.
 
 Incoming-only services may show `unknown` when there is no recent local traffic. That means the panel has no local evidence yet; it is not a confirmed outage.
 
@@ -210,19 +214,23 @@ Only enable these in environments where operators are allowed to see the data. E
 
 ## Redaction And Sensitive Data Notes
 
-The panel avoids exposing configured shared secrets. Active health URLs redact sensitive query keys such as `token`, `secret`, `api_key`, `signature`, and `authorization` when rendered or returned in JSON.
+The panel avoids exposing configured shared secrets. Payloads, responses, attempts, events, trace output, and active health URLs redact common sensitive keys such as `authorization`, `cookie`, `x-api-key`, `x-talkto-signature`, `x-talkto-secret`, `token`, `secret`, and `password` when rendered or returned in JSON.
+
+Redaction is a safety layer, not a replacement for access control. Keep the panel behind trusted admin middleware even when payload and response display are disabled.
 
 Avoid placing secrets in health URLs. Prefer unauthenticated, low-risk health endpoints that return minimal status.
 
 ## Suggested Production Setup
 
 - Keep the panel disabled unless operators need it.
-- Require authenticated middleware.
+- Require authenticated middleware such as `web`, `auth`, or a stricter app-specific admin middleware.
 - Require a narrow authorization gate.
 - Keep payload and response display off unless temporarily needed.
+- Treat payload and response visibility as sensitive operational access.
 - Keep Tailwind CDN off and use the host asset pipeline.
 - Enable active health checks only for safe, explicit health endpoints.
 - Avoid secrets in health URLs.
+- Run `php artisan talkto:audit-security` after config changes.
 - Publish views for host-specific branding or wording.
 
 ## Manual Smoke Commands

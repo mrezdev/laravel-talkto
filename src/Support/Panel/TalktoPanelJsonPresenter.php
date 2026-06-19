@@ -18,12 +18,16 @@ class TalktoPanelJsonPresenter
         'api_key',
         'apikey',
         'authorization',
+        'cookie',
         'signature',
         'hmac',
         'bearer',
         'private_key',
         'access_token',
         'refresh_token',
+        'x_api_key',
+        'x_talkto_signature',
+        'x_talkto_secret',
     ];
 
     public function message(TalktoMessage $message): array
@@ -39,7 +43,7 @@ class TalktoPanelJsonPresenter
             'command' => $message->command,
             'business_key' => $message->business_key,
             'idempotency_key' => $message->idempotency_key,
-            'payload' => $this->payload($message->payload ?? null),
+            'payload' => $this->payload($this->messageAttribute($message, 'payload', [])),
             'payload_hash' => $message->payload_hash,
             'schema_version' => $message->schema_version,
             'source_action_status' => $message->source_action_status,
@@ -54,7 +58,7 @@ class TalktoPanelJsonPresenter
             'next_retry_at' => $this->date($message->next_retry_at),
             'last_http_status' => $message->last_http_status,
             'last_error' => $message->last_error,
-            'last_response' => $this->response($message->last_response ?? null),
+            'last_response' => $this->response($this->messageAttribute($message, 'last_response', '')),
             'sent_at' => $this->date($message->sent_at),
             'received_at' => $this->date($message->received_at),
             'processing_started_at' => $this->date($message->processing_started_at),
@@ -292,13 +296,52 @@ class TalktoPanelJsonPresenter
     {
         $normalized = strtolower(str_replace(['-', ' '], '_', $key));
 
-        foreach (self::SENSITIVE_KEYS as $sensitive) {
+        foreach ($this->sensitiveKeys() as $sensitive) {
             if ($normalized === $sensitive || str_contains($normalized, $sensitive)) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function sensitiveKeys(): array
+    {
+        $configured = array_merge(
+            $this->stringList(config('talkto.security.redacted_keys', [])),
+            $this->stringList(config('talkto.panel.messages.redacted_keys', [])),
+        );
+
+        return array_values(array_unique(array_merge(self::SENSITIVE_KEYS, $configured)));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function stringList(mixed $values): array
+    {
+        if (! is_array($values)) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            array_map(static fn (mixed $value): string => strtolower(str_replace(['-', ' '], '_', (string) $value)), $values),
+            static fn (string $value): bool => $value !== ''
+        ));
+    }
+
+    private function messageAttribute(TalktoMessage $message, string $key, mixed $missingValue): mixed
+    {
+        $attributes = $message->getAttributes();
+
+        if (! array_key_exists($key, $attributes)) {
+            return $missingValue;
+        }
+
+        return $message->getAttribute($key);
     }
 
     private function date(mixed $value): ?string
