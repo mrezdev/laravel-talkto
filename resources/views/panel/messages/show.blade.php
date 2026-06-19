@@ -15,8 +15,24 @@
             <h2 class="text-2xl font-semibold text-slate-950">Message Detail</h2>
             <p class="mt-1 font-mono text-sm text-slate-600">{{ $message->message_id }}</p>
         </div>
-        @include('talkto::panel.partials.button-link', ['href' => route($routePrefix.'messages.index'), 'label' => 'Back to messages'])
+        <div class="flex flex-wrap gap-2">
+            @include('talkto::panel.partials.button-link', ['href' => route($routePrefix.'messages.trace', ['message' => $message->message_id]), 'label' => 'Trace'])
+            @include('talkto::panel.partials.button-link', ['href' => route($routePrefix.'messages.index'), 'label' => 'Back to messages'])
+        </div>
     </div>
+
+    <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <h3 class="text-base font-semibold text-slate-950">Actions</h3>
+        <div class="mt-4 flex flex-wrap gap-3">
+            @if (config('talkto.panel.actions.retry_enabled', true))
+                <form method="POST" action="{{ route($routePrefix.'messages.retry', ['message' => $message->message_id]) }}">
+                    @csrf
+                    <button type="submit" class="rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Retry now</button>
+                </form>
+            @endif
+            <a class="inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50" href="{{ route($routePrefix.'messages.trace', ['message' => $message->message_id]) }}">View trace</a>
+        </div>
+    </section>
 
     <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div class="flex items-center justify-between gap-4">
@@ -142,7 +158,15 @@
 
     @if ($dead_letter)
         <section class="rounded-lg border border-rose-200 bg-rose-50 p-5 shadow-sm">
-            <h3 class="text-base font-semibold text-rose-950">Dead letter</h3>
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h3 class="text-base font-semibold text-rose-950">Dead letter</h3>
+                @if (config('talkto.panel.actions.dead_letter_reprocess_enabled', true))
+                    <form method="POST" action="{{ route($routePrefix.'dead-letters.reprocess', ['deadLetter' => $dead_letter->id]) }}">
+                        @csrf
+                        <button type="submit" class="rounded-md bg-rose-700 px-4 py-2 text-sm font-medium text-white hover:bg-rose-800">Reprocess dead letter</button>
+                    </form>
+                @endif
+            </div>
             <dl class="mt-4 grid gap-4 md:grid-cols-3">
                 <div>
                     <dt class="text-xs font-semibold uppercase tracking-wide text-rose-700">Status</dt>
@@ -163,6 +187,6 @@
         </section>
     @endif
 
-    <p class="text-sm text-slate-500">Actions will be available in a later phase.</p>
+    <p class="text-sm text-slate-500">Only safe retry, reprocess, and trace actions are available from this panel.</p>
 </div>
 @endsection
