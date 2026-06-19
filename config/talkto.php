@@ -171,6 +171,11 @@ return [
             'cache_seconds' => (int) env('TALKTO_PANEL_HEALTH_CACHE_SECONDS', 30),
         ],
 
+        'views' => [
+            'layout' => env('TALKTO_PANEL_LAYOUT', 'talkto::panel.layout'),
+            'tailwind_cdn' => env('TALKTO_PANEL_TAILWIND_CDN', false),
+        ],
+
         'actions' => [
             'retry_enabled' => env('TALKTO_PANEL_RETRY_ENABLED', true),
             'dead_letter_reprocess_enabled' => env('TALKTO_PANEL_DLQ_REPROCESS_ENABLED', true),
