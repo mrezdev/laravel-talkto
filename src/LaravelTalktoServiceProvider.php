@@ -3,6 +3,7 @@
 namespace Mrezdev\LaravelTalkto;
 
 use Mrezdev\LaravelTalkto\Console\Commands\MakeTalktoIncomingCommand;
+use Mrezdev\LaravelTalkto\Console\Commands\MakeTalktoIntegrationCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\MakeTalktoOutgoingCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\RetryFailedTalktoMessagesCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\ReportTalktoMessagesCommand;
@@ -67,6 +68,7 @@ class LaravelTalktoServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 MakeTalktoIncomingCommand::class,
+                MakeTalktoIntegrationCommand::class,
                 MakeTalktoOutgoingCommand::class,
                 RetryFailedTalktoMessagesCommand::class,
                 ReprocessTalktoDeadLettersCommand::class,
