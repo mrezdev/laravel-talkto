@@ -170,14 +170,14 @@ test('gitattributes keeps release docs and excludes development artifacts from a
     }
 });
 
-test('security and support docs are private safe', function (): void {
+test('security and support docs describe public package support safely', function (): void {
     $combined = p49ReadPackageFile('SECURITY.md')."\n".p49ReadPackageFile('SUPPORT.md');
     $lower = strtolower($combined);
 
-    expect($lower)->toContain('private')
-        ->and($lower)->toContain('proprietary')
-        ->and($lower)->toContain('no public vulnerability disclosure address')
-        ->and($lower)->toContain('internal');
+    expect($lower)->toContain('mit license')
+        ->and($lower)->toContain('repository security advisory workflow')
+        ->and($lower)->toContain('repository issue process')
+        ->and($lower)->not->toContain('proprietary');
 
     foreach (p49ObviousSecretPatterns() as $term) {
         expect($combined)->not->toContain($term);

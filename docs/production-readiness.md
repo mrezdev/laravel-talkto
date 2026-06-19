@@ -11,11 +11,11 @@ Laravel Talkto gives Laravel services a secure delivery layer, but each host app
 - Run focused compatibility tests in each host application that consumes the local package copy.
 - Verify package docs do not contain secrets, environment values, raw signatures, or host-only business terms.
 - Review README, installation, configuration, security, testing, troubleshooting, and upgrading notes before tagging a release.
-- Do not publish a public release until the license and repository location are intentionally selected.
+- Confirm the MIT license, repository location, and Packagist package ownership before publishing a public release.
 
 ## Release Metadata
 
-Packagist should read versions from Git tags such as `v0.1.0`, not from a committed `version` field. Keep the package license conservative until the project owner approves a public license and repository metadata.
+Packagist should read versions from Git tags such as `v0.1.0`, not from a committed `version` field. The package license is MIT; keep repository metadata aligned with the published package identity.
 
 ## Host Rollout Checklist
 

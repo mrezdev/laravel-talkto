@@ -1,14 +1,14 @@
 # Security Policy
 
-Laravel Talkto is currently a private, proprietary package.
+Laravel Talkto is open-sourced software licensed under the MIT license.
 
 ## Supported Versions
 
-Supported versions are defined by the active private release line and Git tags. Before any public release, maintainers must define a public supported versions policy.
+Supported versions are defined by the active release line and Git tags.
 
 ## Reporting Vulnerabilities
 
-No public vulnerability disclosure address has been approved yet. Until then, report suspected vulnerabilities privately through the repository security advisory workflow or the approved internal project channel.
+Report suspected vulnerabilities through the repository security advisory workflow or the maintainer-approved security contact for the published package.
 
 Do not include real shared secrets, production payloads, private credentials, raw signatures, nonce values, authorization headers, cookies, or sensitive headers in issue text, pull requests, logs, screenshots, or documentation.
 

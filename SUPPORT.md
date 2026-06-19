@@ -1,8 +1,8 @@
 # Support
 
-Laravel Talkto is supported as a private internal package.
+Laravel Talkto is open-sourced software licensed under the MIT license.
 
-For now, support requests, bug reports, and release questions should be handled through the project owner's internal planning and review process. Do not publish private support addresses, secrets, credentials, or production data in repository metadata.
+Support requests, bug reports, and release questions should be handled through the repository issue process or the maintainer-approved support channel. Do not publish secrets, credentials, or production data in repository metadata.
 
 When reporting an issue, include:
 
@@ -13,4 +13,4 @@ When reporting an issue, include:
 - sanitized `talkto:security-audit` output when configuration or signing is involved
 - a minimal generic reproduction that does not include production payloads, credentials, raw signatures, or private headers
 
-Before a public release, maintainers should define public support expectations, response ownership, supported versions, and the issue intake process.
+Maintainers should keep support expectations, response ownership, supported versions, and issue intake guidance current for each release line.

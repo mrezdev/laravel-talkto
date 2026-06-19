@@ -2,7 +2,7 @@
     "name": "mrezdev/laravel-talkto",
     "description": "Reliable Laravel service-to-service messaging with signed outbox/inbox envelopes, idempotency, retries, callbacks, observability, and security audit tooling.",
     "type": "library",
-    "license": "proprietary",
+    "license": "MIT",
     "keywords": [
         "laravel",
         "webhook",

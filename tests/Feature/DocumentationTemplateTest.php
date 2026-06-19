@@ -191,25 +191,12 @@ test('documentation index exists and links only to existing files', function ():
     }
 });
 
-test('readme and docs avoid fake callback api and proprietary release overclaims', function (): void {
+test('readme and docs avoid fake callback api and describe mit release metadata', function (): void {
     $combined = p48DocumentationText()."\n".p48ReadPackageFile('docs/README.md');
     $composer = json_decode(p48ReadPackageFile('composer.json'), true, 512, JSON_THROW_ON_ERROR);
 
     expect($combined)->not->toContain('sendResult'.'Callback(')
-        ->and($combined)->toContain('sendResult(');
-
-    if (($composer['license'] ?? null) === 'proprietary') {
-        $lower = strtolower($combined);
-
-        foreach ([
-            'mit license',
-            'licensed under mit',
-            'open-source package',
-            'open source package',
-            'released as open source',
-            'publicly released package',
-        ] as $claim) {
-            expect($lower)->not->toContain($claim);
-        }
-    }
+        ->and($combined)->toContain('sendResult(')
+        ->and($composer['license'] ?? null)->toBe('MIT')
+        ->and(strtolower($combined))->toContain('mit license');
 });

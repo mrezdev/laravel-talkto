@@ -1,10 +1,10 @@
 <?php
 
-test('composer metadata stays aligned with private package scope', function (): void {
+test('composer metadata stays aligned with public package scope', function (): void {
     $composer = json_decode(file_get_contents(__DIR__.'/../../composer.json') ?: '{}', true);
 
     expect($composer['name'])->toBe('mrezdev/laravel-talkto')
-        ->and($composer['license'])->toBe('proprietary')
+        ->and($composer['license'])->toBe('MIT')
         ->and($composer['autoload']['psr-4'])->toHaveKey('Mrezdev\\LaravelTalkto\\');
 
     foreach (['laravel', 'service-to-service', 'hmac', 'outbox', 'inbox', 'idempotency', 'retry', 'dead-letter', 'callback', 'observability', 'security-audit'] as $keyword) {
@@ -18,9 +18,9 @@ test('composer metadata stays aligned with private package scope', function (): 
         'docs/release-process.md',
     ]);
 
-    expect($docs)->not->toContain('MIT')
-        ->and($docs)->not->toContain('open source')
-        ->and($docs)->not->toContain('open-source');
+    expect($docs)->toContain('MIT')
+        ->and(strtolower($docs))->toContain('mit license')
+        ->and(strtolower($docs))->not->toContain('proprietary');
 });
 
 test('github actions workflow runs composer validation and pest on supported php versions', function (): void {

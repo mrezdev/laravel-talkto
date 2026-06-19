@@ -31,5 +31,5 @@ git push -u origin main
 - Confirm the repository is private.
 - Confirm the package root contains `composer.json` directly at the top level.
 - Confirm `vendor/`, `composer.lock`, generated test caches, build output, and local environment files are absent.
-- Confirm the license is still proprietary/private unless the owner approved a change.
+- Confirm `composer.json` and `LICENSE.md` still use the owner-approved MIT license unless the owner approved a change.
 - Confirm docs and metadata contain placeholders only.

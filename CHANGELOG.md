@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Changed package license to MIT for public Composer/Packagist distribution.
+
 ### Reliability Fixes
 
 - Hardened incoming idempotency, retry lock clearing, and callback success state cleanup.

@@ -12,7 +12,7 @@ This package is prepared for a future private repository, but P.49A does not cre
 6. Run `composer install --prefer-dist --no-interaction --no-progress`.
 7. Run `vendor/bin/pest`.
 8. Enable branch protection when available.
-9. Keep the license private and proprietary until the owner approves a different license.
+9. Keep the owner-approved MIT license unless the owner approves a different license.
 10. Tag releases only after Composer validation, package tests, docs review, and leakage checks pass.
 
 ## Repository Scope

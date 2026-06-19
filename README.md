@@ -336,9 +336,13 @@ The detailed public surface is tracked in [docs/PUBLIC_API.md](docs/PUBLIC_API.m
 
 ## Current Maturity / Release Status
 
-This package is currently proprietary according to `composer.json`. Do not assume a public package license, public support process, or Packagist distribution until the repository owner makes that decision.
+This package is licensed under MIT and is ready for public Composer/Packagist distribution after the normal release checklist passes.
 
-The package is suitable for private package hardening and host integration review. Treat tags as package version boundaries, and review [UPGRADE.md](UPGRADE.md), [CHANGELOG.md](CHANGELOG.md), and [docs/public-release-readiness.md](docs/public-release-readiness.md) before broad distribution.
+Treat tags as package version boundaries, and review [UPGRADE.md](UPGRADE.md), [CHANGELOG.md](CHANGELOG.md), and [docs/public-release-readiness.md](docs/public-release-readiness.md) before broad distribution.
+
+## License
+
+Laravel Talkto is open-sourced software licensed under the MIT license.
 
 ## Testing
 

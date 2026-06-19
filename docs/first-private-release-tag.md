@@ -19,7 +19,7 @@ Also confirm:
 - CI passes on the default branch.
 - Host-only domain rules are not embedded in package source or docs.
 - No generated files or dependency folders are committed.
-- The license remains proprietary/private until the owner approves a different license.
+- Use the MIT license unless the owner approves a different license.
 
 ## First Tag
 

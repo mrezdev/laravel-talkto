@@ -71,4 +71,4 @@ Scan for committed credentials, private access values, local machine secrets, pr
 
 ## License Warning
 
-The package remains proprietary/private until the owner explicitly approves a different license. Do not change the license during extraction.
+The package license is MIT. Do not change the license during extraction unless the owner explicitly approves a different license.
