@@ -32,7 +32,7 @@ flowchart LR
 
 - You only need an in-process service class call.
 - You need a general event bus, stream processor, or pub/sub platform.
-- You need a UI dashboard included with the package.
+- You need the package to own host-specific business dashboards or operational policy.
 - You want the package to own host domain logic, permissions, or data mapping.
 - You want the package to decide what callback results mean for host business side effects.
 
@@ -50,8 +50,22 @@ flowchart LR
 - Retry/backoff state and retry command.
 - Dead Letter Queue storage and reprocess command.
 - Read-only metrics, health summaries, report command, and message trace command.
+- Optional Talkto Panel for local message inspection, trace, safe retry/reprocess actions, and connection health.
 - Read-only security audit command and centralized redaction.
 - Signed result callback sender and receiver runtime, with contracts that hosts can override.
+
+## Optional Talkto Panel
+
+Laravel Talkto includes an optional Blade/Tailwind operations panel. It is disabled by default and can show local message history, detail/trace views, safe retry and dead-letter reprocess actions, passive connection health, and optional active health checks for configured health URLs.
+
+```dotenv
+TALKTO_PANEL_ENABLED=true
+TALKTO_PANEL_PREFIX=admin/talkto
+TALKTO_PANEL_AUTHORIZATION_ENABLED=true
+TALKTO_PANEL_GATE=viewTalktoPanel
+```
+
+The panel does not require Livewire, Vue, React, Inertia, Filament, or required frontend JavaScript. See [docs/panel.md](docs/panel.md) for setup, security defaults, view publishing, payload visibility, and production guidance.
 
 ## 60-Second Architecture Overview
 

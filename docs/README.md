@@ -45,6 +45,7 @@ Use this page as the documentation map for Laravel Talkto. The root [README](../
 
 ## Observability
 
+- [Talkto Panel](panel.md)
 - [Recovery and monitoring template](recovery-monitoring-template.md)
 - [Troubleshooting](troubleshooting.md)
 - [Testing](testing.md)

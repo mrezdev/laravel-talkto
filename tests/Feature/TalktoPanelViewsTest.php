@@ -141,12 +141,24 @@ test('panel views are namespaced and publishable', function (): void {
         ->and(View::exists('talkto::panel.index'))->toBeTrue()
         ->and(View::exists('talkto::panel.messages.index'))->toBeTrue()
         ->and(View::exists('talkto::panel.messages.show'))->toBeTrue()
-        ->and(View::exists('talkto::panel.connections.index'))->toBeTrue();
+        ->and(View::exists('talkto::panel.connections.index'))->toBeTrue()
+        ->and(View::exists('talkto::panel.partials.active-health-badge'))->toBeTrue();
 
     expect(Artisan::call('vendor:publish', [
         '--tag' => 'talkto-panel-views',
         '--force' => true,
     ]))->toBe(0);
+});
+
+test('panel layout can be customized through config', function (): void {
+    ($this->bootPanelViewsApp)();
+
+    View::addNamespace('panel-test', __DIR__.'/../Fixtures/views');
+    config(['talkto.panel.views.layout' => 'panel-test::custom-panel-layout']);
+
+    $this->get('/talkto')
+        ->assertOk()
+        ->assertSee('Custom Panel Layout');
 });
 
 function p3PanelUseEnv(array $values = []): void

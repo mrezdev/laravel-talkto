@@ -32,6 +32,15 @@ Packagist should read versions from Git tags such as `v0.1.0`, not from a commit
 
 Track message status, attempt count, last error, payload hash mismatch events, invalid signature events, command allowlist failures, duplicate idempotency keys, callback failures, and queue latency.
 
+## Optional Talkto Panel
+
+- Keep the panel disabled unless operators need it.
+- Protect the panel with authenticated middleware and a narrow authorization gate.
+- Keep payload and response display disabled in production unless there is a specific operational need.
+- Prefer active health checks only for safe, explicit health endpoints.
+- Do not expose secrets in active health URLs.
+- Publish panel views if the host needs UI customization or production-specific wording.
+
 ## Before Enabling Real Traffic
 
 Run a local end-to-end exchange, a staging exchange with test secrets, and a rollback drill. Confirm the host can pause sends, pause receives, retry failed jobs, and inspect message history without exposing secrets.

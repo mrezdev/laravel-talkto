@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\Schema;
 use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
@@ -279,6 +280,18 @@ test('panel message query paginates latest messages and applies filters', functi
     expect($query->findMessage('panel-in')?->id)->toBe($incoming->id);
     expect($query->findMessage('missing-message'))->toBeNull();
     expect($query->paginate(TalktoPanelMessageFilters::fromArray(['message_id' => (string) $old->id]), 10)->total())->toBe(1);
+});
+
+test('panel message query returns empty results when messages table is missing', function (): void {
+    Schema::dropIfExists('talkto_messages');
+
+    $query = app(TalktoPanelMessageQuery::class);
+    $paginator = $query->paginate(TalktoPanelMessageFilters::fromArray([]), 10);
+
+    expect($query->latest())->toHaveCount(0)
+        ->and($paginator->total())->toBe(0)
+        ->and($paginator->items())->toBe([])
+        ->and($query->findMessage('missing-message'))->toBeNull();
 });
 
 test('panel message query returns related attempts events and dead letter safely', function (): void {

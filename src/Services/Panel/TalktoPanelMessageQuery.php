@@ -6,6 +6,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Pagination\LengthAwarePaginator as LaravelLengthAwarePaginator;
 use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
@@ -17,6 +18,16 @@ class TalktoPanelMessageQuery
     public function paginate(TalktoPanelMessageFilters $filters, int $perPage = 25): LengthAwarePaginator
     {
         $perPage = max(1, min($perPage, 100));
+
+        if (! $this->messagesTableExists()) {
+            return new LaravelLengthAwarePaginator(
+                items: [],
+                total: 0,
+                perPage: $perPage,
+                currentPage: LaravelLengthAwarePaginator::resolveCurrentPage(),
+                options: ['path' => LaravelLengthAwarePaginator::resolveCurrentPath()]
+            );
+        }
 
         $query = $this->baseMessageQuery();
         $this->applyFilters($query, $filters);
@@ -31,6 +42,10 @@ class TalktoPanelMessageQuery
     {
         $limit = max(1, min($limit, 100));
 
+        if (! $this->messagesTableExists()) {
+            return collect();
+        }
+
         return $this->baseMessageQuery()
             ->orderByDesc('created_at')
             ->orderByDesc('id')
@@ -40,6 +55,10 @@ class TalktoPanelMessageQuery
 
     public function findMessage(string|int $id): ?TalktoMessage
     {
+        if (! $this->messagesTableExists()) {
+            return null;
+        }
+
         $query = $this->baseMessageQuery();
 
         if (is_int($id) || ctype_digit((string) $id)) {
@@ -152,6 +171,11 @@ class TalktoPanelMessageQuery
     private function tableExists(string $modelClass): bool
     {
         return Schema::hasTable((new $modelClass)->getTable());
+    }
+
+    private function messagesTableExists(): bool
+    {
+        return $this->tableExists($this->messageModelClass());
     }
 
     private function messageModelClass(): string

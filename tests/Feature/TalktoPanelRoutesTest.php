@@ -3,6 +3,7 @@
 use Illuminate\Foundation\Auth\User as AuthenticatableUser;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
@@ -70,6 +71,22 @@ test('panel route custom prefix works', function (): void {
     $this->getJson('/talkto')->assertNotFound();
 });
 
+test('panel route custom name prefix works', function (): void {
+    ($this->bootPanelApp)([
+        'TALKTO_PANEL_ENABLED' => 'true',
+        'TALKTO_PANEL_ROUTE_NAME' => 'ops.talkto.',
+    ]);
+
+    config(['talkto.panel.authorization.enabled' => false]);
+    $this->withoutMiddleware();
+
+    expect(Route::has('ops.talkto.index'))->toBeTrue()
+        ->and(Route::has('ops.talkto.connections.check'))->toBeTrue()
+        ->and(Route::has('talkto.panel.index'))->toBeFalse();
+
+    $this->getJson('/talkto')->assertOk();
+});
+
 test('panel routes are independent from existing api route loading', function (): void {
     ($this->bootPanelApp)(['TALKTO_PANEL_ENABLED' => 'true']);
 
@@ -80,6 +97,36 @@ test('panel routes are independent from existing api route loading', function ()
 
     expect(Route::has('talkto.panel.index'))->toBeFalse()
         ->and(Route::has('talkto.receive'))->toBeTrue();
+});
+
+test('panel dashboard and messages index handle missing message table', function (): void {
+    ($this->bootPanelApp)(['TALKTO_PANEL_ENABLED' => 'true']);
+
+    config(['talkto.panel.authorization.enabled' => false]);
+    $this->withoutMiddleware();
+    Schema::dropIfExists('talkto_messages');
+
+    $this->getJson('/talkto')
+        ->assertOk()
+        ->assertJsonPath('latest_messages', []);
+
+    $this->getJson('/talkto/messages')
+        ->assertOk()
+        ->assertJsonPath('messages.total', 0)
+        ->assertJsonPath('messages.data', []);
+});
+
+test('panel mutating action routes are post only', function (): void {
+    ($this->bootPanelApp)(['TALKTO_PANEL_ENABLED' => 'true']);
+
+    $routes = Route::getRoutes();
+
+    expect($routes->getByName('talkto.panel.messages.retry')?->methods())->toContain('POST')
+        ->and($routes->getByName('talkto.panel.dead-letters.reprocess')?->methods())->toContain('POST')
+        ->and($routes->getByName('talkto.panel.connections.check')?->methods())->toContain('POST')
+        ->and($routes->getByName('talkto.panel.messages.retry')?->methods())->not->toContain('GET')
+        ->and($routes->getByName('talkto.panel.dead-letters.reprocess')?->methods())->not->toContain('GET')
+        ->and($routes->getByName('talkto.panel.connections.check')?->methods())->not->toContain('GET');
 });
 
 test('panel authorization denies access when enabled and gate does not allow', function (): void {
