@@ -9,8 +9,7 @@ class TalktoPanelActionResult
         public readonly string $message,
         public readonly array $meta = [],
         public readonly ?string $redirectRoute = null,
-    ) {
-    }
+    ) {}
 
     public static function success(string $message, array $meta = []): self
     {

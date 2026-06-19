@@ -4,6 +4,7 @@ namespace Mrezdev\LaravelTalkto\Services;
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use InvalidArgumentException;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackReceiverContract;
 use Mrezdev\LaravelTalkto\Data\TalktoResultCallbackData;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
@@ -165,6 +166,7 @@ class TalktoResultCallbackReceiver implements ResultCallbackReceiverContract
             'skipped' => ['skipped', 'completed'],
             'failed_retryable' => ['failed_retryable', 'failed_retryable'],
             'failed_final' => ['failed_final', 'failed_final'],
+            default => throw new InvalidArgumentException('Unsupported callback status.'),
         };
     }
 

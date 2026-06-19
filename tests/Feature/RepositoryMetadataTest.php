@@ -115,14 +115,30 @@ test('github issue and pull request templates request sanitized generic context'
 
 test('github workflow validates composer metadata installs dependencies and runs package tests', function (): void {
     $workflow = p49ReadPackageFile('.github/workflows/tests.yml');
+    $lockRemovalPosition = strpos($workflow, 'rm -f composer.lock');
+    $validatePosition = strpos($workflow, 'composer validate --strict');
+    $installPosition = strpos($workflow, 'composer install --prefer-dist --no-interaction --no-progress');
+    $auditPosition = strpos($workflow, 'composer audit');
 
     expect($workflow)->toContain('pull_request')
         ->and($workflow)->toContain('push:')
         ->and($workflow)->toContain('actions/checkout')
         ->and($workflow)->toContain('shivammathur/setup-php')
+        ->and($workflow)->toContain('rm -f composer.lock')
         ->and($workflow)->toContain('composer validate --strict')
         ->and($workflow)->toContain('composer install --prefer-dist --no-interaction --no-progress')
+        ->and($workflow)->toContain('composer audit')
+        ->and($workflow)->toContain('vendor/bin/pint --test')
+        ->and($workflow)->toContain('vendor/bin/phpstan analyse')
         ->and($workflow)->toContain('vendor/bin/pest');
+
+    expect($lockRemovalPosition)->not->toBeFalse()
+        ->and($validatePosition)->not->toBeFalse()
+        ->and($installPosition)->not->toBeFalse()
+        ->and($auditPosition)->not->toBeFalse()
+        ->and($lockRemovalPosition)->toBeLessThan($validatePosition)
+        ->and($validatePosition)->toBeLessThan($installPosition)
+        ->and($installPosition)->toBeLessThan($auditPosition);
 
     foreach (['deploy', 'scp ', 'rsync', 'gh release', 'composer publish', 'git push'] as $term) {
         expect(strtolower($workflow))->not->toContain($term);

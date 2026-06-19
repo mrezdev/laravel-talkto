@@ -4,12 +4,12 @@ namespace Mrezdev\LaravelTalkto\Console\Commands;
 
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Builder;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoHealthChecker;
 use Mrezdev\LaravelTalkto\Services\TalktoMetricsCollector;
-use Illuminate\Console\Command;
-use Illuminate\Database\Eloquent\Builder;
 use Throwable;
 
 class ReportTalktoMessagesCommand extends Command

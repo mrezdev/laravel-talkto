@@ -17,9 +17,7 @@ class TalktoPanelConnectionHealthChecker
     public function __construct(
         private readonly TalktoPanelConnectionRegistry $registry,
         private readonly TalktoCurrentServiceGuard $currentServiceGuard,
-    )
-    {
-    }
+    ) {}
 
     public function check(TalktoPanelConnection $connection, int $windowMinutes = 60): TalktoPanelConnectionHealth
     {

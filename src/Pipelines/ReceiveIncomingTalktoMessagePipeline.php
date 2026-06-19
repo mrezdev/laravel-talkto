@@ -2,15 +2,15 @@
 
 namespace Mrezdev\LaravelTalkto\Pipelines;
 
-use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
-use Mrezdev\LaravelTalkto\Models\TalktoEvent;
-use Mrezdev\LaravelTalkto\Models\TalktoMessage;
-use Mrezdev\LaravelTalkto\Services\TalktoSignatureVerifier;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoEvent;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoSignatureVerifier;
 use Throwable;
 
 class ReceiveIncomingTalktoMessagePipeline

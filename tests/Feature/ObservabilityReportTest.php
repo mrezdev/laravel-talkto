@@ -1,12 +1,12 @@
 <?php
 
+use Illuminate\Support\Facades\Artisan;
+use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
-use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Services\TalktoHealthChecker;
 use Mrezdev\LaravelTalkto\Services\TalktoMetricsCollector;
-use Illuminate\Support\Facades\Artisan;
 
 beforeEach(function (): void {
     $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');

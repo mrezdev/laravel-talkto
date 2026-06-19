@@ -207,6 +207,7 @@ php artisan queue:work
 php artisan talkto:retry-failed --dry-run
 php artisan talkto:report --hours=24 --direction=all --limit=20
 php artisan talkto:trace <message-id>
+php artisan talkto:audit-security
 php artisan talkto:security-audit
 ```
 
@@ -289,8 +290,10 @@ Common next stops:
 
 - [docs/installation.md](docs/installation.md)
 - [docs/configuration.md](docs/configuration.md)
+- [docs/extending.md](docs/extending.md)
 - [docs/sending-commands.md](docs/sending-commands.md)
 - [docs/http-client.md](docs/http-client.md)
+- [docs/panel.md](docs/panel.md)
 - [docs/handling-commands.md](docs/handling-commands.md)
 - [docs/scaffolding.md](docs/scaffolding.md)
 - [docs/transactional-outgoing.md](docs/transactional-outgoing.md)
@@ -301,6 +304,7 @@ Common next stops:
 - [docs/recovery-monitoring-template.md](docs/recovery-monitoring-template.md)
 - [docs/production-hardening.md](docs/production-hardening.md)
 - [docs/production-rollout-template.md](docs/production-rollout-template.md)
+- [docs/release-readiness.md](docs/release-readiness.md)
 - [docs/PUBLIC_API.md](docs/PUBLIC_API.md)
 - [UPGRADE.md](UPGRADE.md)
 
@@ -309,6 +313,7 @@ Repository and release preparation:
 - [docs/private-repository-setup.md](docs/private-repository-setup.md)
 - [docs/ci.md](docs/ci.md)
 - [docs/release-process.md](docs/release-process.md)
+- [docs/release-readiness.md](docs/release-readiness.md)
 - [docs/versioning.md](docs/versioning.md)
 - [docs/private-composer-installation.md](docs/private-composer-installation.md)
 - [docs/first-private-repository-commit.md](docs/first-private-repository-commit.md)

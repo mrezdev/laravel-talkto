@@ -3,12 +3,12 @@
 namespace Mrezdev\LaravelTalkto\Services;
 
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Support\TalktoMetricsSnapshot;
-use Illuminate\Database\Eloquent\Builder;
 
 class TalktoMetricsCollector
 {

@@ -2,6 +2,7 @@
 
 namespace Mrezdev\LaravelTalkto\Pipelines;
 
+use Illuminate\Support\Facades\DB;
 use Mrezdev\LaravelTalkto\Contracts\TalktoHttpClient;
 use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
@@ -9,16 +10,13 @@ use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
 use Mrezdev\LaravelTalkto\Services\TalktoOutgoingEnvelopeBuilder;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
-use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class SendOutgoingTalktoMessagePipeline
 {
     private int $talktoMessageId;
 
-    public function __construct(private ?TalktoHttpClient $httpClient = null)
-    {
-    }
+    public function __construct(private ?TalktoHttpClient $httpClient = null) {}
 
     public function send(int $talktoMessageId, TalktoOutgoingEnvelopeBuilder $builder, ?TalktoRetryPolicy $retryPolicy = null): void
     {
@@ -111,7 +109,7 @@ class SendOutgoingTalktoMessagePipeline
             'talkto_message_id' => $message->id,
             'message_id' => $message->message_id,
             'stage' => 'transport',
-            'attempt_no' => ((int) $message->attempts) + 1,
+            'attempt_no' => ((int) $message->getAttribute('attempts')) + 1,
             'status' => 'skipped',
             'error_class' => $errorClass,
             'error_message' => $errorMessage,
@@ -155,7 +153,7 @@ class SendOutgoingTalktoMessagePipeline
             }
 
             $previousStatus = $message->overall_status;
-            $attemptNo = ((int) $message->attempts) + 1;
+            $attemptNo = ((int) $message->getAttribute('attempts')) + 1;
             $sourceService = $message->source_service;
             $targetService = $message->target_service;
             $command = $message->command;
@@ -425,6 +423,9 @@ class SendOutgoingTalktoMessagePipeline
         return max(0, (int) $message->last_attempted_at->diffInSeconds($message->next_retry_at, false));
     }
 
+    /**
+     * @return class-string<TalktoMessage>
+     */
     protected function messageModelClass(): string
     {
         $class = config('talkto.models.message', TalktoMessage::class);
@@ -434,6 +435,9 @@ class SendOutgoingTalktoMessagePipeline
             : TalktoMessage::class;
     }
 
+    /**
+     * @return class-string<TalktoAttempt>
+     */
     protected function attemptModelClass(): string
     {
         $class = config('talkto.models.attempt', TalktoAttempt::class);
@@ -443,6 +447,9 @@ class SendOutgoingTalktoMessagePipeline
             : TalktoAttempt::class;
     }
 
+    /**
+     * @return class-string<TalktoEvent>
+     */
     protected function eventModelClass(): string
     {
         $class = config('talkto.models.event', TalktoEvent::class);

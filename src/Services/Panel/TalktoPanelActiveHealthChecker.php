@@ -15,8 +15,7 @@ class TalktoPanelActiveHealthChecker
     public function __construct(
         private readonly TalktoPanelConnectionRegistry $registry,
         private readonly TalktoSecurityRedactor $redactor,
-    ) {
-    }
+    ) {}
 
     public function check(TalktoPanelConnection $connection, bool $force = false): TalktoPanelActiveHealthResult
     {

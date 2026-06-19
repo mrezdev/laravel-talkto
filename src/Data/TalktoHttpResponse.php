@@ -9,8 +9,7 @@ class TalktoHttpResponse
         private readonly ?string $body = null,
         private readonly array $headers = [],
         private readonly ?bool $successful = null,
-    ) {
-    }
+    ) {}
 
     public function status(): int
     {

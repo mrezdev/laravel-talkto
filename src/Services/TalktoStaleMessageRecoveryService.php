@@ -13,8 +13,7 @@ class TalktoStaleMessageRecoveryService
     public function __construct(
         private readonly TalktoRetryPolicy $retryPolicy,
         private readonly TalktoDeadLetterQueue $deadLetterQueue,
-    ) {
-    }
+    ) {}
 
     public function recover(?string $direction, int $olderThanMinutes, int $limit, bool $dryRun): array
     {

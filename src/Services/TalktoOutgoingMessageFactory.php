@@ -2,15 +2,15 @@
 
 namespace Mrezdev\LaravelTalkto\Services;
 
-use Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract;
-use Illuminate\Database\QueryException;
-use Mrezdev\LaravelTalkto\Models\TalktoEvent;
-use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use JsonSerializable;
+use Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract;
+use Mrezdev\LaravelTalkto\Models\TalktoEvent;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Throwable;
 
 class TalktoOutgoingMessageFactory
@@ -18,8 +18,7 @@ class TalktoOutgoingMessageFactory
     public function __construct(
         private readonly TalktoPayloadHasher $payloadHasher,
         private readonly TalktoOutgoingTargetRegistryContract $targets
-    ) {
-    }
+    ) {}
 
     public function create(
         string $target,

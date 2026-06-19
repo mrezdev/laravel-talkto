@@ -2,6 +2,7 @@
 
 namespace Mrezdev\LaravelTalkto\Pipelines;
 
+use Illuminate\Support\Facades\DB;
 use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
 use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
@@ -9,7 +10,6 @@ use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
 use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResolver;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
-use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class ProcessIncomingTalktoMessagePipeline
@@ -102,7 +102,7 @@ class ProcessIncomingTalktoMessagePipeline
             'talkto_message_id' => $message->id,
             'message_id' => $message->message_id,
             'stage' => 'destination_processor',
-            'attempt_no' => ((int) $message->attempts) + 1,
+            'attempt_no' => ((int) $message->getAttribute('attempts')) + 1,
             'status' => 'skipped',
             'error_class' => $errorClass,
             'error_message' => $errorMessage,
@@ -140,7 +140,7 @@ class ProcessIncomingTalktoMessagePipeline
             }
 
             $previousStatus = $message->overall_status;
-            $attemptNo = ((int) $message->attempts) + 1;
+            $attemptNo = ((int) $message->getAttribute('attempts')) + 1;
 
             $message->forceFill([
                 'attempts' => $attemptNo,

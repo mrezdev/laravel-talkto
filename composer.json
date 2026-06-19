@@ -38,7 +38,9 @@
     "require-dev": {
         "orchestra/testbench": "^10.0|^11.0",
         "pestphp/pest": "^3.0|^4.0",
-        "pestphp/pest-plugin-laravel": "^3.0|^4.0"
+        "pestphp/pest-plugin-laravel": "^3.0|^4.0",
+        "laravel/pint": "^1.29",
+        "larastan/larastan": "^3.10"
     },
     "autoload": {
         "psr-4": {
@@ -51,7 +53,10 @@
         }
     },
     "scripts": {
-        "test": "pest"
+        "test": "pest",
+        "format": "pint",
+        "format:test": "pint --test",
+        "analyse": "phpstan analyse"
     },
     "config": {
         "allow-plugins": {

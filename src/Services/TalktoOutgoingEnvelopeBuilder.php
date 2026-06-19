@@ -2,20 +2,19 @@
 
 namespace Mrezdev\LaravelTalkto\Services;
 
-use Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract;
-use Mrezdev\LaravelTalkto\Data\TalktoEnvelopeData;
-use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoSignatureException;
-use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoOutgoingTarget;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
+use Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract;
+use Mrezdev\LaravelTalkto\Data\TalktoEnvelopeData;
+use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoOutgoingTarget;
+use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoSignatureException;
 
 class TalktoOutgoingEnvelopeBuilder
 {
     public function __construct(
         private readonly TalktoSigner $signer,
         private readonly TalktoOutgoingTargetRegistryContract $targets
-    ) {
-    }
+    ) {}
 
     public function buildEnvelope(Model $message): array
     {

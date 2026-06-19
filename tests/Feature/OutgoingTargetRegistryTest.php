@@ -1,5 +1,7 @@
 <?php
 
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Http;
 use Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract;
 use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoOutgoingTarget;
 use Mrezdev\LaravelTalkto\Exceptions\UnknownTalktoOutgoingTarget;
@@ -11,8 +13,6 @@ use Mrezdev\LaravelTalkto\Services\TalktoOutgoingTarget;
 use Mrezdev\LaravelTalkto\Services\TalktoOutgoingTargetRegistry;
 use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
-use Illuminate\Http\Client\Request;
-use Illuminate\Support\Facades\Http;
 
 beforeEach(function (): void {
     $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');

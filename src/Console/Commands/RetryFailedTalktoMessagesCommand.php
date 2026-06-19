@@ -2,12 +2,12 @@
 
 namespace Mrezdev\LaravelTalkto\Console\Commands;
 
+use Illuminate\Console\Command;
 use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
 use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
-use Illuminate\Console\Command;
 
 class RetryFailedTalktoMessagesCommand extends Command
 {

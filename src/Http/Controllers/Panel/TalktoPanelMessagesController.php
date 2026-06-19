@@ -39,7 +39,7 @@ class TalktoPanelMessagesController
             ]);
         }
 
-        return view('talkto::panel.messages.index', $data);
+        return $this->renderView('talkto::panel.messages.index', $data);
     }
 
     public function show(
@@ -72,6 +72,13 @@ class TalktoPanelMessagesController
             ]);
         }
 
-        return view('talkto::panel.messages.show', $data);
+        return $this->renderView('talkto::panel.messages.show', $data);
+    }
+
+    private function renderView(string $view, array $data): View
+    {
+        abort_unless(view()->exists($view), 500);
+
+        return view($view, $data);
     }
 }

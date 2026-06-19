@@ -2,10 +2,10 @@
 
 namespace Mrezdev\LaravelTalkto\Services;
 
-use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingHandlerRegistryContract;
-use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler;
-use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoIncomingHandler;
 use Illuminate\Contracts\Container\Container;
+use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler;
+use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingHandlerRegistryContract;
+use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoIncomingHandler;
 
 class TalktoIncomingHandlerRegistry implements TalktoIncomingHandlerRegistryContract
 {

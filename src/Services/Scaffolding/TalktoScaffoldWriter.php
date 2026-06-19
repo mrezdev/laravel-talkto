@@ -2,7 +2,6 @@
 
 namespace Mrezdev\LaravelTalkto\Services\Scaffolding;
 
-use InvalidArgumentException;
 use Mrezdev\LaravelTalkto\Support\Scaffolding\TalktoScaffoldFile;
 use Mrezdev\LaravelTalkto\Support\Scaffolding\TalktoScaffoldResult;
 use RuntimeException;
@@ -22,10 +21,6 @@ final class TalktoScaffoldWriter
         $errors = [];
 
         foreach ($files as $file) {
-            if (! $file instanceof TalktoScaffoldFile) {
-                throw new InvalidArgumentException('Scaffold writer expects TalktoScaffoldFile objects.');
-            }
-
             $intended[] = $file->path;
 
             if ($dryRun) {

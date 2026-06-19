@@ -353,9 +353,7 @@ class TalktoRetryPolicy
             return [10];
         }
 
-        $sequence = array_values(array_map(fn (mixed $seconds): int => max(0, (int) $seconds), $value));
-
-        return $sequence === [] ? [10] : $sequence;
+        return array_values(array_map(fn (mixed $seconds): int => max(0, (int) $seconds), $value));
     }
 
     private function intList(mixed $value, array $default): array
@@ -364,9 +362,7 @@ class TalktoRetryPolicy
             return $default;
         }
 
-        $values = array_values(array_unique(array_map('intval', $value)));
-
-        return $values === [] ? $default : $values;
+        return array_values(array_unique(array_map('intval', $value)));
     }
 
     private function stringList(mixed $value, array $default): array

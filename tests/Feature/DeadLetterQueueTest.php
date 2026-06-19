@@ -1,5 +1,9 @@
 <?php
 
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Schema;
 use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
 use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
@@ -7,11 +11,8 @@ use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
 use Mrezdev\LaravelTalkto\Services\TalktoOutgoingEnvelopeBuilder;
+use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
-use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Queue;
-use Illuminate\Support\Facades\Schema;
 
 beforeEach(function (): void {
     $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');
@@ -239,7 +240,7 @@ function dlqOutgoingMessage(string $messageId, array $attributes = []): TalktoMe
         'target_service' => 'peer',
         'command' => 'domain.command',
         'payload' => ['id' => $messageId],
-        'payload_hash' => app(\Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher::class)->hash(['id' => $messageId]),
+        'payload_hash' => app(TalktoPayloadHasher::class)->hash(['id' => $messageId]),
         'schema_version' => 1,
         'source_action_status' => 'succeeded_assumed',
         'transport_status' => 'pending',

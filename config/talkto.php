@@ -1,5 +1,13 @@
 <?php
 
+use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
+use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
+use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
+use Mrezdev\LaravelTalkto\Models\TalktoEvent;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoFlowBuilder;
+
 return [
     'service' => env('TALKTO_SERVICE', 'app'),
 
@@ -9,10 +17,10 @@ return [
     ],
 
     'models' => [
-        'message' => \Mrezdev\LaravelTalkto\Models\TalktoMessage::class,
-        'attempt' => \Mrezdev\LaravelTalkto\Models\TalktoAttempt::class,
-        'event' => \Mrezdev\LaravelTalkto\Models\TalktoEvent::class,
-        'dead_letter' => \Mrezdev\LaravelTalkto\Models\TalktoDeadLetter::class,
+        'message' => TalktoMessage::class,
+        'attempt' => TalktoAttempt::class,
+        'event' => TalktoEvent::class,
+        'dead_letter' => TalktoDeadLetter::class,
     ],
 
     'database' => [
@@ -132,12 +140,12 @@ return [
     ],
 
     'jobs' => [
-        'send_message' => \Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage::class,
-        'process_incoming' => \Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage::class,
+        'send_message' => SendTalktoMessage::class,
+        'process_incoming' => ProcessIncomingTalktoMessage::class,
     ],
 
     'builders' => [
-        'flow' => \Mrezdev\LaravelTalkto\Services\TalktoFlowBuilder::class,
+        'flow' => TalktoFlowBuilder::class,
     ],
 
     'retry' => [

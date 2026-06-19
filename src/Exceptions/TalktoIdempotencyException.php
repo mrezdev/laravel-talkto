@@ -2,6 +2,4 @@
 
 namespace Mrezdev\LaravelTalkto\Exceptions;
 
-class TalktoIdempotencyException extends TalktoException
-{
-}
+class TalktoIdempotencyException extends TalktoException {}

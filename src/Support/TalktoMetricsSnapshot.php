@@ -24,8 +24,7 @@ class TalktoMetricsSnapshot
         public readonly array $statusCounts = [],
         public readonly array $directionCounts = [],
         public readonly array $deadLetterCounts = []
-    ) {
-    }
+    ) {}
 
     public function toArray(): array
     {

@@ -249,9 +249,7 @@ class IncomingHandlerRegistryCountingHandler implements TalktoIncomingCommandHan
     }
 }
 
-class IncomingHandlerRegistryInvalidHandler
-{
-}
+class IncomingHandlerRegistryInvalidHandler {}
 
 class IncomingHandlerRegistryDependency
 {

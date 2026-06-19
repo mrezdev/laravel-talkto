@@ -392,7 +392,7 @@ class TalktoTraceReporter
 
         return [
             'redacted' => true,
-            'keys' => array_values(array_map('strval', array_keys($payload))),
+            'keys' => array_map('strval', array_keys($payload)),
         ];
     }
 

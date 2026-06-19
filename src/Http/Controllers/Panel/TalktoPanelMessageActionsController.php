@@ -67,7 +67,14 @@ class TalktoPanelMessageActionsController
             ));
         }
 
-        return view('talkto::panel.messages.trace', $data);
+        return $this->renderView('talkto::panel.messages.trace', $data);
+    }
+
+    private function renderView(string $view, array $data): View
+    {
+        abort_unless(view()->exists($view), 500);
+
+        return view($view, $data);
     }
 
     private function routePrefix(): string

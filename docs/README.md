@@ -12,6 +12,7 @@ Use this page as the documentation map for Laravel Talkto. The root [README](../
 ## Configuration
 
 - [Configuration](configuration.md)
+- [Extending Laravel Talkto](extending.md)
 - [HTTP client extension](http-client.md)
 - [Host integration template](host-integration-template.md)
 
@@ -38,12 +39,14 @@ Use this page as the documentation map for Laravel Talkto. The root [README](../
 
 - [Security](security.md)
 - [Production hardening](production-hardening.md)
+- [Release readiness](release-readiness.md)
 - [Troubleshooting](troubleshooting.md)
 - [Production readiness](production-readiness.md)
 
 ## Retry, DLQ, Recovery
 
 - [Recovery and monitoring template](recovery-monitoring-template.md)
+- [Production hardening](production-hardening.md)
 - [Troubleshooting](troubleshooting.md)
 
 ## Observability
@@ -70,6 +73,7 @@ Use this page as the documentation map for Laravel Talkto. The root [README](../
 
 - [Private repository setup](private-repository-setup.md)
 - [CI](ci.md)
+- [Release readiness](release-readiness.md)
 - [Release process](release-process.md)
 - [Versioning](versioning.md)
 - [Private Composer installation](private-composer-installation.md)

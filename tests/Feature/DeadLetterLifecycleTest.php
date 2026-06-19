@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler;
+use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
 use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
@@ -70,8 +71,8 @@ test('successful and skipped incoming reprocess mark matching dead letters repro
     $successDeadLetter = p06DlqRow($success, TalktoDeadLetterQueue::STATUS_REPROCESSING);
     $skippedDeadLetter = p06DlqRow($skipped, TalktoDeadLetterQueue::STATUS_REPROCESSING);
 
-    (new \Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage($success->id))->handle(new P06ResultResolver('succeeded'));
-    (new \Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage($skipped->id))->handle(new P06ResultResolver('skipped'));
+    (new ProcessIncomingTalktoMessage($success->id))->handle(new P06ResultResolver('succeeded'));
+    (new ProcessIncomingTalktoMessage($skipped->id))->handle(new P06ResultResolver('skipped'));
 
     expect($successDeadLetter->fresh()->status)->toBe(TalktoDeadLetterQueue::STATUS_REPROCESSED)
         ->and($skippedDeadLetter->fresh()->status)->toBe(TalktoDeadLetterQueue::STATUS_REPROCESSED);
@@ -83,8 +84,8 @@ test('retryable and final incoming failures do not mark dead letter reprocessed'
     $retryableDeadLetter = p06DlqRow($retryable, TalktoDeadLetterQueue::STATUS_REPROCESSING);
     $finalDeadLetter = p06DlqRow($final, TalktoDeadLetterQueue::STATUS_REPROCESSING);
 
-    (new \Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage($retryable->id))->handle(new P06ResultResolver('failed_retryable'));
-    (new \Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage($final->id))->handle(new P06ResultResolver('failed_final'));
+    (new ProcessIncomingTalktoMessage($retryable->id))->handle(new P06ResultResolver('failed_retryable'));
+    (new ProcessIncomingTalktoMessage($final->id))->handle(new P06ResultResolver('failed_final'));
 
     expect($retryableDeadLetter->fresh()->status)->toBe(TalktoDeadLetterQueue::STATUS_REPROCESSING)
         ->and($finalDeadLetter->fresh()->status)->toBe(TalktoDeadLetterQueue::STATUS_FAILED_REPROCESS);

@@ -3,12 +3,12 @@
 namespace Mrezdev\LaravelTalkto\Services;
 
 use Closure;
-use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
-use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use JsonSerializable;
+use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Throwable;
 
 class TalktoFlowBuilder

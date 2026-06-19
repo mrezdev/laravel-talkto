@@ -2,13 +2,13 @@
 
 namespace Mrezdev\LaravelTalkto\Services;
 
+use InvalidArgumentException;
 use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler;
 use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingHandlerRegistryContract;
 use Mrezdev\LaravelTalkto\Exceptions\UnknownTalktoIncomingCommand;
 use Mrezdev\LaravelTalkto\Handlers\NoopIncomingCommandHandler;
 use Mrezdev\LaravelTalkto\Handlers\SkippedIncomingCommandHandler;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
-use InvalidArgumentException;
 
 class TalktoIncomingCommandResolver
 {

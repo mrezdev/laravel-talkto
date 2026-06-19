@@ -36,6 +36,13 @@ class TalktoPanelController
             ]);
         }
 
-        return view('talkto::panel.index', $data);
+        return $this->renderView('talkto::panel.index', $data);
+    }
+
+    private function renderView(string $view, array $data): View
+    {
+        abort_unless(view()->exists($view), 500);
+
+        return view($view, $data);
     }
 }

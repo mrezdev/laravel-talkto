@@ -1,5 +1,9 @@
 <?php
 
+use Illuminate\Database\QueryException;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Queue;
 use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler;
 use Mrezdev\LaravelTalkto\Http\Controllers\TalktoReceiveController;
 use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
@@ -9,10 +13,6 @@ use Mrezdev\LaravelTalkto\Pipelines\ReceiveIncomingTalktoMessagePipeline;
 use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
 use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
 use Mrezdev\LaravelTalkto\Services\TalktoSignatureVerifier;
-use Illuminate\Database\QueryException;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Queue;
 
 beforeEach(function (): void {
     $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');
@@ -355,7 +355,9 @@ class IncomingLedgerCountingHandler implements TalktoIncomingCommandHandler
 class IncomingLedgerRaceTalktoMessage extends TalktoMessage
 {
     public static bool $hideFirstLookup = false;
+
     public static ?int $hideLookupNumber = null;
+
     public static int $lookupCount = 0;
 
     public static function query()

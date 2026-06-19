@@ -30,11 +30,23 @@ jobs:
           extensions: pdo_sqlite, sqlite3
           coverage: none
 
+      - name: Remove library lock file
+        run: rm -f composer.lock
+
       - name: Validate Composer metadata
         run: composer validate --strict
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Audit Composer dependencies
+        run: composer audit
+
+      - name: Check formatting
+        run: vendor/bin/pint --test
+
+      - name: Run static analysis
+        run: vendor/bin/phpstan analyse
 
       - name: Run package tests
         run: vendor/bin/pest

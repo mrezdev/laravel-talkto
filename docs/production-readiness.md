@@ -7,7 +7,7 @@ Laravel Talkto gives Laravel services a secure delivery layer, but each host app
 - Confirm `composer.json` has the package name, description, license, authors, keywords, autoloading, Laravel provider discovery, and compatible PHP/Laravel constraints.
 - Keep package versions out of `composer.json` for Packagist readiness; release versions should come from Git tags.
 - Keep `phpunit.xml.dist`, `tests/TestCase.php`, and `tests/Pest.php` committed so a fresh package checkout has a documented test entry point.
-- Run package syntax checks and package tests after installing package-local development dependencies.
+- Run package quality checks after installing package-local development dependencies: `composer validate --strict`, `composer audit`, `vendor/bin/pint --test`, `vendor/bin/phpstan analyse`, and `vendor/bin/pest`.
 - Run focused compatibility tests in each host application that consumes the local package copy.
 - Verify package docs do not contain secrets, environment values, raw signatures, or host-only business terms.
 - Review README, installation, configuration, security, testing, troubleshooting, and upgrading notes before tagging a release.

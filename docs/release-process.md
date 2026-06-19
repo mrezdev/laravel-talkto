@@ -8,12 +8,15 @@ Package versions come from Git tags. `composer.json` intentionally has no static
 2. Confirm repository visibility and Packagist ownership are intentional.
 3. Update `CHANGELOG.md`.
 4. Run `composer validate --strict`.
-5. Run `composer install --prefer-dist --no-interaction --no-progress` when dependencies are not installed.
-6. Run `vendor/bin/pest`.
-7. Run `php artisan talkto:security-audit` in a host test app when applicable.
-8. Review docs, repository metadata, and leakage checks.
-9. Create a Git tag only after tests pass.
-10. Verify a host application can require the tag in a non-production branch.
+5. Run `composer audit`.
+6. Run `composer install --prefer-dist --no-interaction --no-progress` when dependencies are not installed.
+7. Run `vendor/bin/pint --test`.
+8. Run `vendor/bin/phpstan analyse`.
+9. Run `vendor/bin/pest`.
+10. Run `php artisan talkto:audit-security` in a host test app when applicable.
+11. Review docs, repository metadata, and leakage checks.
+12. Create a Git tag only after tests pass.
+13. Verify a host application can require the tag in a non-production branch.
 
 ## Tag Names
 

@@ -2,10 +2,9 @@
 
 namespace Mrezdev\LaravelTalkto\Services\Panel;
 
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Collection;
 use Illuminate\Pagination\LengthAwarePaginator as LaravelLengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
@@ -15,7 +14,7 @@ use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelMessageFilters;
 
 class TalktoPanelMessageQuery
 {
-    public function paginate(TalktoPanelMessageFilters $filters, int $perPage = 25): LengthAwarePaginator
+    public function paginate(TalktoPanelMessageFilters $filters, int $perPage = 25): LaravelLengthAwarePaginator
     {
         $perPage = max(1, min($perPage, 100));
 
@@ -71,7 +70,9 @@ class TalktoPanelMessageQuery
             }
         }
 
-        return $query->where('message_id', (string) $id)->first();
+        $message = $query->where('message_id', (string) $id)->first();
+
+        return $message instanceof TalktoMessage ? $message : null;
     }
 
     public function attemptsFor(TalktoMessage $message): Collection

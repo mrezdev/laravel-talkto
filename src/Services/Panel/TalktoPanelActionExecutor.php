@@ -24,8 +24,7 @@ class TalktoPanelActionExecutor
         private readonly TalktoDeadLetterQueue $deadLetterQueue,
         private readonly TalktoTraceReporter $traceReporter,
         private readonly TalktoCurrentServiceGuard $currentServiceGuard,
-    ) {
-    }
+    ) {}
 
     public function retryMessage(TalktoMessage $message): TalktoPanelActionResult
     {

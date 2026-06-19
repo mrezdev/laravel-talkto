@@ -1,5 +1,8 @@
 <?php
 
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use Mrezdev\LaravelTalkto\Contracts\CommandHandlerContract;
 use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackReceiverContract;
@@ -26,9 +29,6 @@ use Mrezdev\LaravelTalkto\Services\TalktoOutgoingMessageFactory;
 use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
 use Mrezdev\LaravelTalkto\Services\TalktoSignatureVerifier;
 use Mrezdev\LaravelTalkto\Services\TalktoSigner;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Schema;
 
 test('package config is merged', function (): void {
     expect(config('talkto'))->toBeArray()
@@ -282,14 +282,8 @@ test('incoming command result constructors set outcome flags', function (): void
         ->and($final->retryable)->toBeFalse();
 });
 
-class PackageSmokeHostTalktoMessage extends TalktoMessage
-{
-}
+class PackageSmokeHostTalktoMessage extends TalktoMessage {}
 
-class PackageSmokeHostTalktoAttempt extends TalktoAttempt
-{
-}
+class PackageSmokeHostTalktoAttempt extends TalktoAttempt {}
 
-class PackageSmokeHostTalktoEvent extends TalktoEvent
-{
-}
+class PackageSmokeHostTalktoEvent extends TalktoEvent {}

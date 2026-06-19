@@ -18,8 +18,7 @@ class TalktoPanelConnection
         public readonly ?string $activeHealthMethod = null,
         public readonly ?string $activeHealthUrl = null,
         public readonly array $activeHealthMeta = [],
-    ) {
-    }
+    ) {}
 
     public function toArray(): array
     {

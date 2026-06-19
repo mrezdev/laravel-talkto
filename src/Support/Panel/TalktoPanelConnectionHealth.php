@@ -18,8 +18,7 @@ class TalktoPanelConnectionHealth
         public readonly int $deadLetters = 0,
         public readonly array $warnings = [],
         public readonly array $checks = [],
-    ) {
-    }
+    ) {}
 
     public function toArray(): array
     {

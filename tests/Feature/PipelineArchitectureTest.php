@@ -1,16 +1,16 @@
 <?php
 
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Mrezdev\LaravelTalkto\Http\Controllers\TalktoReceiveController;
 use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
 use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
 use Mrezdev\LaravelTalkto\Pipelines\ProcessIncomingTalktoMessagePipeline;
 use Mrezdev\LaravelTalkto\Pipelines\ReceiveIncomingTalktoMessagePipeline;
 use Mrezdev\LaravelTalkto\Pipelines\SendOutgoingTalktoMessagePipeline;
-use Mrezdev\LaravelTalkto\Http\Controllers\TalktoReceiveController;
 use Mrezdev\LaravelTalkto\Services\TalktoOutgoingEnvelopeBuilder;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 use Mrezdev\LaravelTalkto\Services\TalktoSignatureVerifier;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 beforeEach(function (): void {
     PipelineArchitectureReceivePipeline::$called = false;

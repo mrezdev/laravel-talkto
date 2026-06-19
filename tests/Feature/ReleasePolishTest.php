@@ -32,8 +32,12 @@ test('github actions workflow runs composer validation and pest on supported php
         ->and($workflow)->toContain('master')
         ->and($workflow)->toContain("'8.2'")
         ->and($workflow)->toContain("'8.3'")
+        ->and($workflow)->toContain('rm -f composer.lock')
         ->and($workflow)->toContain('composer validate --strict')
         ->and($workflow)->toContain('composer install --prefer-dist --no-interaction --no-progress')
+        ->and($workflow)->toContain('composer audit')
+        ->and($workflow)->toContain('vendor/bin/pint --test')
+        ->and($workflow)->toContain('vendor/bin/phpstan analyse')
         ->and($workflow)->toContain('vendor/bin/pest');
 });
 

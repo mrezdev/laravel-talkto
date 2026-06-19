@@ -183,7 +183,7 @@ class TalktoPanelConnectionRegistry
         $keys = array_keys($commands);
         sort($keys);
 
-        return array_values(array_map('strval', $keys));
+        return array_map('strval', $keys);
     }
 
     private function filled(mixed $value): bool

@@ -2,6 +2,4 @@
 
 namespace Mrezdev\LaravelTalkto\Exceptions;
 
-class TalktoCommandNotAllowedException extends TalktoException
-{
-}
+class TalktoCommandNotAllowedException extends TalktoException {}

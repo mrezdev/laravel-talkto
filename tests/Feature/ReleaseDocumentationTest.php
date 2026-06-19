@@ -54,6 +54,7 @@ if (! function_exists('p49ReleaseDocPaths')) {
         return [
             'docs/private-repository-setup.md',
             'docs/ci.md',
+            'docs/release-readiness.md',
             'docs/release-process.md',
             'docs/versioning.md',
             'docs/private-composer-installation.md',
@@ -98,16 +99,19 @@ test('release and private repository docs exist', function (): void {
     }
 });
 
-test('release docs describe tag based private first versioning', function (): void {
+test('release docs describe tag based public ready versioning and quality gates', function (): void {
     $docs = strtolower(p49CombinedFiles(p49ReleaseDocPaths()));
 
     foreach ([
         'git tag',
         'no static `version` field',
         'no version in composer.json',
-        'private-first',
-        'license decision',
+        'mit license',
+        'packagist',
         'composer validate --strict',
+        'composer audit',
+        'vendor/bin/pint --test',
+        'vendor/bin/phpstan analyse',
         'vendor/bin/pest',
     ] as $term) {
         expect($docs)->toContain($term);

@@ -3,15 +3,13 @@
 namespace Mrezdev\LaravelTalkto\Services;
 
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
-use Illuminate\Database\Eloquent\Builder;
 
 class TalktoHealthChecker
 {
-    public function __construct(private readonly TalktoMetricsCollector $metrics)
-    {
-    }
+    public function __construct(private readonly TalktoMetricsCollector $metrics) {}
 
     public function check(?CarbonInterface $from = null, ?CarbonInterface $to = null, string $direction = 'all'): array
     {

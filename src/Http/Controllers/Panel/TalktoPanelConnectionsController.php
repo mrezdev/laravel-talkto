@@ -9,8 +9,8 @@ use Illuminate\View\View;
 use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelActiveHealthChecker;
 use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelConnectionHealthChecker;
 use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelConnectionRegistry;
-use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelConnection;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelAuthorizer;
+use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelConnection;
 
 class TalktoPanelConnectionsController
 {
@@ -45,7 +45,7 @@ class TalktoPanelConnectionsController
             return response()->json($data);
         }
 
-        return view('talkto::panel.connections.index', $data);
+        return $this->renderView('talkto::panel.connections.index', $data);
     }
 
     public function check(
@@ -82,6 +82,13 @@ class TalktoPanelConnectionsController
     {
         return $connections->all()
             ->first(fn (TalktoPanelConnection $connection): bool => $connection->direction === $direction && $connection->service === $service);
+    }
+
+    private function renderView(string $view, array $data): View
+    {
+        abort_unless(view()->exists($view), 500);
+
+        return view($view, $data);
     }
 
     private function flashMessage(array $result): string

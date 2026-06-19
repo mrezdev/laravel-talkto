@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\Route;
 use Mrezdev\LaravelTalkto\Contracts\CommandHandlerContract;
 use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackReceiverContract;
@@ -11,13 +12,12 @@ use Mrezdev\LaravelTalkto\Exceptions\TalktoCommandNotAllowedException;
 use Mrezdev\LaravelTalkto\Exceptions\TalktoException;
 use Mrezdev\LaravelTalkto\Exceptions\TalktoIdempotencyException;
 use Mrezdev\LaravelTalkto\Exceptions\TalktoPayloadHashMismatchException;
+use Mrezdev\LaravelTalkto\LaravelTalktoServiceProvider;
 use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
 use Mrezdev\LaravelTalkto\Services\TalktoSigner;
-use Mrezdev\LaravelTalkto\LaravelTalktoServiceProvider;
-use Illuminate\Support\Facades\Route;
 
 test('service provider is discoverable and loaded by testbench', function (): void {
     expect(class_exists(LaravelTalktoServiceProvider::class))->toBeTrue()

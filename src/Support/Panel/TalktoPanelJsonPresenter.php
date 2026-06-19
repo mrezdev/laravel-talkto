@@ -4,7 +4,6 @@ namespace Mrezdev\LaravelTalkto\Support\Panel;
 
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\Support\Arrayable;
-use Illuminate\Database\Eloquent\Model;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 
 class TalktoPanelJsonPresenter
@@ -184,7 +183,7 @@ class TalktoPanelJsonPresenter
                 continue;
             }
 
-            if ($value instanceof Arrayable || $value instanceof Model) {
+            if ($value instanceof Arrayable) {
                 $data[$key] = $this->redactArray($this->arrayable($value));
             }
         }
@@ -261,7 +260,7 @@ class TalktoPanelJsonPresenter
         if (is_array($value)) {
             return [
                 'redacted' => true,
-                'keys' => array_values(array_map('strval', array_keys($value))),
+                'keys' => array_map('strval', array_keys($value)),
             ];
         }
 
@@ -271,10 +270,6 @@ class TalktoPanelJsonPresenter
     private function arrayable(array|object $value): array
     {
         if ($value instanceof Arrayable) {
-            return $value->toArray();
-        }
-
-        if ($value instanceof Model) {
             return $value->toArray();
         }
 

@@ -2,8 +2,8 @@
 
 use Illuminate\Support\Facades\Route;
 use Mrezdev\LaravelTalkto\Http\Controllers\Panel\TalktoPanelConnectionsController;
-use Mrezdev\LaravelTalkto\Http\Controllers\Panel\TalktoPanelDeadLetterActionsController;
 use Mrezdev\LaravelTalkto\Http\Controllers\Panel\TalktoPanelController;
+use Mrezdev\LaravelTalkto\Http\Controllers\Panel\TalktoPanelDeadLetterActionsController;
 use Mrezdev\LaravelTalkto\Http\Controllers\Panel\TalktoPanelMessageActionsController;
 use Mrezdev\LaravelTalkto\Http\Controllers\Panel\TalktoPanelMessagesController;
 

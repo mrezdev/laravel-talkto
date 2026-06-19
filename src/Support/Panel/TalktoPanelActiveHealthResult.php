@@ -15,8 +15,7 @@ final class TalktoPanelActiveHealthResult
         public readonly ?string $checkedAt = null,
         public readonly array $warnings = [],
         public readonly array $meta = [],
-    ) {
-    }
+    ) {}
 
     public static function disabled(TalktoPanelConnection $connection): self
     {

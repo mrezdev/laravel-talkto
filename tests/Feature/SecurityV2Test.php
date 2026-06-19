@@ -1,5 +1,8 @@
 <?php
 
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Queue;
 use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoSignatureException;
 use Mrezdev\LaravelTalkto\Http\Controllers\TalktoReceiveController;
 use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
@@ -9,9 +12,6 @@ use Mrezdev\LaravelTalkto\Services\TalktoOutgoingMessageFactory;
 use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
 use Mrezdev\LaravelTalkto\Services\TalktoSignatureVerifier;
 use Mrezdev\LaravelTalkto\Services\TalktoSigner;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Queue;
 
 beforeEach(function (): void {
     $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');

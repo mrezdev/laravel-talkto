@@ -203,9 +203,7 @@ class RecordingTalktoHttpClient implements TalktoHttpClient
 {
     public array $requests = [];
 
-    public function __construct(private readonly mixed $response)
-    {
-    }
+    public function __construct(private readonly mixed $response) {}
 
     public function post(string $url, array $headers, array $envelope, int $timeout): TalktoHttpResponse
     {

@@ -21,3 +21,5 @@ The package is licensed under MIT and can be prepared for public Composer/Packag
 - Public package name is final.
 - Packagist package ownership is confirmed.
 - Documentation is reviewed for private details.
+- Release readiness checks pass: `composer validate --strict`, `composer audit`, `vendor/bin/pint --test`, `vendor/bin/phpstan analyse`, and `vendor/bin/pest`.
+- Host/staging checks pass for `php artisan talkto:audit-security`, route throttling, panel protection, stale recovery dry-runs, and pruning dry-runs.

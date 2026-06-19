@@ -1,10 +1,13 @@
 <?php
 
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\ServiceProvider;
 use Mrezdev\LaravelTalkto\Console\Commands\ReportTalktoMessagesCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\ReprocessTalktoDeadLettersCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\RetryFailedTalktoMessagesCommand;
 use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingHandlerRegistryContract;
 use Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract;
+use Mrezdev\LaravelTalkto\LaravelTalktoServiceProvider;
 use Mrezdev\LaravelTalkto\Pipelines\ProcessIncomingTalktoMessagePipeline;
 use Mrezdev\LaravelTalkto\Pipelines\ReceiveIncomingTalktoMessagePipeline;
 use Mrezdev\LaravelTalkto\Pipelines\SendOutgoingTalktoMessagePipeline;
@@ -12,9 +15,6 @@ use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
 use Mrezdev\LaravelTalkto\Services\TalktoHealthChecker;
 use Mrezdev\LaravelTalkto\Services\TalktoMetricsCollector;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
-use Mrezdev\LaravelTalkto\LaravelTalktoServiceProvider;
-use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\ServiceProvider;
 
 test('composer metadata is package release friendly', function (): void {
     $composer = json_decode((string) file_get_contents(__DIR__.'/../../composer.json'), true);

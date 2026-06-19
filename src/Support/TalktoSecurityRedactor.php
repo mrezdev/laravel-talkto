@@ -63,7 +63,11 @@ class TalktoSecurityRedactor
             ? (string) $value
             : json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
-        if ($text === null || $text === '') {
+        if ($text === false) {
+            return null;
+        }
+
+        if ($text === '') {
             return $text;
         }
 

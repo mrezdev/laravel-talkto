@@ -7,7 +7,6 @@ use Illuminate\Support\Facades\Http;
 use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
-use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
 use Throwable;
 

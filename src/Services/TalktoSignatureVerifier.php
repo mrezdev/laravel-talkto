@@ -7,8 +7,7 @@ class TalktoSignatureVerifier
     public function __construct(
         private readonly TalktoPayloadHasher $payloadHasher,
         private readonly TalktoSigner $signer
-    ) {
-    }
+    ) {}
 
     public function verifyEnvelope(array $envelope, array $headers): array
     {

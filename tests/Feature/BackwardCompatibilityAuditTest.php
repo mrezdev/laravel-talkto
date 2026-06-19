@@ -1,5 +1,7 @@
 <?php
 
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\ServiceProvider;
 use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler;
 use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingHandlerRegistryContract;
 use Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract;
@@ -7,6 +9,7 @@ use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoIncomingHandler;
 use Mrezdev\LaravelTalkto\Exceptions\UnknownTalktoIncomingCommand;
 use Mrezdev\LaravelTalkto\Handlers\NoopIncomingCommandHandler;
 use Mrezdev\LaravelTalkto\Handlers\SkippedIncomingCommandHandler;
+use Mrezdev\LaravelTalkto\LaravelTalktoServiceProvider;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResolver;
 use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
@@ -16,9 +19,6 @@ use Mrezdev\LaravelTalkto\Services\TalktoOutgoingTarget;
 use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
 use Mrezdev\LaravelTalkto\Services\TalktoSignatureVerifier;
 use Mrezdev\LaravelTalkto\Services\TalktoSigner;
-use Mrezdev\LaravelTalkto\LaravelTalktoServiceProvider;
-use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\ServiceProvider;
 
 beforeEach(function (): void {
     config([

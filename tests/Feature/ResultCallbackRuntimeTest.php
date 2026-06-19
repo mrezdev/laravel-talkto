@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
@@ -452,7 +453,7 @@ function p04SignedCallback(TalktoMessage $original, TalktoIncomingCommandResult 
 
 class P04CustomCallbackSender implements ResultCallbackSenderContract
 {
-    public function sendResult(\Illuminate\Database\Eloquent\Model $message, IncomingCommandResultContract $result, array $options = []): mixed
+    public function sendResult(Model $message, IncomingCommandResultContract $result, array $options = []): mixed
     {
         return ['sent' => true];
     }

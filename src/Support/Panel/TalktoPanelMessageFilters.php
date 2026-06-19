@@ -15,8 +15,7 @@ class TalktoPanelMessageFilters
         public readonly ?string $idempotencyKey = null,
         public readonly ?string $createdFrom = null,
         public readonly ?string $createdTo = null,
-    ) {
-    }
+    ) {}
 
     public static function fromArray(array $input): self
     {

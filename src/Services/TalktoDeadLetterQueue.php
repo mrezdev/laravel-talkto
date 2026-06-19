@@ -2,19 +2,23 @@
 
 namespace Mrezdev\LaravelTalkto\Services;
 
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
-use Illuminate\Database\QueryException;
-use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class TalktoDeadLetterQueue
 {
     public const STATUS_OPEN = 'open';
+
     public const STATUS_REPROCESSING = 'reprocessing';
+
     public const STATUS_REPROCESSED = 'reprocessed';
+
     public const STATUS_FAILED_REPROCESS = 'failed_reprocess';
+
     public const STATUS_IGNORED = 'ignored';
 
     public function store(
@@ -130,13 +134,14 @@ class TalktoDeadLetterQueue
     public function markReprocessedForMessage(TalktoMessage $message): ?TalktoDeadLetter
     {
         $deadLetterClass = $this->deadLetterModelClass();
+        $messageKey = $message->getKey();
         $deadLetter = $deadLetterClass::query()
             ->where('status', self::STATUS_REPROCESSING)
-            ->where(function ($query) use ($message): void {
+            ->where(function ($query) use ($message, $messageKey): void {
                 $query->where('message_id', $message->message_id);
 
-                if ($message->id !== null) {
-                    $query->orWhere('talkto_message_id', $message->id);
+                if ($messageKey !== null) {
+                    $query->orWhere('talkto_message_id', $messageKey);
                 }
             })
             ->first();
@@ -196,9 +201,11 @@ class TalktoDeadLetterQueue
     {
         $deadLetterClass = $this->deadLetterModelClass();
 
-        if ($message->id !== null) {
+        $messageKey = $message->getKey();
+
+        if ($messageKey !== null) {
             $existing = $deadLetterClass::query()
-                ->where('talkto_message_id', $message->id)
+                ->where('talkto_message_id', $messageKey)
                 ->first();
 
             if ($existing) {
