@@ -104,6 +104,40 @@ test('talkto migrations and models work together on configured connection and ta
         ->and(DB::connection('talkto_testing')->table('custom_talkto_dead_letters')->count())->toBe(1);
 });
 
+test('messages migration includes idempotency fingerprint and query indexes', function (): void {
+    $migration = file_get_contents(__DIR__.'/../../database/migrations/2026_06_13_000001_create_talkto_messages_table.php') ?: '';
+
+    expect($migration)->toContain("\$table->string('idempotency_fingerprint', 64)->nullable()->unique();")
+        ->and($migration)->toContain("'talkto_messages_retry_lookup_idx'")
+        ->and($migration)->toContain("'talkto_messages_target_status_idx'")
+        ->and($migration)->toContain("'talkto_messages_service_command_time_idx'")
+        ->and($migration)->toContain("'talkto_messages_correlation_time_idx'");
+});
+
+test('max attempts default is consistent between config and messages migration', function (): void {
+    $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');
+
+    expect($this->artisan('migrate')->run())->toBe(0);
+
+    $message = TalktoMessage::query()->create([
+        'message_id' => 'storage-default-max-attempts',
+        'direction' => 'incoming',
+        'source_service' => 'source',
+        'target_service' => 'testing',
+        'command' => 'domain.command',
+        'payload' => ['id' => 'storage-default-max-attempts'],
+        'payload_hash' => 'hash',
+        'schema_version' => 1,
+        'destination_receive_status' => 'received',
+        'destination_action_status' => 'queued',
+        'overall_status' => 'queued',
+        'received_at' => now(),
+    ]);
+
+    expect(config('talkto.retry.max_attempts'))->toBe(5)
+        ->and((int) $message->fresh()->max_attempts)->toBe(5);
+});
+
 test('talkto migration down methods drop custom tables from configured connection', function (): void {
     talktoStorageUseTestingConnection();
     talktoStorageUseCustomTables();

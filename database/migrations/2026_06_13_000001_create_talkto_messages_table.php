@@ -19,6 +19,7 @@ return new class extends Migration
             $table->string('command', 150)->index();
             $table->string('business_key', 191)->nullable()->index();
             $table->string('idempotency_key', 191)->nullable()->index();
+            $table->string('idempotency_fingerprint', 64)->nullable()->unique();
             $table->json('payload')->nullable();
             $table->string('payload_hash', 100)->nullable();
             $table->unsignedInteger('schema_version')->default(1);
@@ -29,7 +30,7 @@ return new class extends Migration
             $table->string('overall_status', 80)->default('created')->index();
             $table->unsignedInteger('attempts')->default(0);
             $table->unsignedInteger('retry_count')->default(0);
-            $table->unsignedInteger('max_attempts')->default(6);
+            $table->unsignedInteger('max_attempts')->default(5);
             $table->timestamp('next_attempt_at')->nullable()->index();
             $table->timestamp('next_retry_at')->nullable()->index();
             $table->integer('last_http_status')->nullable();
@@ -46,6 +47,10 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index(['source_service', 'target_service']);
+            $table->index(['direction', 'overall_status', 'next_retry_at'], 'talkto_messages_retry_lookup_idx');
+            $table->index(['direction', 'target_service', 'overall_status'], 'talkto_messages_target_status_idx');
+            $table->index(['source_service', 'target_service', 'command', 'created_at'], 'talkto_messages_service_command_time_idx');
+            $table->index(['correlation_id', 'created_at'], 'talkto_messages_correlation_time_idx');
             $table->index('created_at');
         });
     }

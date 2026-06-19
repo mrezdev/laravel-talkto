@@ -20,6 +20,7 @@ class TalktoMessage extends Model
         'command',
         'business_key',
         'idempotency_key',
+        'idempotency_fingerprint',
         'payload',
         'payload_hash',
         'schema_version',
@@ -58,6 +59,39 @@ class TalktoMessage extends Model
         'failed_at' => 'datetime',
         'locked_at' => 'datetime',
     ];
+
+    public static function idempotencyFingerprint(
+        ?string $direction,
+        ?string $sourceService,
+        ?string $targetService,
+        ?string $command,
+        ?string $idempotencyKey
+    ): ?string {
+        if ($idempotencyKey === null || $idempotencyKey === '') {
+            return null;
+        }
+
+        return hash('sha256', implode('|', [
+            (string) $direction,
+            (string) $sourceService,
+            (string) $targetService,
+            (string) $command,
+            $idempotencyKey,
+        ]));
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (TalktoMessage $message): void {
+            $message->idempotency_fingerprint = static::idempotencyFingerprint(
+                $message->direction,
+                $message->source_service,
+                $message->target_service,
+                $message->command,
+                $message->idempotency_key
+            );
+        });
+    }
 
     public function attempts(): HasMany
     {

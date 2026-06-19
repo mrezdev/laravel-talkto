@@ -116,6 +116,83 @@ test('outgoing factory honors configured model classes', function (): void {
         ->and($event->message()->first())->toBeInstanceOf(PackageSmokeHostTalktoMessage::class);
 });
 
+test('outgoing factory stores idempotency fingerprint and reuses duplicate fingerprint messages', function (): void {
+    $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');
+
+    expect($this->artisan('migrate')->run())->toBe(0);
+
+    config([
+        'talkto.outgoing.peer' => [
+            'url' => 'https://peer.test',
+            'secret' => 'secret',
+            'endpoint' => '/api/talkto/receive',
+            'mode' => 'reliable',
+        ],
+    ]);
+
+    $factory = app(TalktoOutgoingMessageFactory::class);
+
+    $first = $factory->create('peer', 'domain.command', ['item' => 'item-1'], [
+        'message_id' => 'outgoing-idempotent-first',
+        'idempotency_key' => 'outgoing-once',
+    ]);
+
+    $second = $factory->create('peer', 'domain.command', ['item' => 'item-2'], [
+        'message_id' => 'outgoing-idempotent-second',
+        'idempotency_key' => 'outgoing-once',
+    ]);
+
+    expect($first->id)->toBe($second->id)
+        ->and($first->idempotency_fingerprint)->toBe(TalktoMessage::idempotencyFingerprint(
+            'outgoing',
+            config('talkto.service', 'app'),
+            'peer',
+            'domain.command',
+            'outgoing-once'
+        ))
+        ->and((int) $first->max_attempts)->toBe(5)
+        ->and(TalktoMessage::query()->where('idempotency_key', 'outgoing-once')->count())->toBe(1);
+});
+
+test('outgoing factory scopes idempotency fingerprint by command and source', function (): void {
+    $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');
+
+    expect($this->artisan('migrate')->run())->toBe(0);
+
+    config([
+        'talkto.outgoing.peer' => [
+            'url' => 'https://peer.test',
+            'secret' => 'secret',
+            'endpoint' => '/api/talkto/receive',
+            'mode' => 'reliable',
+        ],
+    ]);
+
+    $factory = app(TalktoOutgoingMessageFactory::class);
+
+    $commandA = $factory->create('peer', 'domain.command', [], [
+        'message_id' => 'outgoing-scope-command-a',
+        'idempotency_key' => 'outgoing-scope',
+    ]);
+
+    $commandB = $factory->create('peer', 'domain.other-command', [], [
+        'message_id' => 'outgoing-scope-command-b',
+        'idempotency_key' => 'outgoing-scope',
+    ]);
+
+    config(['talkto.service' => 'other-source']);
+
+    $sourceB = $factory->create('peer', 'domain.command', [], [
+        'message_id' => 'outgoing-scope-source-b',
+        'idempotency_key' => 'outgoing-scope',
+    ]);
+
+    expect($commandA->id)->not->toBe($commandB->id)
+        ->and($commandA->id)->not->toBe($sourceB->id)
+        ->and(TalktoMessage::query()->where('idempotency_key', 'outgoing-scope')->count())->toBe(3)
+        ->and(TalktoMessage::query()->where('idempotency_key', 'outgoing-scope')->distinct()->count('idempotency_fingerprint'))->toBe(3);
+});
+
 test('package migrations are loadable and create Talkto tables', function (): void {
     $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');
 

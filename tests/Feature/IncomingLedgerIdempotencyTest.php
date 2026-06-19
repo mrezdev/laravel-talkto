@@ -44,6 +44,28 @@ beforeEach(function (): void {
     ]);
 
     IncomingLedgerRaceTalktoMessage::$hideFirstLookup = false;
+    IncomingLedgerRaceTalktoMessage::$hideLookupNumber = null;
+    IncomingLedgerRaceTalktoMessage::$lookupCount = 0;
+});
+
+test('message with idempotency key stores idempotency fingerprint', function (): void {
+    $message = talktoIncomingMessage('incoming-fingerprint', [
+        'idempotency_key' => 'fingerprint-key',
+    ]);
+
+    expect($message->idempotency_fingerprint)->toBe(TalktoMessage::idempotencyFingerprint(
+        'incoming',
+        'source',
+        'testing',
+        'domain.command',
+        'fingerprint-key'
+    ));
+});
+
+test('message without idempotency key stores null idempotency fingerprint', function (): void {
+    $message = talktoIncomingMessage('incoming-no-fingerprint');
+
+    expect($message->idempotency_fingerprint)->toBeNull();
 });
 
 test('duplicate message id receive returns duplicate and dispatches once', function (): void {
@@ -100,6 +122,19 @@ test('duplicate key detection uses the configured message table', function (): v
         ->and($method->invoke(app(ReceiveIncomingTalktoMessagePipeline::class), $exception, 'other_messages'))->toBeFalse();
 });
 
+test('database unique idempotency fingerprint prevents duplicate stored messages', function (): void {
+    $existing = talktoIncomingMessage('incoming-fingerprint-race-original', [
+        'idempotency_key' => 'fingerprint-race',
+        'overall_status' => 'queued',
+    ]);
+
+    expect(fn () => talktoIncomingMessage('incoming-fingerprint-race-new', [
+        'idempotency_key' => 'fingerprint-race',
+    ]))->toThrow(QueryException::class);
+
+    expect(TalktoMessage::query()->where('idempotency_fingerprint', $existing->idempotency_fingerprint)->count())->toBe(1);
+});
+
 test('idempotency key after success returns already processed and does not dispatch', function (): void {
     Queue::fake();
 
@@ -119,7 +154,8 @@ test('idempotency key after success returns already processed and does not dispa
             'status' => 'already_processed',
             'message_id' => 'incoming-processed',
         ])
-        ->and(TalktoMessage::query()->where('idempotency_key', 'business-once')->count())->toBe(1);
+        ->and(TalktoMessage::query()->where('idempotency_key', 'business-once')->count())->toBe(1)
+        ->and(TalktoMessage::query()->whereNotNull('idempotency_fingerprint')->count())->toBe(1);
 
     Queue::assertNotPushed(ProcessIncomingTalktoMessage::class);
 });
@@ -216,7 +252,9 @@ test('idempotency key is scoped by source target and command', function (): void
         ->and($targetResponse->getStatusCode())->toBe(202)
         ->and(TalktoMessage::query()->where('idempotency_key', 'scope-command')->count())->toBe(2)
         ->and(TalktoMessage::query()->where('idempotency_key', 'scope-source')->count())->toBe(2)
-        ->and(TalktoMessage::query()->where('idempotency_key', 'scope-target')->count())->toBe(2);
+        ->and(TalktoMessage::query()->where('idempotency_key', 'scope-target')->count())->toBe(2)
+        ->and(TalktoMessage::query()->where('idempotency_key', 'scope-command')->distinct()->count('idempotency_fingerprint'))->toBe(2)
+        ->and(TalktoMessage::query()->where('idempotency_key', 'scope-source')->distinct()->count('idempotency_fingerprint'))->toBe(2);
 
     Queue::assertPushed(ProcessIncomingTalktoMessage::class, 3);
 });
@@ -317,11 +355,16 @@ class IncomingLedgerCountingHandler implements TalktoIncomingCommandHandler
 class IncomingLedgerRaceTalktoMessage extends TalktoMessage
 {
     public static bool $hideFirstLookup = false;
+    public static ?int $hideLookupNumber = null;
+    public static int $lookupCount = 0;
 
     public static function query()
     {
-        if (self::$hideFirstLookup) {
+        self::$lookupCount++;
+
+        if (self::$hideFirstLookup || self::$hideLookupNumber === self::$lookupCount) {
             self::$hideFirstLookup = false;
+            self::$hideLookupNumber = null;
 
             return new IncomingLedgerNullQuery;
         }
@@ -333,6 +376,11 @@ class IncomingLedgerRaceTalktoMessage extends TalktoMessage
 class IncomingLedgerNullQuery
 {
     public function where(mixed ...$arguments): self
+    {
+        return $this;
+    }
+
+    public function whereIn(mixed ...$arguments): self
     {
         return $this;
     }

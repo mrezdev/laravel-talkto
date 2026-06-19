@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Throwable;
 
 class ReceiveIncomingTalktoMessagePipeline
 {
@@ -63,15 +64,11 @@ class ReceiveIncomingTalktoMessagePipeline
             return $this->duplicateResponse($existingMessage, 'already_received');
         }
 
-        $idempotencyKey = $envelope['idempotency_key'] ?? null;
+        $idempotencyFingerprint = $this->idempotencyFingerprint($envelope);
 
-        if ($idempotencyKey !== null && $idempotencyKey !== '') {
+        if ($idempotencyFingerprint !== null) {
             $idempotentMessage = $messageClass::query()
-                ->where('direction', 'incoming')
-                ->where('source_service', $envelope['source'])
-                ->where('target_service', $envelope['target'])
-                ->where('command', $envelope['command'])
-                ->where('idempotency_key', $idempotencyKey)
+                ->where('idempotency_fingerprint', $idempotencyFingerprint)
                 ->whereIn('overall_status', $this->idempotencyProtectedStatuses())
                 ->first();
 
@@ -97,6 +94,7 @@ class ReceiveIncomingTalktoMessagePipeline
                     'command' => $envelope['command'],
                     'business_key' => $envelope['business_key'] ?? null,
                     'idempotency_key' => $envelope['idempotency_key'] ?? null,
+                    'idempotency_fingerprint' => $this->idempotencyFingerprint($envelope),
                     'payload' => $envelope['payload'] ?? null,
                     'payload_hash' => $envelope['payload_hash'],
                     'schema_version' => $envelope['schema_version'] ?? 1,
@@ -125,20 +123,41 @@ class ReceiveIncomingTalktoMessagePipeline
 
                 return $message;
             });
-        } catch (QueryException $exception) {
-            if (! $this->isDuplicateMessageIdException($exception, (new $messageClass)->getTable())) {
+        } catch (Throwable $exception) {
+            if (! $exception instanceof QueryException) {
+                throw $exception;
+            }
+
+            $messageTable = (new $messageClass)->getTable();
+
+            if ($this->isDuplicateMessageIdException($exception, $messageTable)) {
+                $existingMessage = $messageClass::query()
+                    ->where('message_id', $messageId)
+                    ->first();
+
+                if (! $existingMessage) {
+                    throw $exception;
+                }
+
+                return $this->duplicateResponse($existingMessage, 'already_received');
+            }
+
+            if (! $this->isDuplicateIdempotencyFingerprintException($exception, $messageTable) || $idempotencyFingerprint === null) {
                 throw $exception;
             }
 
             $existingMessage = $messageClass::query()
-                ->where('message_id', $messageId)
+                ->where('idempotency_fingerprint', $idempotencyFingerprint)
                 ->first();
 
             if (! $existingMessage) {
                 throw $exception;
             }
 
-            return $this->duplicateResponse($existingMessage, 'already_received');
+            return $this->duplicateResponse(
+                $existingMessage,
+                $this->idempotencyDuplicateStatus((string) $existingMessage->overall_status)
+            );
         }
 
         $jobClass = $this->processIncomingJobClass();
@@ -182,6 +201,17 @@ class ReceiveIncomingTalktoMessagePipeline
         };
     }
 
+    private function idempotencyFingerprint(array $envelope): ?string
+    {
+        return TalktoMessage::idempotencyFingerprint(
+            'incoming',
+            (string) $envelope['source'],
+            (string) $envelope['target'],
+            (string) $envelope['command'],
+            $envelope['idempotency_key'] ?? null
+        );
+    }
+
     private function isDuplicateMessageIdException(QueryException $exception, string $messageTable): bool
     {
         $sqlState = (string) ($exception->errorInfo[0] ?? '');
@@ -197,6 +227,21 @@ class ReceiveIncomingTalktoMessagePipeline
         return $isDuplicateConstraint
             && str_contains($message, $table)
             && str_contains($message, 'message_id');
+    }
+
+    private function isDuplicateIdempotencyFingerprintException(QueryException $exception, string $messageTable): bool
+    {
+        $sqlState = (string) ($exception->errorInfo[0] ?? '');
+        $driverCode = (string) ($exception->errorInfo[1] ?? '');
+        $message = strtolower($exception->getMessage());
+
+        $isDuplicateConstraint = in_array($sqlState, ['23000', '23505'], true)
+            || in_array($driverCode, ['19', '1062'], true)
+            || str_contains($message, 'unique constraint failed')
+            || str_contains($message, 'duplicate entry');
+
+        return $isDuplicateConstraint
+            && str_contains($message, 'idempotency_fingerprint');
     }
 
     private function messageModelClass(): string

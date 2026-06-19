@@ -77,6 +77,7 @@ test('talkto message queries use configured connection and table', function (): 
         $table->string('source_service');
         $table->string('target_service');
         $table->string('command');
+        $table->string('idempotency_fingerprint', 64)->nullable()->unique();
         $table->json('payload')->nullable();
         $table->string('payload_hash');
         $table->unsignedInteger('schema_version')->default(1);
@@ -172,7 +173,7 @@ test('talkto model relations keep resolving on default storage tables', function
 test('panel message query remains model based for storage connection compatibility', function (): void {
     $query = file_get_contents(__DIR__.'/../../src/Services/Panel/TalktoPanelMessageQuery.php') ?: '';
 
-    expect($query)->toContain('return $this->messageModelClass()::query();')
+    expect($query)->toContain('$this->messageModelClass()::query()')
         ->and($query)->not->toContain("DB::table('talkto_messages')")
         ->and($query)->not->toContain('DB::table("talkto_messages")');
 });

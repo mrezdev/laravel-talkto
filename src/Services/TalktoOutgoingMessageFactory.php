@@ -3,6 +3,7 @@
 namespace Mrezdev\LaravelTalkto\Services;
 
 use Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract;
+use Illuminate\Database\QueryException;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Illuminate\Contracts\Support\Arrayable;
@@ -10,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use JsonSerializable;
+use Throwable;
 
 class TalktoOutgoingMessageFactory
 {
@@ -45,73 +47,112 @@ class TalktoOutgoingMessageFactory
         $overallStatus = $options['overall_status'] ?? 'waiting_to_send';
         $messageClass = $this->messageModelClass();
         $eventClass = $this->eventModelClass();
-
-        return DB::transaction(function () use (
-            $messageClass,
-            $eventClass,
-            $messageId,
-            $correlationId,
-            $options,
+        $idempotencyFingerprint = $messageClass::idempotencyFingerprint(
+            'outgoing',
             $sourceService,
             $resolvedTarget,
             $command,
-            $businessKey,
-            $idempotencyKey,
-            $normalizedPayload,
-            $payloadHash,
-            $sourceActionStatus,
-            $transportStatus,
-            $destinationReceiveStatus,
-            $destinationActionStatus,
-            $overallStatus
-        ): TalktoMessage {
-            $message = $messageClass::create([
-                'message_id' => $messageId,
-                'correlation_id' => $correlationId,
-                'parent_message_id' => $options['parent_message_id'] ?? null,
-                'direction' => 'outgoing',
-                'source_service' => $sourceService,
-                'target_service' => $resolvedTarget,
-                'command' => $command,
-                'business_key' => $businessKey,
-                'idempotency_key' => $idempotencyKey,
-                'payload' => $normalizedPayload,
-                'payload_hash' => $payloadHash,
-                'schema_version' => $options['schema_version'] ?? 1,
-                'source_action_status' => $sourceActionStatus,
-                'transport_status' => $transportStatus,
-                'destination_receive_status' => $destinationReceiveStatus,
-                'destination_action_status' => $destinationActionStatus,
-                'overall_status' => $overallStatus,
-                'attempts' => 0,
-                'max_attempts' => $options['max_attempts'] ?? config('talkto.retry.max_attempts', 6),
-                'next_attempt_at' => $options['next_attempt_at'] ?? null,
-                'last_error' => $options['last_error'] ?? null,
-                'sent_at' => $options['sent_at'] ?? null,
-                'failed_at' => $options['failed_at'] ?? null,
-            ]);
+            $idempotencyKey
+        );
 
-            $eventClass::create([
-                'talkto_message_id' => $message->id,
-                'message_id' => $message->message_id,
-                'service_name' => $sourceService,
-                'event_type' => 'message_created',
-                'old_status' => null,
-                'new_status' => $message->overall_status,
-                'meta' => array_filter([
-                    'flow_name' => $options['flow_name'] ?? null,
-                    'source' => $sourceService,
-                    'target' => $resolvedTarget,
+        if ($idempotencyFingerprint !== null) {
+            $existingMessage = $messageClass::query()
+                ->where('idempotency_fingerprint', $idempotencyFingerprint)
+                ->first();
+
+            if ($existingMessage instanceof TalktoMessage) {
+                return $existingMessage;
+            }
+        }
+
+        try {
+            return DB::transaction(function () use (
+                $messageClass,
+                $eventClass,
+                $messageId,
+                $correlationId,
+                $options,
+                $sourceService,
+                $resolvedTarget,
+                $command,
+                $businessKey,
+                $idempotencyKey,
+                $idempotencyFingerprint,
+                $normalizedPayload,
+                $payloadHash,
+                $sourceActionStatus,
+                $transportStatus,
+                $destinationReceiveStatus,
+                $destinationActionStatus,
+                $overallStatus
+            ): TalktoMessage {
+                $message = $messageClass::create([
+                    'message_id' => $messageId,
+                    'correlation_id' => $correlationId,
+                    'parent_message_id' => $options['parent_message_id'] ?? null,
+                    'direction' => 'outgoing',
+                    'source_service' => $sourceService,
+                    'target_service' => $resolvedTarget,
                     'command' => $command,
                     'business_key' => $businessKey,
                     'idempotency_key' => $idempotencyKey,
-                    'source_result' => $options['source_result'] ?? null,
-                    'source_meta' => $options['source_meta'] ?? null,
-                ], fn (mixed $value): bool => $value !== null),
-            ]);
+                    'idempotency_fingerprint' => $idempotencyFingerprint,
+                    'payload' => $normalizedPayload,
+                    'payload_hash' => $payloadHash,
+                    'schema_version' => $options['schema_version'] ?? 1,
+                    'source_action_status' => $sourceActionStatus,
+                    'transport_status' => $transportStatus,
+                    'destination_receive_status' => $destinationReceiveStatus,
+                    'destination_action_status' => $destinationActionStatus,
+                    'overall_status' => $overallStatus,
+                    'attempts' => 0,
+                    'max_attempts' => $options['max_attempts'] ?? config('talkto.retry.max_attempts', 5),
+                    'next_attempt_at' => $options['next_attempt_at'] ?? null,
+                    'last_error' => $options['last_error'] ?? null,
+                    'sent_at' => $options['sent_at'] ?? null,
+                    'failed_at' => $options['failed_at'] ?? null,
+                ]);
 
-            return $message;
-        });
+                $eventClass::create([
+                    'talkto_message_id' => $message->id,
+                    'message_id' => $message->message_id,
+                    'service_name' => $sourceService,
+                    'event_type' => 'message_created',
+                    'old_status' => null,
+                    'new_status' => $message->overall_status,
+                    'meta' => array_filter([
+                        'flow_name' => $options['flow_name'] ?? null,
+                        'source' => $sourceService,
+                        'target' => $resolvedTarget,
+                        'command' => $command,
+                        'business_key' => $businessKey,
+                        'idempotency_key' => $idempotencyKey,
+                        'source_result' => $options['source_result'] ?? null,
+                        'source_meta' => $options['source_meta'] ?? null,
+                    ], fn (mixed $value): bool => $value !== null),
+                ]);
+
+                return $message;
+            });
+        } catch (Throwable $exception) {
+            if (! $exception instanceof QueryException) {
+                throw $exception;
+            }
+
+            if ($idempotencyFingerprint === null || ! $this->isDuplicateIdempotencyFingerprintException($exception)) {
+                throw $exception;
+            }
+
+            $existingMessage = $messageClass::query()
+                ->where('idempotency_fingerprint', $idempotencyFingerprint)
+                ->first();
+
+            if (! $existingMessage instanceof TalktoMessage) {
+                throw $exception;
+            }
+
+            return $existingMessage;
+        }
     }
 
     private function resolvedTargetName(string $target): string
@@ -172,5 +213,19 @@ class TalktoOutgoingMessageFactory
         }
 
         throw new InvalidArgumentException('Talkto payload must be arrayable, json serializable, scalar, array, or null.');
+    }
+
+    private function isDuplicateIdempotencyFingerprintException(QueryException $exception): bool
+    {
+        $sqlState = (string) ($exception->errorInfo[0] ?? '');
+        $driverCode = (string) ($exception->errorInfo[1] ?? '');
+        $message = strtolower($exception->getMessage());
+
+        return (
+            in_array($sqlState, ['23000', '23505'], true)
+            || in_array($driverCode, ['19', '1062'], true)
+            || str_contains($message, 'unique constraint failed')
+            || str_contains($message, 'duplicate entry')
+        ) && str_contains($message, 'idempotency_fingerprint');
     }
 }
