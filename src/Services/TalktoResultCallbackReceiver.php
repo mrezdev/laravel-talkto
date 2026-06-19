@@ -112,13 +112,11 @@ class TalktoResultCallbackReceiver implements ResultCallbackReceiverContract
 
             $oldStatus = $message->overall_status;
 
-            $message->forceFill(array_filter([
-                'destination_action_status' => $destinationStatus,
-                'overall_status' => $overallStatus,
-                'completed_at' => $overallStatus === 'completed' ? now() : null,
-                'failed_at' => in_array($overallStatus, ['failed_retryable', 'failed_final'], true) ? now() : null,
-                'last_error' => $callback->resultData->errorMessage,
-            ], fn (mixed $value): bool => $value !== null))->save();
+            $message->forceFill($this->callbackStateAttributes(
+                $destinationStatus,
+                $overallStatus,
+                $callback->resultData->errorMessage
+            ))->save();
 
             $this->recordEvent($message, 'result_callback_received', $oldStatus, $message->overall_status, [
                 'callback_message_id' => $callback->callbackMessageId,
@@ -168,6 +166,32 @@ class TalktoResultCallbackReceiver implements ResultCallbackReceiverContract
             'failed_retryable' => ['failed_retryable', 'failed_retryable'],
             'failed_final' => ['failed_final', 'failed_final'],
         };
+    }
+
+    private function callbackStateAttributes(string $destinationStatus, string $overallStatus, ?string $errorMessage): array
+    {
+        $attributes = [
+            'destination_action_status' => $destinationStatus,
+            'overall_status' => $overallStatus,
+        ];
+
+        if ($overallStatus === 'completed') {
+            return $attributes + [
+                'completed_at' => now(),
+                'failed_at' => null,
+                'last_error' => null,
+            ];
+        }
+
+        if (in_array($overallStatus, ['failed_retryable', 'failed_final'], true)) {
+            return $attributes + [
+                'completed_at' => null,
+                'failed_at' => now(),
+                'last_error' => $errorMessage,
+            ];
+        }
+
+        return $attributes;
     }
 
     private function accepted(string $status, TalktoResultCallbackData $callback, bool $duplicate): array

@@ -28,6 +28,16 @@ beforeEach(function (): void {
                 'domain.command' => [
                     'driver' => 'none',
                 ],
+                'domain.other-command' => [
+                    'driver' => 'none',
+                ],
+            ],
+        ],
+        'talkto.incoming.source-b' => [
+            'allowed_commands' => [
+                'domain.command' => [
+                    'driver' => 'none',
+                ],
             ],
         ],
         'talkto.models.message' => TalktoMessage::class,
@@ -114,6 +124,103 @@ test('idempotency key after success returns already processed and does not dispa
     Queue::assertNotPushed(ProcessIncomingTalktoMessage::class);
 });
 
+test('idempotency key protects active incoming states without dispatching again', function (): void {
+    Queue::fake();
+
+    foreach (['queued', 'processing', 'failed_retryable'] as $status) {
+        $key = "business-once-{$status}";
+
+        talktoIncomingMessage("incoming-active-{$status}", [
+            'idempotency_key' => $key,
+            'destination_action_status' => $status,
+            'overall_status' => $status,
+        ]);
+
+        $response = talktoReceive(talktoEnvelope("incoming-active-duplicate-{$status}", $key));
+
+        expect($response->getStatusCode())->toBe(200)
+            ->and($response->getData(true))->toMatchArray([
+                'received' => true,
+                'duplicate' => true,
+                'status' => 'already_accepted',
+                'message_id' => "incoming-active-{$status}",
+            ])
+            ->and(TalktoMessage::query()->where('idempotency_key', $key)->count())->toBe(1);
+    }
+
+    Queue::assertNotPushed(ProcessIncomingTalktoMessage::class);
+});
+
+test('idempotency key after completed or succeeded incoming work returns already processed', function (): void {
+    Queue::fake();
+
+    foreach (['completed', 'succeeded'] as $status) {
+        $key = "business-done-{$status}";
+
+        talktoIncomingMessage("incoming-done-{$status}", [
+            'idempotency_key' => $key,
+            'destination_action_status' => $status,
+            'overall_status' => $status,
+            'completed_at' => now(),
+        ]);
+
+        $response = talktoReceive(talktoEnvelope("incoming-done-duplicate-{$status}", $key));
+
+        expect($response->getStatusCode())->toBe(200)
+            ->and($response->getData(true))->toMatchArray([
+                'received' => true,
+                'duplicate' => true,
+                'status' => 'already_processed',
+                'message_id' => "incoming-done-{$status}",
+            ])
+            ->and(TalktoMessage::query()->where('idempotency_key', $key)->count())->toBe(1);
+    }
+
+    Queue::assertNotPushed(ProcessIncomingTalktoMessage::class);
+});
+
+test('idempotency key is scoped by source target and command', function (): void {
+    Queue::fake();
+
+    talktoIncomingMessage('incoming-scope-command', [
+        'idempotency_key' => 'scope-command',
+        'command' => 'domain.command',
+    ]);
+
+    talktoIncomingMessage('incoming-scope-source', [
+        'idempotency_key' => 'scope-source',
+        'source_service' => 'source-a',
+    ]);
+
+    talktoIncomingMessage('incoming-scope-target', [
+        'idempotency_key' => 'scope-target',
+        'target_service' => 'target-a',
+    ]);
+
+    $commandResponse = talktoReceive(talktoEnvelope('incoming-scope-command-new', 'scope-command', [
+        'command' => 'domain.other-command',
+    ]));
+
+    $sourceResponse = talktoReceive(talktoEnvelope('incoming-scope-source-new', 'scope-source', [
+        'source' => 'source-b',
+    ]));
+
+    config(['talkto.service' => 'target-b']);
+
+    $targetResponse = talktoReceive(talktoEnvelope('incoming-scope-target-new', 'scope-target', [
+        'target' => 'target-b',
+    ]));
+
+    expect($commandResponse->getStatusCode())->toBe(202)
+        ->and($sourceResponse->getStatusCode())->toBe(202)
+        ->and($targetResponse->getStatusCode())->toBe(202)
+        ->and(TalktoMessage::query()->where('idempotency_key', 'scope-command')->count())->toBe(2)
+        ->and(TalktoMessage::query()->where('idempotency_key', 'scope-source')->count())->toBe(2)
+        ->and(TalktoMessage::query()->where('idempotency_key', 'scope-target')->count())->toBe(2);
+
+    Queue::assertPushed(ProcessIncomingTalktoMessage::class, 3);
+});
+
 test('processing the same incoming job twice executes handler only once', function (): void {
     $message = talktoIncomingMessage('incoming-job-once');
     $handler = new IncomingLedgerCountingHandler;
@@ -152,11 +259,11 @@ function talktoReceive(array $envelope): JsonResponse
     return app(TalktoReceiveController::class)->__invoke($request, app(TalktoSignatureVerifier::class));
 }
 
-function talktoEnvelope(string $messageId, ?string $idempotencyKey = null): array
+function talktoEnvelope(string $messageId, ?string $idempotencyKey = null, array $overrides = []): array
 {
     $payload = ['id' => $messageId];
 
-    return array_filter([
+    return array_filter(array_merge([
         'message_id' => $messageId,
         'source' => 'source',
         'target' => 'testing',
@@ -164,7 +271,7 @@ function talktoEnvelope(string $messageId, ?string $idempotencyKey = null): arra
         'idempotency_key' => $idempotencyKey,
         'payload_hash' => app(TalktoPayloadHasher::class)->hash($payload),
         'payload' => $payload,
-    ], fn (mixed $value): bool => $value !== null);
+    ], $overrides), fn (mixed $value): bool => $value !== null);
 }
 
 function talktoIncomingMessage(string $messageId, array $attributes = []): TalktoMessage

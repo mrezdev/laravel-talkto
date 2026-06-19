@@ -112,6 +112,29 @@ test('callback receiver verifies signed callback and updates original outgoing m
         ->and(TalktoEvent::query()->where('message_id', 'p04-receive-success')->where('event_type', 'result_callback_applied')->exists())->toBeTrue();
 });
 
+test('callback receiver success clears stale failure fields', function (): void {
+    $message = p04OutgoingMessage('p04-receive-success-clears-failure', [
+        'destination_action_status' => 'failed_retryable',
+        'overall_status' => 'failed_retryable',
+        'failed_at' => now()->subMinute(),
+        'last_error' => 'stale failure',
+    ]);
+    [$envelope, $headers] = p04SignedCallback($message, TalktoIncomingCommandResult::succeeded(['processed' => true]));
+
+    $result = app(ResultCallbackReceiverContract::class)->receiveResult($envelope, $headers);
+    $message = $message->fresh();
+
+    expect($result)->toMatchArray([
+        'accepted' => true,
+        'status' => 'applied',
+        'duplicate' => false,
+    ])->and($message->destination_action_status)->toBe('succeeded')
+        ->and($message->overall_status)->toBe('completed')
+        ->and($message->completed_at)->not->toBeNull()
+        ->and($message->failed_at)->toBeNull()
+        ->and($message->last_error)->toBeNull();
+});
+
 test('callback receiver rejects when callbacks are disabled', function (): void {
     $message = p04OutgoingMessage('p04-receive-disabled');
     [$envelope, $headers] = p04SignedCallback($message, TalktoIncomingCommandResult::succeeded());
@@ -143,6 +166,28 @@ test('callback receiver handles skipped retryable and final results', function (
             ->and($message->fresh()->destination_action_status)->toBe($destinationStatus)
             ->and($message->fresh()->overall_status)->toBe($overallStatus);
     }
+});
+
+test('callback receiver failure sets failure fields and clears stale completed timestamp', function (): void {
+    $message = p04OutgoingMessage('p04-receive-failure-clears-completed', [
+        'destination_action_status' => 'succeeded',
+        'overall_status' => 'completed',
+        'completed_at' => now()->subMinute(),
+    ]);
+    [$envelope, $headers] = p04SignedCallback($message, TalktoIncomingCommandResult::failedRetryable('Temporary failure.', RuntimeException::class));
+
+    $result = app(ResultCallbackReceiverContract::class)->receiveResult($envelope, $headers);
+    $message = $message->fresh();
+
+    expect($result)->toMatchArray([
+        'accepted' => true,
+        'status' => 'applied',
+        'duplicate' => false,
+    ])->and($message->destination_action_status)->toBe('failed_retryable')
+        ->and($message->overall_status)->toBe('failed_retryable')
+        ->and($message->completed_at)->toBeNull()
+        ->and($message->failed_at)->not->toBeNull()
+        ->and($message->last_error)->toBe('Temporary failure.');
 });
 
 test('callback receiver rejects invalid callback status and linked mismatches', function (): void {

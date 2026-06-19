@@ -66,14 +66,20 @@ class ReceiveIncomingTalktoMessagePipeline
         $idempotencyKey = $envelope['idempotency_key'] ?? null;
 
         if ($idempotencyKey !== null && $idempotencyKey !== '') {
-            $processedMessage = $messageClass::query()
-                ->where('idempotency_key', $idempotencyKey)
+            $idempotentMessage = $messageClass::query()
                 ->where('direction', 'incoming')
-                ->whereIn('overall_status', ['completed', 'succeeded'])
+                ->where('source_service', $envelope['source'])
+                ->where('target_service', $envelope['target'])
+                ->where('command', $envelope['command'])
+                ->where('idempotency_key', $idempotencyKey)
+                ->whereIn('overall_status', $this->idempotencyProtectedStatuses())
                 ->first();
 
-            if ($processedMessage) {
-                return $this->duplicateResponse($processedMessage, 'already_processed');
+            if ($idempotentMessage) {
+                return $this->duplicateResponse(
+                    $idempotentMessage,
+                    $this->idempotencyDuplicateStatus((string) $idempotentMessage->overall_status)
+                );
             }
         }
 
@@ -153,6 +159,27 @@ class ReceiveIncomingTalktoMessagePipeline
             'status' => $status,
             'message_id' => $message->message_id,
         ], 200);
+    }
+
+    private function idempotencyProtectedStatuses(): array
+    {
+        return [
+            'queued',
+            'processing',
+            'waiting_to_send',
+            'failed_retryable',
+            'completed',
+            'succeeded',
+        ];
+    }
+
+    private function idempotencyDuplicateStatus(string $overallStatus): string
+    {
+        return match ($overallStatus) {
+            'completed', 'succeeded' => 'already_processed',
+            'queued', 'processing', 'waiting_to_send', 'failed_retryable' => 'already_accepted',
+            default => 'already_received',
+        };
     }
 
     private function isDuplicateMessageIdException(QueryException $exception, string $messageTable): bool

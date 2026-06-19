@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Reliability Fixes
+
+- Hardened incoming idempotency, retry lock clearing, and callback success state cleanup.
+
 ### Scaffolding Generators And Optional Panel
 
 - Added Artisan scaffolding generators for outgoing commands, transactional outgoing commands, incoming commands, and integration shortcut flows.

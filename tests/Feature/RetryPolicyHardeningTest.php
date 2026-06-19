@@ -179,6 +179,37 @@ test('mark retryable failure uses resolved backoff and exposes decision shape', 
         ->and($decision)->toHaveKeys(['retryable', 'can_schedule', 'reason', 'max_attempts', 'backoff_seconds', 'policy']);
 });
 
+test('mark retryable failure clears locks and preserves null http status behavior', function (): void {
+    config(['talkto.retry.targets.peer-a.backoff_seconds' => [44]]);
+
+    $policy = app(TalktoRetryPolicy::class);
+    $message = p06RetryMessage('p06-mark-retryable-clears-locks', [
+        'target_service' => 'peer-a',
+        'retry_count' => 2,
+        'last_http_status' => 418,
+        'locked_at' => now(),
+        'locked_by' => 'worker-1',
+    ]);
+    $longError = str_repeat('x', 2100);
+
+    $before = now()->addSeconds(43);
+    $policy->markRetryableFailure($message, 'transport_status', $longError);
+    $message = $message->fresh();
+    $after = now()->addSeconds(45);
+
+    expect($message->transport_status)->toBe('failed')
+        ->and($message->overall_status)->toBe('failed_retryable')
+        ->and($message->retry_count)->toBe(3)
+        ->and($message->next_retry_at->betweenIncluded($before, $after))->toBeTrue()
+        ->and($message->next_attempt_at->equalTo($message->next_retry_at))->toBeTrue()
+        ->and($message->last_attempted_at)->not->toBeNull()
+        ->and($message->last_http_status)->toBe(418)
+        ->and($message->last_error)->toBe(str_repeat('x', 2000))
+        ->and($message->failed_at)->not->toBeNull()
+        ->and($message->locked_at)->toBeNull()
+        ->and($message->locked_by)->toBeNull();
+});
+
 test('retry command validates limits stays read-only in dry run and respects policy direction', function (): void {
     Queue::fake();
 

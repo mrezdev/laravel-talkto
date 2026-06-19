@@ -187,19 +187,24 @@ class TalktoRetryPolicy
         $backoffSeconds = $this->backoffSeconds($currentRetryCount, $message);
         $nextRetryAt = now()->addSeconds($backoffSeconds);
 
-        $message->forceFill(array_filter([
+        $attributes = [
             $statusColumn => 'failed',
             'overall_status' => 'failed_retryable',
             'retry_count' => $currentRetryCount + 1,
             'next_retry_at' => $nextRetryAt,
             'next_attempt_at' => $nextRetryAt,
             'last_attempted_at' => now(),
-            'last_http_status' => $httpStatus,
             'last_error' => $this->excerpt($errorMessage),
             'failed_at' => now(),
             'locked_at' => null,
             'locked_by' => null,
-        ], fn (mixed $value): bool => $value !== null))->save();
+        ];
+
+        if ($httpStatus !== null) {
+            $attributes['last_http_status'] = $httpStatus;
+        }
+
+        $message->forceFill($attributes)->save();
 
         return $message;
     }
