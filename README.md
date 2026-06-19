@@ -49,7 +49,7 @@ flowchart LR
 - Idempotency and replay protection using the message ledger.
 - Retry/backoff state and retry command.
 - Dead Letter Queue storage and reprocess command.
-- Read-only metrics, health summaries, and report command.
+- Read-only metrics, health summaries, report command, and message trace command.
 - Signed result callback sender and receiver runtime, with contracts that hosts can override.
 
 ## 60-Second Architecture Overview
@@ -188,6 +188,7 @@ Run workers and operational commands:
 php artisan queue:work
 php artisan talkto:retry-failed --dry-run
 php artisan talkto:report --hours=24 --direction=all --limit=20
+php artisan talkto:trace <message-id>
 ```
 
 ## Security Model Summary
@@ -202,7 +203,7 @@ Read more in [docs/security.md](docs/security.md).
 
 Retry state is stored on message records and processed through `talkto:retry-failed`. Final or exhausted failures can be stored in `talkto_dead_letters` when DLQ support is enabled and migrated. `talkto:dlq-reprocess` lets operators reprocess eligible dead letters deliberately.
 
-Observability is read-only: `TalktoMetricsCollector`, `TalktoHealthChecker`, and `talkto:report` summarize existing message state without dispatching jobs or mutating rows.
+Observability is read-only: `TalktoMetricsCollector`, `TalktoHealthChecker`, `talkto:report`, and `talkto:trace` summarize existing message state without dispatching jobs or mutating rows. Use `talkto:trace <message-id>` or `talkto:trace --correlation=<correlation-id>` to inspect one flow across related messages, attempts, events, dead letters, and callbacks with payload redacted by default.
 
 Read more in [docs/recovery-monitoring-template.md](docs/recovery-monitoring-template.md), [docs/production-readiness.md](docs/production-readiness.md), and [docs/troubleshooting.md](docs/troubleshooting.md).
 
@@ -267,9 +268,11 @@ Host applications should depend on documented contracts and services rather than
 - `TalktoFlowFactory`
 - `TalktoMetricsCollector`
 - `TalktoHealthChecker`
+- `TalktoTraceReporter`
 - `talkto:retry-failed`
 - `talkto:dlq-reprocess`
 - `talkto:report`
+- `talkto:trace`
 
 The detailed public surface is tracked in [docs/PUBLIC_API.md](docs/PUBLIC_API.md).
 

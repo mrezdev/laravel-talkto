@@ -22,6 +22,12 @@ If idempotency is required, confirm every retry sends the same idempotency key f
 
 Check the callback target URL, endpoint, shared secret, queue state, and stored message relationship. Callback handlers should be safe to retry and should not expose raw secrets in logs.
 
+## Trace One Message
+
+Use `php artisan talkto:trace <message-id>` to inspect a single flow without retrying, dispatching jobs, or mutating rows. Use `php artisan talkto:trace --correlation=<correlation-id> --json` when the message id is unknown but a correlation id is available.
+
+The trace output includes related messages, attempts, events, dead letters, and a sorted timeline. Payload values are redacted by default.
+
 ## Queue Job Stuck
 
 Confirm the host queue connection is running in the intended environment. Inspect failed jobs, retry limits, backoff configuration, and any HTTP timeouts reported by the sender or receiver job.

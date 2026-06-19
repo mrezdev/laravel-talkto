@@ -78,6 +78,7 @@ class ReportTalktoMessagesCommand extends Command
             .' open_dead_letters='.$snapshot->openDeadLetters
         );
         $this->line('health='.($healthReport['ok'] ? 'ok' : 'warning'));
+        $this->line('Use talkto:trace <message_id> for a message-level timeline.');
 
         foreach ($healthReport['warnings'] as $warning) {
             $this->warn($warning);

@@ -5,6 +5,7 @@ namespace Mrezdev\LaravelTalkto;
 use Mrezdev\LaravelTalkto\Console\Commands\RetryFailedTalktoMessagesCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\ReportTalktoMessagesCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\ReprocessTalktoDeadLettersCommand;
+use Mrezdev\LaravelTalkto\Console\Commands\TraceTalktoMessageCommand;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackReceiverContract;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
 use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingHandlerRegistryContract;
@@ -49,6 +50,7 @@ class LaravelTalktoServiceProvider extends ServiceProvider
                 RetryFailedTalktoMessagesCommand::class,
                 ReprocessTalktoDeadLettersCommand::class,
                 ReportTalktoMessagesCommand::class,
+                TraceTalktoMessageCommand::class,
             ]);
         }
 

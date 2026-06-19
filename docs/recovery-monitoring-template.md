@@ -47,6 +47,17 @@ A detail page or command output should show:
 - last redacted error
 - available safe actions
 
+## Trace One Flow
+
+Use the read-only trace report before recovery actions:
+
+```bash
+php artisan talkto:trace <message-id>
+php artisan talkto:trace --correlation=<correlation-id> --json
+```
+
+The trace combines related messages, attempts, lifecycle events, dead letters, callback events, and correlation ids into a chronological timeline. Payload values are redacted by default; `--payload` includes payload values while still redacting secret-like fields.
+
 ## Retryability Classifications
 
 Use explicit classifications:

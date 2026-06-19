@@ -18,6 +18,7 @@ This page lists the package surfaces intended for host applications to depend on
 - `TalktoOutgoingTargetRegistry` for programmatic outgoing target registration.
 - `TalktoMetricsCollector` for read-only metrics snapshots and counts.
 - `TalktoHealthChecker` for read-only health summaries.
+- `TalktoTraceReporter` for read-only message and correlation trace snapshots.
 - `TalktoOutgoingMessageFactory` and `TalktoFlowFactory` for creating outgoing messages.
 - `TalktoIncomingCommandResult` for incoming handler outcomes through the `succeeded`, `failedRetryable`, `failedFinal`, and `skipped` factories.
 - `TalktoResultCallbackSender`, `TalktoResultCallbackReceiver`, and `TalktoResultCallbackEnvelopeBuilder` for signed result callback runtime behavior.
@@ -26,6 +27,7 @@ This page lists the package surfaces intended for host applications to depend on
 
 - `TalktoEnvelopeData` provides an immutable snapshot of the envelope array shape and can be created from an envelope array or compatible message model.
 - `TalktoIncomingCommandResultData` provides an immutable snapshot of an `IncomingCommandResultContract`.
+- `TalktoTraceSnapshot` provides a stable array shape for read-only trace reports.
 
 These data objects are additive. Existing array-based APIs remain supported and continue to return the same keys.
 
@@ -34,6 +36,7 @@ These data objects are additive. Existing array-based APIs remain supported and 
 - `talkto:retry-failed` with `--direction`, `--limit`, and `--dry-run`.
 - `talkto:dlq-reprocess` with `--id`, `--message-id`, `--direction`, `--limit`, `--dry-run`, and `--force`.
 - `talkto:report` with `--hours`, `--from`, `--to`, `--json`, `--direction`, and `--limit`.
+- `talkto:trace` with `message_id`, `--correlation`, `--json`, `--limit`, and `--payload`.
 
 ## Config Areas
 
@@ -57,6 +60,6 @@ These data objects are additive. Existing array-based APIs remain supported and 
 - Signatures use backward-compatible v1 by default; v2 is opt-in for sending and accepted by default for receiving.
 - Retry/backoff state is stored on `talkto_messages`.
 - Dead letters use `talkto_dead_letters` when enabled and migrated.
-- Observability reports are read-only and do not dispatch jobs or mutate rows.
+- Observability reports and traces are read-only and do not dispatch jobs or mutate rows.
 
 Host applications should avoid depending on private helper methods or internal pipeline implementation details.
