@@ -193,6 +193,40 @@ php artisan talkto:trace <message-id>
 php artisan talkto:security-audit
 ```
 
+## Artisan Scaffolding Generators
+
+Laravel Talkto can generate host-app scaffolding for outgoing and incoming command flows. The generated files live under a direction-first structure, while the host app still owns payload mapping, validation, business writes, config review, and rollout.
+
+```bash
+php artisan talkto:make-outgoing inventory verify-invoice
+php artisan talkto:make-outgoing inventory verify-invoice --transactional
+php artisan talkto:make-incoming inventory website.invoice-verified
+php artisan talkto:make-integration inventory verify-invoice --outgoing
+php artisan talkto:make-integration inventory verify-invoice --outgoing --transactional
+php artisan talkto:make-integration inventory website.invoice-verified --incoming
+```
+
+```text
+app/Talkto/
+  Outgoing/{Service}/
+    {Service}TalktoClient.php
+    {Service}OutgoingCommand.php
+    Commands/{Command}/
+      Send{Command}To{Service}.php
+      {Command}PayloadBuilder.php
+      Prepare{Command}SourceAction.php
+  Incoming/{Service}/
+    {Service}IncomingCommand.php
+    Commands/{Command}/
+      {Command}Handler.php
+      Handle{Command}From{Service}.php
+      {Command}PayloadValidator.php
+```
+
+`Prepare{Command}SourceAction.php` is generated only for `--transactional`. Incoming generators print a config snippet for manual `config/talkto.php` review; they do not edit config automatically.
+
+Read more in [docs/scaffolding.md](docs/scaffolding.md) and [docs/transactional-outgoing.md](docs/transactional-outgoing.md).
+
 ## Security Model Summary
 
 Laravel Talkto signs canonical message fields using HMAC SHA-256. Incoming requests can be verified for signature, timestamp tolerance, target service, known source service, command allowlist, payload hash, and replay protection.
@@ -238,6 +272,8 @@ Common next stops:
 - [docs/configuration.md](docs/configuration.md)
 - [docs/sending-commands.md](docs/sending-commands.md)
 - [docs/handling-commands.md](docs/handling-commands.md)
+- [docs/scaffolding.md](docs/scaffolding.md)
+- [docs/transactional-outgoing.md](docs/transactional-outgoing.md)
 - [docs/new-service-onboarding.md](docs/new-service-onboarding.md)
 - [docs/local-http-e2e-template.md](docs/local-http-e2e-template.md)
 - [docs/command-contract-template.md](docs/command-contract-template.md)

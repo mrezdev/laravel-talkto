@@ -17,11 +17,14 @@ Use this page as the documentation map for Laravel Talkto. The root [README](../
 ## Sending Commands
 
 - [Sending commands](sending-commands.md)
+- [Scaffolding generators](scaffolding.md)
+- [Transactional outgoing](transactional-outgoing.md)
 - [Command contract template](command-contract-template.md)
 
 ## Receiving Commands
 
 - [Handling commands](handling-commands.md)
+- [Scaffolding generators](scaffolding.md)
 - [Local HTTP end-to-end template](local-http-e2e-template.md)
 
 ## Callbacks

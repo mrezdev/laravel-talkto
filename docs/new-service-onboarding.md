@@ -95,6 +95,25 @@ The registry should answer:
 - Is the command enabled for this environment?
 - What payload version is accepted?
 
+## Generator-Based Workflow
+
+For services that use the Talkto scaffolding generators, start with dry-run output and keep config edits manual:
+
+```bash
+php artisan talkto:make-outgoing inventory verify-invoice --dry-run
+php artisan talkto:make-incoming inventory website.invoice-verified --dry-run
+```
+
+Then:
+
+1. Configure the peer service in `config/talkto.php`.
+2. Create outgoing scaffolding for commands this service sends.
+3. Create incoming scaffolding for commands this service receives.
+4. Copy and review the incoming config snippet before editing `config/talkto.php`.
+5. Write domain logic in the payload builder, transactional source action, validator, and handler action.
+
+See [scaffolding.md](scaffolding.md) and [transactional-outgoing.md](transactional-outgoing.md).
+
 ## Handler Implementation
 
 Handlers are host code. They validate payloads, perform model lookups, enforce permissions, make safe writes, and return a package result object.

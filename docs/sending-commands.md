@@ -32,3 +32,7 @@ $message = app(\Mrezdev\LaravelTalkto\Services\TalktoOutgoingMessageFactory::cla
 ```
 
 The queued send job builds a signed envelope and sends it to the configured peer endpoint.
+
+## Generated Outgoing Scaffolding
+
+For generated outgoing clients, send actions, payload builders, and command enums, see [scaffolding.md](scaffolding.md). For transactional source-side creation, see [transactional-outgoing.md](transactional-outgoing.md).

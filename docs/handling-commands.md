@@ -27,3 +27,7 @@ The package does not know host models, permissions, or write rules. The handler 
 ## Idempotency
 
 Set `idempotency` to `required` for commands that must reject or deduplicate replayed work.
+
+## Generated Incoming Scaffolding
+
+For generated incoming handler, action, validator, and command enum scaffolding, see [scaffolding.md](scaffolding.md).
