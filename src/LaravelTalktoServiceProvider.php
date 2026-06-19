@@ -5,6 +5,7 @@ namespace Mrezdev\LaravelTalkto;
 use Mrezdev\LaravelTalkto\Console\Commands\RetryFailedTalktoMessagesCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\ReportTalktoMessagesCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\ReprocessTalktoDeadLettersCommand;
+use Mrezdev\LaravelTalkto\Console\Commands\SecurityAuditTalktoCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\TraceTalktoMessageCommand;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackReceiverContract;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
@@ -21,6 +22,8 @@ use Mrezdev\LaravelTalkto\Services\TalktoOutgoingTargetRegistry;
 use Mrezdev\LaravelTalkto\Services\TalktoResultCallbackReceiver;
 use Mrezdev\LaravelTalkto\Services\TalktoResultCallbackSender;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
+use Mrezdev\LaravelTalkto\Services\TalktoSecurityAuditor;
+use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
 use Illuminate\Support\ServiceProvider;
 
 class LaravelTalktoServiceProvider extends ServiceProvider
@@ -33,6 +36,8 @@ class LaravelTalktoServiceProvider extends ServiceProvider
         $this->app->singleton(TalktoOutgoingTargetRegistry::class);
         $this->app->alias(TalktoOutgoingTargetRegistry::class, TalktoOutgoingTargetRegistryContract::class);
         $this->app->bind(TalktoRetryPolicy::class);
+        $this->app->singleton(TalktoSecurityRedactor::class);
+        $this->app->bind(TalktoSecurityAuditor::class);
         $this->app->bind(TalktoDeadLetterQueue::class);
         $this->app->bind(TalktoMetricsCollector::class);
         $this->app->bind(TalktoHealthChecker::class);
@@ -51,6 +56,7 @@ class LaravelTalktoServiceProvider extends ServiceProvider
                 ReprocessTalktoDeadLettersCommand::class,
                 ReportTalktoMessagesCommand::class,
                 TraceTalktoMessageCommand::class,
+                SecurityAuditTalktoCommand::class,
             ]);
         }
 

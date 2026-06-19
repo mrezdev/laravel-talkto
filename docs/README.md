@@ -32,6 +32,7 @@ Use this page as the documentation map for Laravel Talkto. The root [README](../
 ## Security
 
 - [Security](security.md)
+- [Troubleshooting](troubleshooting.md)
 - [Production readiness](production-readiness.md)
 
 ## Retry, DLQ, Recovery

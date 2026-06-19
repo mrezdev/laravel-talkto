@@ -189,13 +189,14 @@ php artisan queue:work
 php artisan talkto:retry-failed --dry-run
 php artisan talkto:report --hours=24 --direction=all --limit=20
 php artisan talkto:trace <message-id>
+php artisan talkto:security-audit
 ```
 
 ## Security Model Summary
 
 Laravel Talkto signs canonical message fields using HMAC SHA-256. Incoming requests can be verified for signature, timestamp tolerance, target service, known source service, command allowlist, payload hash, and replay protection.
 
-By default, outgoing messages use backward-compatible v1 signatures and incoming verification accepts v1 and v2. Move to v2 sending only after both peers are ready. Never commit real shared secrets.
+By default, outgoing messages use backward-compatible v1 signatures and incoming verification accepts v1 and v2. Move to v2 sending only after both peers are ready. Use `talkto:security-audit` to review signature, timestamp, nonce, route middleware, peer secret, and command allowlist posture without mutating state. Never commit real shared secrets.
 
 Read more in [docs/security.md](docs/security.md).
 

@@ -10,20 +10,13 @@ use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
 use Mrezdev\LaravelTalkto\Support\TalktoTraceSnapshot;
 use Throwable;
 
 class TalktoTraceReporter
 {
-    private const SECRET_KEYS = [
-        'secret',
-        'token',
-        'password',
-        'signature',
-        'authorization',
-        'api_key',
-        'key',
-    ];
+    public function __construct(private readonly TalktoSecurityRedactor $redactor) {}
 
     public function traceByMessageId(string $messageId, int $limit = 100, bool $includePayload = false): TalktoTraceSnapshot
     {
@@ -186,11 +179,11 @@ class TalktoTraceReporter
             'status' => $attempt->status,
             'http_status' => $attempt->http_status,
             'error_class' => $attempt->error_class,
-            'error_message' => $this->redactText($attempt->error_message),
-            'request_excerpt' => $this->redactText($attempt->request_excerpt),
-            'response_excerpt' => $this->redactText($attempt->response_excerpt),
+            'error_message' => $this->redactor->redactText($attempt->error_message),
+            'request_excerpt' => $this->redactor->redactText($attempt->request_excerpt),
+            'response_excerpt' => $this->redactor->redactText($attempt->response_excerpt),
             'duration_ms' => $attempt->duration_ms,
-            'meta' => $this->redactValue($attempt->meta ?? []),
+            'meta' => $this->redactor->redactValue($attempt->meta ?? []),
             'created_at' => $this->date($attempt->created_at),
             'updated_at' => $this->date($attempt->updated_at),
         ])->all();
@@ -226,7 +219,7 @@ class TalktoTraceReporter
             'event_type' => $event->event_type,
             'old_status' => $event->old_status,
             'new_status' => $event->new_status,
-            'meta' => $this->redactValue($event->meta ?? []),
+            'meta' => $this->redactor->redactValue($event->meta ?? []),
             'created_at' => $this->date($event->created_at),
             'updated_at' => $this->date($event->updated_at),
         ])->all();
@@ -264,9 +257,9 @@ class TalktoTraceReporter
             'command' => $deadLetter->command,
             'payload' => $this->payload($deadLetter->payload ?? [], $includePayload),
             'headers' => '[redacted]',
-            'failure_reason' => $this->redactText($deadLetter->failure_reason),
+            'failure_reason' => $this->redactor->redactText($deadLetter->failure_reason),
             'exception_class' => $deadLetter->exception_class,
-            'exception_message' => $this->redactText($deadLetter->exception_message),
+            'exception_message' => $this->redactor->redactText($deadLetter->exception_message),
             'failed_status' => $deadLetter->failed_status,
             'original_retry_count' => $deadLetter->original_retry_count,
             'reprocess_count' => $deadLetter->reprocess_count,
@@ -288,8 +281,8 @@ class TalktoTraceReporter
             'source_service' => $message->source_service,
             'target_service' => $message->target_service,
             'command' => $message->command,
-            'business_key' => $this->redactText($message->business_key),
-            'idempotency_key' => $this->redactText($message->idempotency_key),
+            'business_key' => $this->redactor->redactText($message->business_key),
+            'idempotency_key' => $this->redactor->redactText($message->idempotency_key),
             'payload' => $this->payload($message->payload ?? [], $includePayload),
             'payload_hash' => $message->payload_hash,
             'schema_version' => $message->schema_version,
@@ -304,8 +297,8 @@ class TalktoTraceReporter
             'next_attempt_at' => $this->date($message->next_attempt_at),
             'next_retry_at' => $this->date($message->next_retry_at),
             'last_http_status' => $message->last_http_status,
-            'last_error' => $this->redactText($message->last_error),
-            'last_response' => $this->redactText($message->last_response),
+            'last_error' => $this->redactor->redactText($message->last_error),
+            'last_response' => $this->redactor->redactText($message->last_response),
             'sent_at' => $this->date($message->sent_at),
             'received_at' => $this->date($message->received_at),
             'processing_started_at' => $this->date($message->processing_started_at),
@@ -391,105 +384,17 @@ class TalktoTraceReporter
         }
 
         if (! is_array($payload)) {
-            return $includePayload ? $this->redactValue($payload) : '[redacted]';
+            return $includePayload ? $this->redactor->redactValue($payload) : '[redacted]';
         }
 
         if ($includePayload) {
-            return $this->redactValue($payload);
+            return $this->redactor->redactValue($payload);
         }
 
         return [
             'redacted' => true,
             'keys' => array_values(array_map('strval', array_keys($payload))),
         ];
-    }
-
-    private function redactValue(mixed $value, ?string $key = null): mixed
-    {
-        if ($key !== null && $this->isSecretKey($key)) {
-            return '[redacted]';
-        }
-
-        if (is_array($value)) {
-            $redacted = [];
-
-            foreach ($value as $childKey => $childValue) {
-                $redacted[$childKey] = $this->redactValue($childValue, is_string($childKey) ? $childKey : null);
-            }
-
-            return $redacted;
-        }
-
-        if (is_string($value)) {
-            return $this->redactText($value);
-        }
-
-        return $value;
-    }
-
-    private function redactText(mixed $value): ?string
-    {
-        if ($value === null) {
-            return null;
-        }
-
-        $text = is_scalar($value) ? (string) $value : json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-
-        if ($text === null || $text === '') {
-            return $text;
-        }
-
-        foreach ($this->configuredSecrets() as $secret) {
-            $text = str_replace($secret, '[redacted]', $text);
-        }
-
-        $text = preg_replace(
-            '/\b(authorization|x-talkto-signature|signature|api[_-]?key|token|password|secret)(\s*[:=]\s*)([^,\s;]+)/i',
-            '$1$2[redacted]',
-            $text
-        ) ?? $text;
-
-        return $text;
-    }
-
-    private function isSecretKey(string $key): bool
-    {
-        $normalized = strtolower(str_replace(['-', ' '], '_', $key));
-
-        foreach (self::SECRET_KEYS as $secretKey) {
-            if ($normalized === $secretKey || str_contains($normalized, $secretKey)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function configuredSecrets(): array
-    {
-        $secrets = [];
-
-        foreach ([config('talkto.outgoing', []), config('talkto.incoming', [])] as $targets) {
-            if (! is_array($targets)) {
-                continue;
-            }
-
-            foreach ($targets as $target) {
-                if (! is_array($target)) {
-                    continue;
-                }
-
-                foreach (['secret', 'signing_secret'] as $key) {
-                    $secret = $target[$key] ?? null;
-
-                    if (is_string($secret) && $secret !== '') {
-                        $secrets[] = $secret;
-                    }
-                }
-            }
-        }
-
-        return array_values(array_unique($secrets));
     }
 
     private function limited($query, int $limit, bool &$truncated): Collection

@@ -14,6 +14,8 @@ The package config is published as `config/talkto.php`. Defaults are conservativ
 
 `talkto.routes.enabled` and `talkto.migrations.enabled` are false by default. Enable them only when the host application does not already provide the same tables or receive endpoint.
 
+When enabling package routes for public traffic, include throttle or rate-limit middleware in `talkto.routes.middleware` or wrap the package controller in host-owned routes.
+
 ## Peers
 
 Outgoing peer config contains the destination URL, endpoint, secret, and mode. Incoming peer config contains the source secret and allowed commands.
@@ -44,6 +46,27 @@ Outgoing peer config contains the destination URL, endpoint, secret, and mode. I
     ],
 ],
 ```
+
+## Security
+
+`talkto.security.signature_version` defaults to `v1` for backward compatibility. New peer integrations should prefer `v2` after both services understand the v2 signature headers. Receivers use `talkto.security.accept_versions` to control which versions are allowed.
+
+`talkto.security.timestamp_tolerance_seconds` should stay small enough to limit replay windows while allowing normal clock skew. The default is 300 seconds.
+
+`talkto.security.replay_protection.require_nonce_for_v2` remains false by default for compatibility. Enable it after all v2 peers send `X-Talkto-Nonce`.
+
+`talkto.security.redacted_keys` lets hosts add extra key names that should be masked in traces, audit output, and safe event excerpts:
+
+```php
+'security' => [
+    'redacted_keys' => [
+        'custom_credential',
+        'session_secret',
+    ],
+],
+```
+
+Use `php artisan talkto:security-audit` to review signature, timestamp, nonce, route middleware, peer secret, and allowed command settings without mutating state.
 
 ## Callbacks
 

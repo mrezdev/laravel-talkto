@@ -17,7 +17,8 @@ return [
 
     'security' => [
         // v1 remains the default for backward compatibility. Enable v2 only
-        // after both peers understand the version and nonce headers.
+        // after both peers understand the version and nonce headers. New peer
+        // integrations should prefer v2 when they can coordinate both sides.
         'require_signature' => env('TALKTO_REQUIRE_SIGNATURE', true),
         'signature_version' => env('TALKTO_SIGNATURE_VERSION', 'v1'),
         'accept_versions' => ['v1', 'v2'],
@@ -29,10 +30,15 @@ return [
         'replay_protection' => [
             'enabled' => env('TALKTO_REPLAY_PROTECTION_ENABLED', true),
             'use_message_id' => true,
+            // Keep false for backward compatibility. Require v2 nonces after
+            // every peer sends X-Talkto-Nonce.
             'require_nonce_for_v2' => env('TALKTO_REQUIRE_V2_NONCE', false),
         ],
         'nonce_header' => 'X-Talkto-Nonce',
         'signature_version_header' => 'X-Talkto-Signature-Version',
+        // Extra key names redacted by reports, traces, audit output, and safe
+        // event excerpts. The built-in list already covers common secrets.
+        'redacted_keys' => [],
     ],
 
     'http' => [
@@ -53,6 +59,8 @@ return [
 
     'routes' => [
         // Disabled by default so existing apps can keep their own receive route.
+        // When enabling public package routes, add host throttle/rate-limit
+        // middleware appropriate for your deployment.
         'enabled' => env('TALKTO_ROUTES_ENABLED', false),
         'prefix' => env('TALKTO_ROUTES_PREFIX', 'api'),
         'middleware' => ['api'],

@@ -8,12 +8,14 @@ use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
 use Throwable;
 
 class TalktoResultCallbackSender implements ResultCallbackSenderContract
 {
     public function __construct(
-        private readonly TalktoResultCallbackEnvelopeBuilder $builder
+        private readonly TalktoResultCallbackEnvelopeBuilder $builder,
+        private readonly TalktoSecurityRedactor $redactor
     ) {}
 
     public function sendResult(Model $message, IncomingCommandResultContract $result, array $options = []): array
@@ -152,37 +154,6 @@ class TalktoResultCallbackSender implements ResultCallbackSenderContract
             return null;
         }
 
-        foreach ($this->configuredSecrets() as $secret) {
-            $value = str_replace($secret, '[redacted]', $value);
-        }
-
-        return mb_substr($value, 0, $limit);
-    }
-
-    private function configuredSecrets(): array
-    {
-        $targets = config('talkto.outgoing', []);
-
-        if (! is_array($targets)) {
-            return [];
-        }
-
-        $secrets = [];
-
-        foreach ($targets as $target) {
-            if (! is_array($target)) {
-                continue;
-            }
-
-            foreach (['secret', 'signing_secret'] as $key) {
-                $secret = $target[$key] ?? null;
-
-                if (is_string($secret) && $secret !== '') {
-                    $secrets[] = $secret;
-                }
-            }
-        }
-
-        return array_values(array_unique($secrets));
+        return mb_substr((string) $this->redactor->redactText($value), 0, $limit);
     }
 }

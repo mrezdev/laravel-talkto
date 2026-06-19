@@ -22,6 +22,10 @@ If idempotency is required, confirm every retry sends the same idempotency key f
 
 Check the callback target URL, endpoint, shared secret, queue state, and stored message relationship. Callback handlers should be safe to retry and should not expose raw secrets in logs.
 
+## Security Audit Findings
+
+Use `php artisan talkto:security-audit` to review signing, timestamp tolerance, accepted signature versions, nonce posture, route middleware, peer secrets, and command allowlists. Add `--json` for machine-readable output or `--fail-on=error` for CI-style checks.
+
 ## Trace One Message
 
 Use `php artisan talkto:trace <message-id>` to inspect a single flow without retrying, dispatching jobs, or mutating rows. Use `php artisan talkto:trace --correlation=<correlation-id> --json` when the message id is unknown but a correlation id is available.
