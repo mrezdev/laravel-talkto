@@ -1,0 +1,12 @@
+<?php
+
+namespace {{ namespace }};
+
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+
+class {{ class }}
+{
+{{ client_method }}
+
+    // talkto:outgoing-methods
+}

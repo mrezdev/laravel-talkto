@@ -1,0 +1,65 @@
+<?php
+
+namespace {{ namespace }};
+
+use {{ enum_fqn }};
+use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoFlowFactory;
+
+class {{ class }}
+{
+    public function __construct(
+        private readonly TalktoFlowFactory $talkto,
+        private readonly {{ payload_builder_class }} $payloadBuilder,
+        private readonly {{ source_action_class }} $sourceAction,
+    ) {}
+
+    public function handle(mixed $source): TalktoMessage
+    {
+        return $this->sendForSource($source);
+    }
+
+    public function handleTransactionally(array $data): TalktoMessage
+    {
+        return DB::transaction(function () use ($data): TalktoMessage {
+            $source = $this->sourceAction->handle($data);
+
+            return $this->sendForSource($source);
+        });
+    }
+
+    private function sendForSource(mixed $source): TalktoMessage
+    {
+        return $this->talkto
+            ->flow('{{ flow_name }}')
+            ->to('{{ service }}')
+            ->command({{ enum_class }}::{{ enum_case }}->value)
+            ->businessKey($this->businessKey($source))
+            ->idempotencyKey($this->idempotencyKey($source))
+            ->payload($this->payloadBuilder->fromSource($source))
+            ->send();
+    }
+
+    private function businessKey(mixed $source): string
+    {
+        return '{{ command_kebab }}:'.$this->sourceId($source);
+    }
+
+    private function idempotencyKey(mixed $source): string
+    {
+        return '{{ command_value }}:'.$this->sourceId($source).':v1';
+    }
+
+    private function sourceId(mixed $source): string
+    {
+        $id = data_get($source, 'id');
+
+        if ($id === null || $id === '') {
+            throw new InvalidArgumentException('Unable to build Talkto keys: source must expose a stable [id]. Customize this generated method for your domain.');
+        }
+
+        return (string) $id;
+    }
+}

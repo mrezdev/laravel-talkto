@@ -1,0 +1,23 @@
+<?php
+
+namespace {{ namespace }};
+
+class {{ class }}
+{
+    public function handle(array $data): mixed
+    {
+        /*
+         * TODO:
+         * Create or update your source-side business record here.
+         *
+         * This method is called inside a local database transaction by
+         * {{ send_class }}::handleTransactionally().
+         *
+         * Do not call the remote service here.
+         * Do not send HTTP requests here.
+         * Return the stable source object/record used by the payload builder.
+         */
+
+        return $data;
+    }
+}

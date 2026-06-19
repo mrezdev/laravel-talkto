@@ -1,0 +1,19 @@
+<?php
+
+namespace {{ namespace }};
+
+use InvalidArgumentException;
+
+class {{ class }}
+{
+    public function validate(array $payload): array
+    {
+        /*
+         * TODO:
+         * Validate your incoming payload here.
+         * Throw InvalidArgumentException for non-retryable validation errors.
+         */
+
+        return $payload;
+    }
+}

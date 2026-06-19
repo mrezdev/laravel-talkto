@@ -2,6 +2,8 @@
 
 namespace Mrezdev\LaravelTalkto;
 
+use Mrezdev\LaravelTalkto\Console\Commands\MakeTalktoIncomingCommand;
+use Mrezdev\LaravelTalkto\Console\Commands\MakeTalktoOutgoingCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\RetryFailedTalktoMessagesCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\ReportTalktoMessagesCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\ReprocessTalktoDeadLettersCommand;
@@ -27,6 +29,8 @@ use Mrezdev\LaravelTalkto\Services\Scaffolding\TalktoScaffoldNameResolver;
 use Mrezdev\LaravelTalkto\Services\Scaffolding\TalktoScaffoldPathResolver;
 use Mrezdev\LaravelTalkto\Services\Scaffolding\TalktoScaffoldWriter;
 use Mrezdev\LaravelTalkto\Services\Scaffolding\TalktoStubRenderer;
+use Mrezdev\LaravelTalkto\Services\Scaffolding\TalktoIncomingScaffolder;
+use Mrezdev\LaravelTalkto\Services\Scaffolding\TalktoOutgoingScaffolder;
 use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
 use Illuminate\Support\ServiceProvider;
 
@@ -54,12 +58,16 @@ class LaravelTalktoServiceProvider extends ServiceProvider
         $this->app->bind(TalktoScaffoldPathResolver::class);
         $this->app->bind(TalktoStubRenderer::class);
         $this->app->bind(TalktoScaffoldWriter::class);
+        $this->app->bind(TalktoIncomingScaffolder::class);
+        $this->app->bind(TalktoOutgoingScaffolder::class);
     }
 
     public function boot(): void
     {
         if ($this->app->runningInConsole()) {
             $this->commands([
+                MakeTalktoIncomingCommand::class,
+                MakeTalktoOutgoingCommand::class,
                 RetryFailedTalktoMessagesCommand::class,
                 ReprocessTalktoDeadLettersCommand::class,
                 ReportTalktoMessagesCommand::class,

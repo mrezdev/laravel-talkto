@@ -1,0 +1,33 @@
+<?php
+
+namespace {{ namespace }};
+
+use InvalidArgumentException;
+use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
+use Throwable;
+
+class {{ class }} implements TalktoIncomingCommandHandler
+{
+    public function __construct(
+        private readonly {{ validator_class }} $validator,
+        private readonly {{ action_class }} $action,
+    ) {}
+
+    public function handle(TalktoMessage $message): TalktoIncomingCommandResult
+    {
+        $payload = $message->payload ?? [];
+
+        try {
+            $validated = $this->validator->validate($payload);
+            $result = $this->action->handle($validated, $message);
+
+            return TalktoIncomingCommandResult::succeeded($result);
+        } catch (InvalidArgumentException $exception) {
+            return TalktoIncomingCommandResult::failedFinal($exception->getMessage(), 'validation_error');
+        } catch (Throwable $throwable) {
+            return TalktoIncomingCommandResult::failedRetryable($throwable->getMessage(), $throwable::class);
+        }
+    }
+}

@@ -1,0 +1,49 @@
+<?php
+
+namespace {{ namespace }};
+
+use {{ enum_fqn }};
+use InvalidArgumentException;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoFlowFactory;
+
+class {{ class }}
+{
+    public function __construct(
+        private readonly TalktoFlowFactory $talkto,
+        private readonly {{ payload_builder_class }} $payloadBuilder,
+    ) {}
+
+    public function handle(mixed $source): TalktoMessage
+    {
+        return $this->talkto
+            ->flow('{{ flow_name }}')
+            ->to('{{ service }}')
+            ->command({{ enum_class }}::{{ enum_case }}->value)
+            ->businessKey($this->businessKey($source))
+            ->idempotencyKey($this->idempotencyKey($source))
+            ->payload($this->payloadBuilder->fromSource($source))
+            ->send();
+    }
+
+    private function businessKey(mixed $source): string
+    {
+        return '{{ command_kebab }}:'.$this->sourceId($source);
+    }
+
+    private function idempotencyKey(mixed $source): string
+    {
+        return '{{ command_value }}:'.$this->sourceId($source).':v1';
+    }
+
+    private function sourceId(mixed $source): string
+    {
+        $id = data_get($source, 'id');
+
+        if ($id === null || $id === '') {
+            throw new InvalidArgumentException('Unable to build Talkto keys: source must expose a stable [id]. Customize this generated method for your domain.');
+        }
+
+        return (string) $id;
+    }
+}

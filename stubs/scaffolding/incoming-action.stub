@@ -1,0 +1,23 @@
+<?php
+
+namespace {{ namespace }};
+
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+
+class {{ class }}
+{
+    public function handle(array $payload, TalktoMessage $message): array
+    {
+        /*
+         * TODO:
+         * Handle the validated incoming command here.
+         * Keep heavy business logic out of the handler class.
+         * Return a small result array for Talkto callback records.
+         */
+
+        return [
+            'handled' => true,
+            'message_id' => $message->id,
+        ];
+    }
+}
