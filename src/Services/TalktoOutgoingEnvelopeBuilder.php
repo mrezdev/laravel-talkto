@@ -3,6 +3,7 @@
 namespace Mrezdev\LaravelTalkto\Services;
 
 use Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract;
+use Mrezdev\LaravelTalkto\Data\TalktoEnvelopeData;
 use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoSignatureException;
 use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoOutgoingTarget;
 use Illuminate\Database\Eloquent\Model;
@@ -18,21 +19,7 @@ class TalktoOutgoingEnvelopeBuilder
 
     public function buildEnvelope(Model $message): array
     {
-        return [
-            'protocol_version' => 2,
-            'message_id' => $message->message_id,
-            'correlation_id' => $message->correlation_id,
-            'parent_message_id' => $message->parent_message_id,
-            'source' => $message->source_service,
-            'target' => $message->target_service,
-            'command' => $message->command,
-            'business_key' => $message->business_key,
-            'idempotency_key' => $message->idempotency_key,
-            'schema_version' => $message->schema_version ?: 1,
-            'created_at' => optional($message->created_at)->toIso8601String(),
-            'payload_hash' => $message->payload_hash,
-            'payload' => $message->payload,
-        ];
+        return TalktoEnvelopeData::fromMessage($message)->toArray();
     }
 
     public function buildHeaders(Model $message, ?string $timestamp = null): array

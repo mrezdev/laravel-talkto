@@ -21,6 +21,13 @@ This page lists the package surfaces intended for host applications to depend on
 - `TalktoOutgoingMessageFactory` and `TalktoFlowFactory` for creating outgoing messages.
 - `TalktoIncomingCommandResult` for incoming handler outcomes through the `succeeded`, `failedRetryable`, `failedFinal`, and `skipped` factories.
 
+## Data Objects
+
+- `TalktoEnvelopeData` provides an immutable snapshot of the envelope array shape and can be created from an envelope array or compatible message model.
+- `TalktoIncomingCommandResultData` provides an immutable snapshot of an `IncomingCommandResultContract`.
+
+These data objects are additive. Existing array-based APIs remain supported and continue to return the same keys.
+
 ## Commands
 
 - `talkto:retry-failed` with `--direction`, `--limit`, and `--dry-run`.

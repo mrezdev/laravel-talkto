@@ -2,12 +2,12 @@
 
 namespace Mrezdev\LaravelTalkto\Pipelines;
 
+use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
 use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
 use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResolver;
-use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -181,15 +181,15 @@ class ProcessIncomingTalktoMessagePipeline
         });
     }
 
-    private function applyResult(TalktoMessage $message, TalktoAttempt $attempt, TalktoIncomingCommandResult $result, TalktoRetryPolicy $retryPolicy): void
+    private function applyResult(TalktoMessage $message, TalktoAttempt $attempt, IncomingCommandResultContract $result, TalktoRetryPolicy $retryPolicy): void
     {
-        if ($result->skipped) {
+        if ($result->isSkipped()) {
             $this->applySkippedResult($message, $attempt, $result);
 
             return;
         }
 
-        if ($result->succeeded) {
+        if ($result->isSucceeded()) {
             $this->applySuccessfulResult($message, $attempt, $result);
 
             return;
@@ -198,11 +198,12 @@ class ProcessIncomingTalktoMessagePipeline
         $this->applyFailedResult($message, $attempt, $result, $retryPolicy);
     }
 
-    private function applySkippedResult(TalktoMessage $message, TalktoAttempt $attempt, TalktoIncomingCommandResult $result): void
+    private function applySkippedResult(TalktoMessage $message, TalktoAttempt $attempt, IncomingCommandResultContract $result): void
     {
         DB::transaction(function () use ($message, $attempt, $result): void {
             $messageClass = $this->messageModelClass();
             $eventClass = $this->eventModelClass();
+            $meta = $result->meta();
 
             $message = $messageClass::query()->whereKey($message->id)->lockForUpdate()->first();
 
@@ -223,7 +224,7 @@ class ProcessIncomingTalktoMessagePipeline
             $attempt->forceFill([
                 'status' => 'skipped',
                 'meta' => $this->mergeAttemptMeta($attempt, [
-                    'result_meta' => $result->meta,
+                    'result_meta' => $meta,
                 ]),
             ])->save();
 
@@ -234,16 +235,18 @@ class ProcessIncomingTalktoMessagePipeline
                 'event_type' => 'incoming_command_skipped',
                 'old_status' => 'processing',
                 'new_status' => 'skipped',
-                'meta' => $this->eventMeta($message, $result->meta),
+                'meta' => $this->eventMeta($message, $meta),
             ]);
         });
     }
 
-    private function applySuccessfulResult(TalktoMessage $message, TalktoAttempt $attempt, TalktoIncomingCommandResult $result): void
+    private function applySuccessfulResult(TalktoMessage $message, TalktoAttempt $attempt, IncomingCommandResultContract $result): void
     {
         DB::transaction(function () use ($message, $attempt, $result): void {
             $messageClass = $this->messageModelClass();
             $eventClass = $this->eventModelClass();
+            $resultPayload = $result->result();
+            $meta = $result->meta();
 
             $message = $messageClass::query()->whereKey($message->id)->lockForUpdate()->first();
 
@@ -264,8 +267,8 @@ class ProcessIncomingTalktoMessagePipeline
             $attempt->forceFill([
                 'status' => 'succeeded',
                 'meta' => $this->mergeAttemptMeta($attempt, [
-                    'result' => $result->result,
-                    'result_meta' => $result->meta,
+                    'result' => $resultPayload,
+                    'result_meta' => $meta,
                 ]),
             ])->save();
 
@@ -277,20 +280,24 @@ class ProcessIncomingTalktoMessagePipeline
                 'old_status' => 'processing',
                 'new_status' => 'succeeded',
                 'meta' => $this->eventMeta($message, [
-                    'result' => $result->result,
-                    'result_meta' => $result->meta,
+                    'result' => $resultPayload,
+                    'result_meta' => $meta,
                 ]),
             ]);
         });
     }
 
-    private function applyFailedResult(TalktoMessage $message, TalktoAttempt $attempt, TalktoIncomingCommandResult $result, TalktoRetryPolicy $retryPolicy): void
+    private function applyFailedResult(TalktoMessage $message, TalktoAttempt $attempt, IncomingCommandResultContract $result, TalktoRetryPolicy $retryPolicy): void
     {
-        $newStatus = $result->retryable ? 'failed_retryable' : 'failed_final';
+        $newStatus = $result->isRetryable() ? 'failed_retryable' : 'failed_final';
 
         DB::transaction(function () use ($message, $attempt, $result, $newStatus, $retryPolicy): void {
             $messageClass = $this->messageModelClass();
             $eventClass = $this->eventModelClass();
+            $retryable = $result->isRetryable();
+            $errorMessage = $result->errorMessage();
+            $errorClass = $result->errorClass();
+            $meta = $result->meta();
 
             $message = $messageClass::query()->whereKey($message->id)->lockForUpdate()->first();
 
@@ -300,13 +307,13 @@ class ProcessIncomingTalktoMessagePipeline
 
             $scheduled = false;
 
-            if ($result->retryable && $retryPolicy->isDirectionEnabled($message)) {
+            if ($retryable && $retryPolicy->isDirectionEnabled($message)) {
                 if ($retryPolicy->canScheduleRetry($message)) {
-                    $retryPolicy->markRetryableFailure($message, 'destination_action_status', $result->errorMessage);
+                    $retryPolicy->markRetryableFailure($message, 'destination_action_status', $errorMessage);
                     $newStatus = $message->overall_status;
                     $scheduled = true;
                 } else {
-                    $retryPolicy->markFinalFailure($message, 'destination_action_status', $result->errorMessage);
+                    $retryPolicy->markFinalFailure($message, 'destination_action_status', $errorMessage);
                     $newStatus = $message->overall_status;
                 }
             } else {
@@ -315,22 +322,22 @@ class ProcessIncomingTalktoMessagePipeline
                     'overall_status' => $newStatus,
                     'failed_at' => now(),
                     'last_attempted_at' => now(),
-                    'last_error' => $result->errorMessage,
+                    'last_error' => $errorMessage,
                     'locked_at' => null,
                     'locked_by' => null,
                 ])->save();
             }
 
             if ($newStatus === $retryPolicy->finalFailureStatus()) {
-                $this->storeDeadLetterIfEnabled($message, $result->errorMessage);
+                $this->storeDeadLetterIfEnabled($message, $errorMessage);
             }
 
             $attempt->forceFill([
                 'status' => $newStatus,
-                'error_class' => $result->errorClass,
-                'error_message' => $result->errorMessage,
+                'error_class' => $errorClass,
+                'error_message' => $errorMessage,
                 'meta' => $this->mergeAttemptMeta($attempt, [
-                    'result_meta' => $result->meta,
+                    'result_meta' => $meta,
                 ]),
             ])->save();
 
@@ -342,12 +349,12 @@ class ProcessIncomingTalktoMessagePipeline
                 'old_status' => 'processing',
                 'new_status' => $newStatus,
                 'meta' => $this->eventMeta($message, [
-                    'error_class' => $result->errorClass,
-                    'retryable' => $result->retryable,
+                    'error_class' => $errorClass,
+                    'retryable' => $retryable,
                 ]),
             ]);
 
-            if ($result->retryable && $retryPolicy->isDirectionEnabled($message)) {
+            if ($retryable && $retryPolicy->isDirectionEnabled($message)) {
                 $this->recordRetryEvent($eventClass, $message, $scheduled ? 'retry_scheduled' : 'retry_exhausted');
             }
         });
