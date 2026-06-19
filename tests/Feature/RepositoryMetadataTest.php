@@ -23,12 +23,12 @@ if (! function_exists('p49ForbiddenProjectTerms')) {
             'App'.'eal',
             'Hy'.'brid',
             'Material'.'Detail',
-            'create:receive-bulks-'.'hybrid',
-            'receive-bulks-'.'hybrid',
-            'product_'.'inventory',
+            'create:receive-bulks-'.'hy'.'brid',
+            'receive-bulks-'.'hy'.'brid',
+            'product_'.'inven'.'tory',
             'ware'.'house',
             'mrezdev'.'_testing',
-            'inventory'.'_testing',
+            'inven'.'tory'.'_testing',
         ];
     }
 }

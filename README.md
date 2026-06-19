@@ -1,33 +1,76 @@
 # Laravel Talkto
 
-Laravel Talkto is a Laravel package for secure service-to-service command delivery. It helps one Laravel application send a signed command to another application, track that command through an outbox/inbox lifecycle, process it through an approved handler, and receive a signed result callback.
+Laravel Talkto is a generic Laravel package for secure service-to-service command delivery. It gives Laravel applications a common transport layer for signed envelopes, outbox/inbox persistence, handler execution, retries, attempts, dead letters, idempotency, replay protection, source action lifecycle hooks, and callback contracts.
 
-The package is intentionally generic. It provides the communication layer; each host application keeps its own domain rules, model lookups, data mapping, writes, and rollout decisions.
+The package intentionally stops at the communication boundary. Host applications keep their own domain rules, model lookups, validation, writes, dashboards, rollout decisions, and callback side effects.
 
-## What Problem It Solves
+## What Laravel Talkto Is
 
-Cross-service commands are easy to send once and hard to operate safely. Laravel Talkto gives hosts a common structure for signed payloads, idempotent delivery, retries, attempts, status tracking, and callbacks without forcing domain code into the transport package.
+Laravel Talkto helps one Laravel app send a command to another Laravel app, persist the lifecycle on both sides, run an approved receiver handler, and record enough state for retries and operations.
 
-## What It Does
+It is useful when service communication needs to be signed, replay-aware, idempotent, observable, and recoverable without copying the same transport code into every application.
 
-- Builds and signs outgoing command envelopes.
-- Verifies incoming signatures and timestamp tolerance.
-- Stores outbox/inbox messages with statuses.
-- Tracks attempts and lifecycle events.
-- Supports idempotency and replay protection.
-- Runs source action lifecycle hooks around outgoing messages.
-- Resolves approved receiver handlers.
-- Provides result callback contracts and examples.
-- Exposes retry and recovery hooks for host-owned operations.
-- Supports monitoring and reporting patterns through generic message state.
+```mermaid
+flowchart LR
+    A["Source app"] --> B["Signed command envelope"]
+    B --> C["Target receive route"]
+    C --> D["Inbox message + handler"]
+    D --> E["Result object"]
+    E -. "Callback contract" .-> A
+```
 
-## What It Does Not Do
+## When To Use It
 
-- It does not implement host business logic.
-- It does not implement inventory/accounting/payment logic.
-- It does not ship a UI by default.
-- It does not decide production deployment, traffic, queue, or rollback policy.
-- It does not replace host-specific handlers, mappers, permissions, or rollout checks.
+- You have two or more Laravel services exchanging commands.
+- You need HMAC signing, timestamp checks, and payload hashes.
+- You want outbox/inbox records for message lifecycle and operator review.
+- You need idempotency and duplicate message protection.
+- You want retry, dead-letter, and report commands around message state.
+- You want package-owned transport behavior while host code owns business behavior.
+
+## When Not To Use It
+
+- You only need an in-process service class call.
+- You need a general event bus, stream processor, or pub/sub platform.
+- You need a UI dashboard included with the package.
+- You want the package to own host domain logic, permissions, or data mapping.
+- You need generic callback runtime out of the box today; this package currently exposes callback contracts for host-owned implementations.
+
+## Core Features
+
+- Signed command envelopes with HMAC SHA-256.
+- Payload hashing and timestamp tolerance checks.
+- Optional v2 signatures with nonce support.
+- Outbox/inbox persistence on `talkto_messages`.
+- Attempt and lifecycle event tracking.
+- Incoming command handler contracts and registry.
+- Outgoing target config, aliases, and registry.
+- Source action lifecycle wrapping for outgoing flows.
+- Idempotency and replay protection using the message ledger.
+- Retry/backoff state and retry command.
+- Dead Letter Queue storage and reprocess command.
+- Read-only metrics, health summaries, and report command.
+- Callback sender and receiver contracts for host-bound implementations.
+
+## 60-Second Architecture Overview
+
+1. The source app creates a durable outgoing `TalktoMessage`.
+2. The package builds and signs an envelope for the configured target service.
+3. The target app verifies the signature, timestamp, target service, command allowlist, and payload hash.
+4. The target app stores an incoming message and queues handler processing.
+5. The configured handler returns a `TalktoIncomingCommandResult`.
+6. The package updates message status, attempts, events, retry state, and DLQ state.
+7. If the host has bound callback services, callback contracts can be used to report the result back to the source.
+
+Routes and migrations are disabled by default. Hosts opt in only after confirming route ownership and table ownership.
+
+## Requirements
+
+- PHP `^8.2`
+- Laravel components compatible with `^12.0|^13.0`
+- A queue worker for asynchronous send and receive jobs
+- A database connection for package message tables when package migrations are enabled
+- Shared secrets configured per service pair
 
 ## Installation
 
@@ -37,68 +80,52 @@ php artisan vendor:publish --tag=laravel-talkto-config
 php artisan vendor:publish --tag=laravel-talkto-migrations
 ```
 
-The Laravel service provider is auto-discovered. Package routes and migrations are disabled by default so existing applications can adopt the package without duplicate endpoints or duplicate tables. Short publish tags are also available: `talkto-config` and `talkto-migrations`.
-
-## Production Install Checklist
-
-1. Install with Composer.
-2. Publish config and migrations.
-3. Review `config/talkto.php` ownership, peer names, secrets, routes, and migration settings.
-4. Run package migrations only after confirming the host owns the `talkto_*` tables.
-5. Run a queue worker for `SendTalktoMessage` and `ProcessIncomingTalktoMessage`.
-6. Schedule `talkto:retry-failed`, and schedule or manually run `talkto:report`.
-7. Keep DLQ reprocessing manual or operator-approved with `talkto:dlq-reprocess`.
-8. Run one outgoing test, one incoming test, one duplicate `message_id` test, one retry dry-run, and one report command in a non-production environment.
-
-## Publishing Config And Migrations
-
-Publish config first and review ownership before enabling routes or migrations:
+Short publish tags are also available:
 
 ```bash
-php artisan vendor:publish --tag=laravel-talkto-config
-php artisan vendor:publish --tag=laravel-talkto-migrations
-# or:
 php artisan vendor:publish --tag=talkto-config
 php artisan vendor:publish --tag=talkto-migrations
 ```
 
-Keep `talkto.routes.enabled` and `talkto.migrations.enabled` false unless the host application has confirmed it wants package-owned routes or tables.
+Review the published config before enabling package routes or migrations.
 
-## Environment Variables
+## 5-Minute Quickstart
 
-Common production variables include:
+Install and publish:
 
-```dotenv
-TALKTO_SERVICE=source-app
-TALKTO_ROUTES_ENABLED=false
-TALKTO_MIGRATIONS_ENABLED=false
-TALKTO_REQUIRE_SIGNATURE=true
-TALKTO_SIGNATURE_VERSION=v1
-TALKTO_TIMESTAMP_TOLERANCE_SECONDS=300
-TALKTO_RETRY_ENABLED=true
-TALKTO_DEAD_LETTER_ENABLED=true
-TALKTO_OBSERVABILITY_ENABLED=true
+```bash
+composer require mrezdev/laravel-talkto
+php artisan vendor:publish --tag=talkto-config
+php artisan vendor:publish --tag=talkto-migrations
 ```
 
-Use peer-specific environment variable names for URLs and secrets, for example `TALKTO_TARGET_APP_URL`, `TALKTO_TO_TARGET_APP_SECRET`, and `TALKTO_FROM_SOURCE_APP_SECRET`.
+Set the local service name:
 
-## Configure Peers
+```dotenv
+TALKTO_SERVICE=source-service
+TALKTO_ROUTES_ENABLED=false
+TALKTO_MIGRATIONS_ENABLED=false
+```
 
-Each application names itself with `TALKTO_SERVICE` and configures explicit peers under `talkto.outgoing` and `talkto.incoming`.
+Configure one outgoing target:
 
 ```php
 'outgoing' => [
-    'target-app' => [
-        'url' => env('TALKTO_TARGET_APP_URL'),
-        'secret' => env('TALKTO_TO_TARGET_APP_SECRET'),
+    'target-service' => [
+        'url' => env('TALKTO_TARGET_SERVICE_URL', 'https://target.example.test'),
         'endpoint' => '/api/talkto/receive',
+        'secret' => env('TALKTO_TO_TARGET_SERVICE_SECRET'),
         'mode' => 'reliable',
     ],
 ],
+```
 
+Configure one incoming command handler on the receiving app:
+
+```php
 'incoming' => [
-    'source-app' => [
-        'secret' => env('TALKTO_FROM_SOURCE_APP_SECRET'),
+    'source-service' => [
+        'secret' => env('TALKTO_FROM_SOURCE_SERVICE_SECRET'),
         'allowed_commands' => [
             'domain.command' => [
                 'driver' => 'handler',
@@ -110,126 +137,78 @@ Each application names itself with `TALKTO_SERVICE` and configures explicit peer
 ],
 ```
 
-Never store real secrets in documentation or committed config.
-
-## Queues And Scheduler
-
-Run Laravel queue workers for the queues used by package jobs. A typical scheduler setup runs:
-
-```bash
-php artisan talkto:retry-failed --direction=all --limit=100
-php artisan talkto:report --hours=24 --direction=all --limit=20
-```
-
-Use `talkto:retry-failed --dry-run` before enabling scheduled dispatch in a new environment. Use `talkto:dlq-reprocess --dry-run` before reprocessing dead letters.
-
-## Basic Sender Example
-
-Use `TalktoFlowFactory` when the host wants to run a source-side action and create an outgoing message in one lifecycle:
+Create a small generic handler:
 
 ```php
-$message = app(\Mrezdev\LaravelTalkto\Services\TalktoFlowFactory::class)
-    ->flow('reserve-resource')
-    ->to('target-service')
-    ->command('domain.command')
-    ->businessKey('business-key-123')
-    ->idempotencyKey('command-123')
-    ->run(fn () => [
-        'payload' => ['id' => 123],
-        'result' => ['source_saved' => true],
-    ]);
-```
+<?php
 
-Use `TalktoOutgoingMessageFactory` directly when the host already completed its source-side work:
-
-```php
-$message = app(\Mrezdev\LaravelTalkto\Services\TalktoOutgoingMessageFactory::class)
-    ->create(
-        target: 'target-service',
-        command: 'domain.command',
-        payload: ['id' => 123],
-        businessKey: 'business-key-123',
-        idempotencyKey: 'command-123',
-    );
-```
-
-## Outgoing Targets
-
-Outgoing targets describe where a command should be delivered and how it should be signed. Existing `talkto.outgoing` config remains supported:
-
-```php
-'outgoing' => [
-    'target-service' => [
-        'url' => env('TALKTO_TARGET_SERVICE_URL'),
-        'secret' => env('TALKTO_TO_TARGET_SERVICE_SECRET'),
-        'endpoint' => '/api/talkto/receive',
-        'headers' => [],
-    ],
-],
-```
-
-Hosts can also register or override targets from a service provider:
-
-```php
-app(\Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract::class)
-    ->register('target-service', [
-        'url' => 'https://target.test',
-        'secret' => env('TALKTO_TO_TARGET_SERVICE_SECRET'),
-    ]);
-```
-
-Delivery still runs through the existing queued send job. Retry/backoff and DLQ behavior continue to handle transport failures after the target is resolved.
-
-## Incoming Handlers
-
-Destination applications register incoming command handlers while keeping domain behavior in the host:
-
-```php
 namespace App\Talkto\Handlers;
 
 use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
 
-final class CreateOrderHandler implements TalktoIncomingCommandHandler
+final class DomainCommandHandler implements TalktoIncomingCommandHandler
 {
     public function handle(TalktoMessage $message): TalktoIncomingCommandResult
     {
         $payload = $message->payload ?? [];
-        // Host-owned validation, lookup, and write logic lives here.
 
-        return TalktoIncomingCommandResult::succeeded(['processed' => true]);
+        if (! isset($payload['resource_id'])) {
+            return TalktoIncomingCommandResult::failedFinal('Missing resource_id.');
+        }
+
+        return TalktoIncomingCommandResult::succeeded([
+            'processed' => true,
+            'resource_id' => $payload['resource_id'],
+        ]);
     }
 }
 ```
 
-Register handlers in config:
+Send a generic command:
 
 ```php
-'incoming' => [
-    'handlers' => [
-        'order.create' => App\Talkto\Handlers\CreateOrderHandler::class,
+use Mrezdev\LaravelTalkto\Services\TalktoOutgoingMessageFactory;
+
+$message = app(TalktoOutgoingMessageFactory::class)->create(
+    target: 'target-service',
+    command: 'domain.command',
+    payload: ['resource_id' => 'resource-123'],
+    options: [
+        'business_key' => 'business-key-123',
+        'idempotency_key' => 'source-service:domain.command:business-key-123:v1',
     ],
-    'unknown_command_strategy' => 'fail',
-],
+);
 ```
 
-Or register from a host service provider:
+Run workers and operational commands:
 
-```php
-app(\Mrezdev\LaravelTalkto\Services\TalktoIncomingHandlerRegistry::class)
-    ->register('order.create', App\Talkto\Handlers\CreateOrderHandler::class);
+```bash
+php artisan queue:work
+php artisan talkto:retry-failed --dry-run
+php artisan talkto:report --hours=24 --direction=all --limit=20
 ```
 
-Hosts may also inject or resolve `Mrezdev\LaravelTalkto\Contracts\TalktoIncomingHandlerRegistryContract`; it shares the same registry instance as the concrete service.
+## Security Model Summary
 
-Unknown commands fail by default so existing retry and DLQ behavior can handle them. Set `talkto.incoming.unknown_command_strategy` to `skip` only when the host explicitly wants unknown commands marked skipped. Handler execution happens in the queued incoming job and keeps the existing idempotency and status guards.
+Laravel Talkto signs canonical message fields using HMAC SHA-256. Incoming requests can be verified for signature, timestamp tolerance, target service, known source service, command allowlist, payload hash, and replay protection.
 
-## Result Callback Example
+By default, outgoing messages use backward-compatible v1 signatures and incoming verification accepts v1 and v2. Move to v2 sending only after both peers are ready. Never commit real shared secrets.
 
-The package currently exposes callback sender and receiver contracts. Concrete callback sender and receiver services may remain host-owned until the generic callback runtime phase.
+Read more in [docs/security.md](docs/security.md).
 
-After a host app binds `ResultCallbackSenderContract` to its own callback sender implementation, it can send a result back to the source after a destination command succeeds or fails:
+## Retry, DLQ, And Observability Summary
+
+Retry state is stored on message records and processed through `talkto:retry-failed`. Final or exhausted failures can be stored in `talkto_dead_letters` when DLQ support is enabled and migrated. `talkto:dlq-reprocess` lets operators reprocess eligible dead letters deliberately.
+
+Observability is read-only: `TalktoMetricsCollector`, `TalktoHealthChecker`, and `talkto:report` summarize existing message state without dispatching jobs or mutating rows.
+
+Read more in [docs/recovery-monitoring-template.md](docs/recovery-monitoring-template.md), [docs/production-readiness.md](docs/production-readiness.md), and [docs/troubleshooting.md](docs/troubleshooting.md).
+
+## Result Callback Contracts
+
+The package exposes `ResultCallbackSenderContract` and `ResultCallbackReceiverContract`. Generic callback runtime is a later phase, so host apps may bind their own sender and receiver implementations while relying on the package contracts.
 
 ```php
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
@@ -240,129 +219,75 @@ $result = TalktoIncomingCommandResult::succeeded(['processed' => true]);
 app(ResultCallbackSenderContract::class)->sendResult($message, $result);
 ```
 
-Concrete callback sender and receiver services may remain host-owned while implementing the package contracts.
+Read more in [docs/result-callbacks.md](docs/result-callbacks.md) and [docs/callback-contract-template.md](docs/callback-contract-template.md).
 
-## Retry And Backoff
+## Documentation Map
 
-Laravel Talkto stores retry state on `talkto_messages` and uses database state as the source of truth. Outgoing delivery retries are enabled by default; incoming handler retries are disabled by default because handlers may have host-owned side effects.
+Start with the documentation index: [docs/README.md](docs/README.md).
 
-Key config values live under `talkto.retry`: `enabled`, `max_attempts`, `backoff_seconds`, `outgoing_enabled`, `incoming_enabled`, `retryable_statuses`, and `final_failure_status`.
+Common next stops:
 
-Run due retries with:
+- [docs/installation.md](docs/installation.md)
+- [docs/configuration.md](docs/configuration.md)
+- [docs/sending-commands.md](docs/sending-commands.md)
+- [docs/handling-commands.md](docs/handling-commands.md)
+- [docs/new-service-onboarding.md](docs/new-service-onboarding.md)
+- [docs/local-http-e2e-template.md](docs/local-http-e2e-template.md)
+- [docs/command-contract-template.md](docs/command-contract-template.md)
+- [docs/callback-contract-template.md](docs/callback-contract-template.md)
+- [docs/recovery-monitoring-template.md](docs/recovery-monitoring-template.md)
+- [docs/production-rollout-template.md](docs/production-rollout-template.md)
+- [docs/PUBLIC_API.md](docs/PUBLIC_API.md)
+- [UPGRADE.md](UPGRADE.md)
 
-```bash
-php artisan talkto:retry-failed --direction=outgoing --limit=100
-```
+Repository and release preparation:
 
-Use `--direction=incoming|outgoing|all` and `--dry-run` when inspecting work. In production, schedule the command from the host application scheduler, for example every minute, after queue workers and retry limits are reviewed.
+- [docs/private-repository-setup.md](docs/private-repository-setup.md)
+- [docs/ci.md](docs/ci.md)
+- [docs/release-process.md](docs/release-process.md)
+- [docs/versioning.md](docs/versioning.md)
+- [docs/private-composer-installation.md](docs/private-composer-installation.md)
+- [docs/package-extraction-checklist.md](docs/package-extraction-checklist.md)
+- [docs/public-release-readiness.md](docs/public-release-readiness.md)
 
-## Dead Letter Queue
+## Public API / Extension Points
 
-Final or exhausted failures can be preserved in `talkto_dead_letters` so operators can inspect them and optionally dispatch them for reprocessing later. Temporary retryable failures are not dead-lettered.
+Host applications should depend on documented contracts and services rather than internal pipeline details:
 
-DLQ behavior is controlled under `talkto.dead_letter`: `enabled`, `table`, `auto_store_on_final_failure`, `allow_reprocess`, and `max_reprocess_attempts`.
+- `TalktoIncomingCommandHandler`
+- `TalktoIncomingHandlerRegistryContract`
+- `TalktoOutgoingTargetRegistryContract`
+- `IncomingCommandResultContract`
+- `ResultCallbackSenderContract`
+- `ResultCallbackReceiverContract`
+- `SourceActionContract`
+- `TalktoOutgoingMessageFactory`
+- `TalktoFlowFactory`
+- `TalktoMetricsCollector`
+- `TalktoHealthChecker`
+- `talkto:retry-failed`
+- `talkto:dlq-reprocess`
+- `talkto:report`
 
-Reprocess eligible rows with:
+The detailed public surface is tracked in [docs/PUBLIC_API.md](docs/PUBLIC_API.md).
 
-```bash
-php artisan talkto:dlq-reprocess --direction=all --limit=50
-```
+## Current Maturity / Release Status
 
-Use `--id=`, `--message-id=`, `--dry-run`, or `--force` when needed. Reprocessing dispatches the existing outgoing or incoming jobs and relies on the same retry, status, and idempotency guards; it does not execute handlers inline and does not include a dashboard/UI.
+This package is currently proprietary according to `composer.json`. Do not assume a public package license, public support process, or Packagist distribution until the repository owner makes that decision.
 
-If a reprocessing message reaches final failure again, the existing DLQ row is moved to `failed_reprocess` without resetting its reprocess count.
+The package is suitable for private package hardening and host integration review. Treat tags as package version boundaries, and review [UPGRADE.md](UPGRADE.md), [CHANGELOG.md](CHANGELOG.md), and [docs/public-release-readiness.md](docs/public-release-readiness.md) before broad distribution.
 
-## Observability Reports
+## Testing
 
-Laravel Talkto includes read-only observability services and a report command over the existing `talkto_messages`, `talkto_attempts`, `talkto_events`, and `talkto_dead_letters` tables. No dashboard/UI is included.
-
-```bash
-php artisan talkto:report --hours=24 --direction=all --limit=20
-```
-
-Use `--json` for machine-readable output, `--from=` and `--to=` for an explicit window, and `--direction=incoming|outgoing|all` to filter message metrics. The report includes message totals, status and direction counts, retry/DLQ counts, health warnings, and recent failures/events. It does not dispatch jobs or mutate rows.
-
-Observability defaults live under `talkto.observability`: report window/limit settings and health thresholds for stale processing messages and due retry backlog grace.
-
-## Public Extension Points
-
-Stable package extension points include `TalktoIncomingCommandHandler`, `TalktoIncomingHandlerRegistryContract`, `TalktoOutgoingTargetRegistryContract`, `TalktoMetricsCollector`, `TalktoHealthChecker`, the `talkto:*` artisan commands, and the documented `talkto.*` config keys. Host applications should extend through these surfaces instead of depending on internal pipeline details.
-
-## Internal Pipelines
-
-The receive controller and queue jobs delegate orchestration to focused pipelines: `ReceiveIncomingTalktoMessagePipeline`, `ProcessIncomingTalktoMessagePipeline`, and `SendOutgoingTalktoMessagePipeline`. Public routes, jobs, retry behavior, DLQ behavior, and handler/target registries remain the external integration points.
-
-## Adding Talkto To A New Laravel Service
-
-Use the onboarding kit when a new Laravel service adopts Laravel Talkto:
-
-- `docs/new-service-onboarding.md` for the full service checklist.
-- `docs/local-http-e2e-template.md` for a two-service local test pattern.
-- `docs/command-contract-template.md` for command names, payloads, idempotency, and handler contracts.
-- `docs/callback-contract-template.md` for result callback structure, verification, and retry behavior.
-- `docs/recovery-monitoring-template.md` for retryability, recovery actions, redaction, and access policy.
-- `docs/production-rollout-template.md` for disabled deploys, rollout gates, rollback, monitoring, and cutover.
-
-Generic copy/paste examples live under `stubs/host/`. They are intentionally not auto-installed; each host must review names, routes, queues, secrets, and database ownership before copying anything.
-
-## Testing And Local End-To-End
-
-Package tests are designed for a package-local checkout:
+For a package-local checkout:
 
 ```bash
-cd packages/laravel-talkto
 composer install
 vendor/bin/pest
 ```
 
-If `vendor/` is missing inside the package directory, the test runner will not exist. Do not run Composer network operations in a host phase unless that phase explicitly allows it.
-
-For local end-to-end checks, use non-production services, non-production queues, testing databases, local URLs, and throwaway secrets. Verify the sender can create and sign a message, the receiver can verify and process it, and the source can accept the result callback.
-
-## Security Notes
-
-Laravel Talkto signs canonical message fields with HMAC SHA-256, verifies timestamps within a configured tolerance, hashes normalized payloads for tamper detection, enforces source and command allowlists, and supports required idempotency keys for replay protection.
-
-Signature verification accepts `v1` and `v2` by default. Outgoing messages continue to use the backward-compatible `v1` signature unless `talkto.security.signature_version` is set to `v2`. Update both peers before forcing `talkto.security.accept_versions` to only `v2`. Unsupported outgoing signature versions fail clearly instead of silently downgrading.
-
-Signed requests always require `X-Talkto-Timestamp` because both `v1` and `v2` signatures include it. `talkto.security.require_timestamp` only controls unsigned requests when `talkto.security.require_signature` is `false`.
-
-`v2` signatures include the signature version, timestamp, optional nonce, message ID, source, target, command, and payload hash in the signed canonical string. `v2` outgoing headers include `X-Talkto-Signature-Version`, `X-Talkto-Timestamp`, `X-Talkto-Payload-Hash`, and a generated nonce header. Set `talkto.security.replay_protection.require_nonce_for_v2` only after all senders provide the nonce header.
-
-Replay protection continues to rely on the existing `message_id` ledger and unique constraint; no separate nonce table is created. Tune `talkto.security.timestamp_tolerance_seconds` for clock skew between services.
-
-Never log shared secrets, raw signature secrets, production payloads, or secret headers.
-
-## Production Checklist
-
-Read `docs/production-readiness.md` before enabling real traffic. Hosts should have pause controls, retry procedures, queue monitoring, callback monitoring, secret rotation plans, and rollback steps.
-
-## Release Notes
-
-Package releases should be tagged in Git; `composer.json` intentionally does not carry a static `version` field. The package remains proprietary until the project owner approves a public license and repository metadata.
-
-## Repository / CI / Release
-
-Use the repository preparation docs before extracting the package into a private repository:
-
-- `docs/private-repository-setup.md` for private repository creation steps.
-- `docs/ci.md` for GitHub Actions and local test parity.
-- `docs/release-process.md` for private-first release tagging.
-- `docs/versioning.md` for semantic versioning and compatibility policy.
-- `docs/PUBLIC_API.md` for stable extension points.
-- `docs/SMOKE_TESTS.md` for host-app release checks.
-- `UPGRADE.md` for host upgrade notes.
-- `RELEASE_CHECKLIST.md` for release verification.
-- `docs/private-composer-installation.md` for path and private VCS installation examples.
-- `docs/package-extraction-checklist.md` for the future extraction checklist.
-- `docs/public-release-readiness.md` for blockers before any public release.
-
-## Extensibility
-
-The package exposes contracts for handlers, source actions, incoming results, result callback senders, and result callback receivers. Hosts can bind their own implementations while keeping package-owned transport behavior generic.
+Fresh host integrations should run at least one outgoing message test, one incoming message test, one duplicate `message_id` test, one retry dry run, and one report command in a non-production environment.
 
 ## Host App Responsibilities
 
 Host applications own command naming, payload mapping, validation, model lookup, writes, callback side effects, dashboards, traffic enablement, and operational runbooks.
-
-More detail is available in the `docs/` directory.

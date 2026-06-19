@@ -66,8 +66,8 @@ test('package source avoids host business terms', function (): void {
         'Ap'.'peal',
         'Hy'.'brid',
         'Material'.'Detail',
-        'create:receive'.'-bulks-hybrid',
-        'receive'.'-bulks-hybrid',
+        'create:receive'.'-bulks-hy'.'brid',
+        'receive'.'-bulks-hy'.'brid',
         'product'.'_'.'inven'.'tory',
         'ware'.'house',
     ];
