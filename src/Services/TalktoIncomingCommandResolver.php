@@ -64,6 +64,12 @@ class TalktoIncomingCommandResolver
         $commands = config("talkto.incoming.{$message->source_service}.allowed_commands", []);
         $commands = is_array($commands) ? $commands : [];
 
+        if ($this->isList($commands)) {
+            return in_array((string) $message->command, $commands, true)
+                ? [true, null]
+                : [false, null];
+        }
+
         if (! array_key_exists((string) $message->command, $commands)) {
             return [false, null];
         }
@@ -79,6 +85,11 @@ class TalktoIncomingCommandResolver
         }
 
         return [true, $config];
+    }
+
+    private function isList(array $value): bool
+    {
+        return array_keys($value) === range(0, count($value) - 1);
     }
 
     private function driverForConfig(bool $commandConfigured, ?array $config): ?string

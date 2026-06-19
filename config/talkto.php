@@ -251,6 +251,9 @@ return [
         // Example:
         // 'peer-service' => [
         //     'secret' => env('TALKTO_FROM_PEER_SERVICE_SECRET'),
+        //     // Fail-closed: missing or empty allowed_commands rejects all
+        //     // commands. Use allow_all_commands => true only for trusted
+        //     // internal development cases.
         //     'allowed_commands' => [
         //         'domain.command' => [
         //             'driver' => 'none',
@@ -260,6 +263,7 @@ return [
         //             'driver' => 'none',
         //         ],
         //     ],
+        //     'allow_all_commands' => false,
         // ],
     ],
 ];

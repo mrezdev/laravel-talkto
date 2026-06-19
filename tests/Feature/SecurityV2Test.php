@@ -337,19 +337,119 @@ test('security responses do not leak configured secret', function (): void {
         ->and($response->getData(true)['error'])->toBe('invalid_signature');
 });
 
-function securityEnvelope(string $messageId, array $payload): array
+test('incoming command authorization rejects missing and empty allowlists', function (): void {
+    config(['talkto.incoming.source-service' => [
+        'secret' => 'fake-test-secret',
+    ]]);
+
+    $missing = securityReceive(
+        securityEnvelope('security-allowlist-missing', ['id' => 'security-allowlist-missing']),
+        securityV1Headers('security-allowlist-missing', ['id' => 'security-allowlist-missing'])
+    );
+
+    config(['talkto.incoming.source-service.allowed_commands' => []]);
+
+    $empty = securityReceive(
+        securityEnvelope('security-allowlist-empty', ['id' => 'security-allowlist-empty']),
+        securityV1Headers('security-allowlist-empty', ['id' => 'security-allowlist-empty'])
+    );
+
+    expect($missing->getStatusCode())->toBe(403)
+        ->and($missing->getData(true)['error'])->toBe('command_not_allowed')
+        ->and($empty->getStatusCode())->toBe(403)
+        ->and($empty->getData(true)['error'])->toBe('command_not_allowed');
+});
+
+test('incoming indexed command allowlist permits listed commands and rejects unlisted commands', function (): void {
+    Queue::fake();
+    config(['talkto.incoming.source-service.allowed_commands' => [
+        'orders.mark-paid',
+        'invoices.sync-status',
+    ]]);
+
+    $listed = securityReceive(
+        securityEnvelope('security-indexed-allowed', ['id' => 'security-indexed-allowed'], 'orders.mark-paid'),
+        securityV1Headers('security-indexed-allowed', ['id' => 'security-indexed-allowed'], command: 'orders.mark-paid')
+    );
+
+    $unlisted = securityReceive(
+        securityEnvelope('security-indexed-rejected', ['id' => 'security-indexed-rejected'], 'orders.cancelled'),
+        securityV1Headers('security-indexed-rejected', ['id' => 'security-indexed-rejected'], command: 'orders.cancelled')
+    );
+
+    expect($listed->getStatusCode())->toBe(202)
+        ->and($unlisted->getStatusCode())->toBe(403)
+        ->and($unlisted->getData(true)['error'])->toBe('command_not_allowed');
+});
+
+test('incoming associative command allowlist permits listed commands and rejects unlisted commands', function (): void {
+    Queue::fake();
+    config(['talkto.incoming.source-service.allowed_commands' => [
+        'orders.mark-paid' => [
+            'driver' => 'none',
+        ],
+        'invoices.sync-status' => true,
+    ]]);
+
+    $arrayConfig = securityReceive(
+        securityEnvelope('security-assoc-array-allowed', ['id' => 'security-assoc-array-allowed'], 'orders.mark-paid'),
+        securityV1Headers('security-assoc-array-allowed', ['id' => 'security-assoc-array-allowed'], command: 'orders.mark-paid')
+    );
+    $trueConfig = securityReceive(
+        securityEnvelope('security-assoc-true-allowed', ['id' => 'security-assoc-true-allowed'], 'invoices.sync-status'),
+        securityV1Headers('security-assoc-true-allowed', ['id' => 'security-assoc-true-allowed'], command: 'invoices.sync-status')
+    );
+    $unlisted = securityReceive(
+        securityEnvelope('security-assoc-rejected', ['id' => 'security-assoc-rejected'], 'orders.cancelled'),
+        securityV1Headers('security-assoc-rejected', ['id' => 'security-assoc-rejected'], command: 'orders.cancelled')
+    );
+
+    expect($arrayConfig->getStatusCode())->toBe(202)
+        ->and($trueConfig->getStatusCode())->toBe(202)
+        ->and($unlisted->getStatusCode())->toBe(403)
+        ->and($unlisted->getData(true)['error'])->toBe('command_not_allowed');
+});
+
+test('allow all commands only permits missing allowlist when explicitly true', function (): void {
+    Queue::fake();
+    config(['talkto.incoming.source-service' => [
+        'secret' => 'fake-test-secret',
+        'allow_all_commands' => true,
+    ]]);
+
+    $allowed = securityReceive(
+        securityEnvelope('security-allow-all-true', ['id' => 'security-allow-all-true'], 'unlisted.internal-command'),
+        securityV1Headers('security-allow-all-true', ['id' => 'security-allow-all-true'], command: 'unlisted.internal-command')
+    );
+
+    config(['talkto.incoming.source-service' => [
+        'secret' => 'fake-test-secret',
+        'allow_all_commands' => false,
+    ]]);
+
+    $rejected = securityReceive(
+        securityEnvelope('security-allow-all-false', ['id' => 'security-allow-all-false'], 'unlisted.internal-command'),
+        securityV1Headers('security-allow-all-false', ['id' => 'security-allow-all-false'], command: 'unlisted.internal-command')
+    );
+
+    expect($allowed->getStatusCode())->toBe(202)
+        ->and($rejected->getStatusCode())->toBe(403)
+        ->and($rejected->getData(true)['error'])->toBe('command_not_allowed');
+});
+
+function securityEnvelope(string $messageId, array $payload, string $command = 'domain.command'): array
 {
     return [
         'message_id' => $messageId,
         'source' => 'source-service',
         'target' => 'target-service',
-        'command' => 'domain.command',
+        'command' => $command,
         'payload_hash' => app(TalktoPayloadHasher::class)->hash($payload),
         'payload' => $payload,
     ];
 }
 
-function securityV1Headers(string $messageId, array $payload, ?string $timestamp = null): array
+function securityV1Headers(string $messageId, array $payload, ?string $timestamp = null, string $command = 'domain.command'): array
 {
     $timestamp ??= now()->toIso8601String();
     $payloadHash = app(TalktoPayloadHasher::class)->hash($payload);
@@ -360,7 +460,7 @@ function securityV1Headers(string $messageId, array $payload, ?string $timestamp
             $timestamp,
             'source-service',
             'target-service',
-            'domain.command',
+            $command,
             $payloadHash,
             'fake-test-secret'
         ),
@@ -369,7 +469,7 @@ function securityV1Headers(string $messageId, array $payload, ?string $timestamp
     ];
 }
 
-function securityV2Headers(string $messageId, array $payload, ?string $timestamp = null, ?string $nonce = null): array
+function securityV2Headers(string $messageId, array $payload, ?string $timestamp = null, ?string $nonce = null, string $command = 'domain.command'): array
 {
     $timestamp ??= now()->toIso8601String();
     $nonce ??= 'nonce-'.$messageId;
@@ -383,7 +483,7 @@ function securityV2Headers(string $messageId, array $payload, ?string $timestamp
             $messageId,
             'source-service',
             'target-service',
-            'domain.command',
+            $command,
             $payloadHash,
             'fake-test-secret'
         ),

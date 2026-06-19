@@ -191,12 +191,12 @@ class TalktoSignatureVerifier
     private function commandConfig(array $sourceConfig, string $command): array|bool|null
     {
         if (! array_key_exists('allowed_commands', $sourceConfig)) {
-            return null;
+            return ($sourceConfig['allow_all_commands'] ?? false) === true ? null : false;
         }
 
         $allowedCommands = $sourceConfig['allowed_commands'];
 
-        if (! is_array($allowedCommands)) {
+        if (! is_array($allowedCommands) || $allowedCommands === []) {
             return false;
         }
 

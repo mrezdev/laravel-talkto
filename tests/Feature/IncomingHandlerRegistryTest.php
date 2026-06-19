@@ -121,6 +121,60 @@ test('explicit null allowed command config uses noop handler', function (): void
         ->and($message->fresh()->last_error)->toBeNull();
 });
 
+test('indexed allowed command config uses noop handler when no registry handler exists', function (): void {
+    config(['talkto.incoming.source.allowed_commands' => [
+        'orders.mark-paid',
+        'invoices.sync-status',
+    ]]);
+    $message = ihrIncomingMessage('ihr-indexed-noop', 'orders.mark-paid');
+
+    expect(app(TalktoIncomingCommandResolver::class)->resolve($message))->toBeInstanceOf(NoopIncomingCommandHandler::class);
+});
+
+test('indexed allowed command processes successfully through noop handler', function (): void {
+    config(['talkto.incoming.source.allowed_commands' => [
+        'orders.mark-paid',
+        'invoices.sync-status',
+    ]]);
+    $message = ihrIncomingMessage('ihr-indexed-success', 'invoices.sync-status');
+
+    (new ProcessIncomingTalktoMessage($message->id))->handle();
+
+    expect($message->fresh()->overall_status)->toBe('succeeded')
+        ->and($message->fresh()->destination_action_status)->toBe('succeeded')
+        ->and($message->fresh()->last_error)->toBeNull();
+});
+
+test('indexed unlisted command still fails by default', function (): void {
+    config(['talkto.incoming.source.allowed_commands' => [
+        'orders.mark-paid',
+    ]]);
+    $message = ihrIncomingMessage('ihr-indexed-unlisted', 'orders.cancelled');
+
+    (new ProcessIncomingTalktoMessage($message->id))->handle();
+
+    $message = $message->fresh();
+
+    expect($message->overall_status)->toBe('failed_retryable')
+        ->and($message->destination_action_status)->toBe('failed_retryable')
+        ->and($message->last_error)->toContain('No Talkto incoming handler is registered');
+});
+
+test('registry handler takes priority over indexed allowed command config', function (): void {
+    config(['talkto.incoming.source.allowed_commands' => [
+        'registry.indexed',
+    ]]);
+    app(TalktoIncomingHandlerRegistry::class)->register('registry.indexed', IncomingHandlerRegistryCountingHandler::class);
+    $message = ihrIncomingMessage('ihr-indexed-registry-priority', 'registry.indexed');
+
+    expect(app(TalktoIncomingCommandResolver::class)->resolve($message))->toBeInstanceOf(IncomingHandlerRegistryCountingHandler::class);
+
+    (new ProcessIncomingTalktoMessage($message->id))->handle();
+
+    expect(IncomingHandlerRegistryCountingHandler::$calls)->toBe(1)
+        ->and($message->fresh()->overall_status)->toBe('succeeded');
+});
+
 test('unknown incoming command can be skipped explicitly', function (): void {
     config(['talkto.incoming.unknown_command_strategy' => 'skip']);
     $message = ihrIncomingMessage('ihr-unknown-skip', 'registry.unknown');

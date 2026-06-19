@@ -76,6 +76,7 @@ Outgoing peer config contains the destination URL, endpoint, secret, and mode. I
 'incoming' => [
     'source-service' => [
         'secret' => env('TALKTO_FROM_SOURCE_SERVICE_SECRET'),
+        // Missing or empty allowed_commands rejects all commands.
         'allowed_commands' => [
             'domain.command' => [
                 'driver' => 'handler',
@@ -89,6 +90,24 @@ Outgoing peer config contains the destination URL, endpoint, secret, and mode. I
     ],
 ],
 ```
+
+Incoming command authorization is fail-closed. A known source with no `allowed_commands`, an empty `allowed_commands` array, or a command missing from the allowlist is rejected with `command_not_allowed`.
+
+Both indexed and associative allowlists are supported:
+
+```php
+'allowed_commands' => [
+    'orders.mark-paid',
+    'invoices.sync-status',
+],
+
+'allowed_commands' => [
+    'orders.mark-paid' => ['driver' => 'handler'],
+    'invoices.sync-status' => true,
+],
+```
+
+Use `allow_all_commands => true` only for trusted internal development cases where every command from that source is intentionally accepted. `allow_all_commands => false` does not bypass the allowlist.
 
 ## Security
 

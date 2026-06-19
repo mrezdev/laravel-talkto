@@ -141,6 +141,7 @@ Configure one incoming command handler on the receiving app:
 'incoming' => [
     'source-service' => [
         'secret' => env('TALKTO_FROM_SOURCE_SERVICE_SECRET'),
+        // Missing or empty allowed_commands rejects all commands.
         'allowed_commands' => [
             'domain.command' => [
                 'driver' => 'handler',
@@ -151,6 +152,8 @@ Configure one incoming command handler on the receiving app:
     ],
 ],
 ```
+
+Incoming command allowlists are fail-closed: a command is accepted only when it is explicitly listed under the source service. Use `allow_all_commands => true` only for trusted/internal development cases.
 
 Create a small generic handler:
 
