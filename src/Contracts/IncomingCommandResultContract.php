@@ -4,9 +4,11 @@ namespace Mrezdev\LaravelTalkto\Contracts;
 
 interface IncomingCommandResultContract
 {
-    public function succeeded(): bool;
+    public function isSucceeded(): bool;
 
-    public function retryable(): bool;
+    public function isRetryable(): bool;
+
+    public function isSkipped(): bool;
 
     public function errorClass(): ?string;
 

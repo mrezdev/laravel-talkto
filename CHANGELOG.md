@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Corrected the incoming command result contract to use non-conflicting instance accessors and aligned host stubs/docs with the real result API.
 - Hardened incoming idempotency around `message_id` using the existing message ledger.
 - Added retry/backoff state, due retry command behavior, and conservative HTTP retry classification.
 - Added Dead Letter Queue storage and `talkto:dlq-reprocess`.

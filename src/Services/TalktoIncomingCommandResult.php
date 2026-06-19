@@ -2,7 +2,9 @@
 
 namespace Mrezdev\LaravelTalkto\Services;
 
-class TalktoIncomingCommandResult
+use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
+
+class TalktoIncomingCommandResult implements IncomingCommandResultContract
 {
     public function __construct(
         public readonly bool $succeeded,
@@ -56,5 +58,58 @@ class TalktoIncomingCommandResult
             ], $meta), fn (mixed $value): bool => $value !== null),
             skipped: true
         );
+    }
+
+    public function isSucceeded(): bool
+    {
+        return $this->succeeded;
+    }
+
+    public function isRetryable(): bool
+    {
+        return $this->retryable;
+    }
+
+    public function isSkipped(): bool
+    {
+        return $this->skipped;
+    }
+
+    public function errorClass(): ?string
+    {
+        return $this->errorClass;
+    }
+
+    public function errorMessage(): ?string
+    {
+        return $this->errorMessage;
+    }
+
+    public function result(): array
+    {
+        return $this->result;
+    }
+
+    public function meta(): array
+    {
+        return $this->meta;
+    }
+
+    public function ok(): bool
+    {
+        return $this->isSucceeded();
+    }
+
+    public function toArray(): array
+    {
+        return [
+            'succeeded' => $this->succeeded,
+            'retryable' => $this->retryable,
+            'error_class' => $this->errorClass,
+            'error_message' => $this->errorMessage,
+            'result' => $this->result,
+            'meta' => $this->meta,
+            'skipped' => $this->skipped,
+        ];
     }
 }

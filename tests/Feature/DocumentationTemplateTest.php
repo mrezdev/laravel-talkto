@@ -111,3 +111,27 @@ test('docs stay free of project terms and committed secret values', function ():
         expect($docs)->not->toContain($term);
     }
 });
+
+test('docs reference the real incoming result API', function (): void {
+    $docs = implode("\n", [
+        p48ReadPackageFile('README.md'),
+        p48ReadPackageFile('docs/command-contract-template.md'),
+        p48ReadPackageFile('docs/result-callbacks.md'),
+        p48ReadPackageFile('docs/PUBLIC_API.md'),
+    ]);
+
+    expect($docs)->not->toContain('TalktoIncomingCommandResult::failed(')
+        ->and($docs)->toContain('failedFinal(')
+        ->and($docs)->toContain('failedRetryable(')
+        ->and($docs)->toContain('isSucceeded()')
+        ->and($docs)->toContain('IncomingCommandResultContract');
+});
+
+test('readme references the real result callback sender API', function (): void {
+    $readme = p48ReadPackageFile('README.md');
+
+    expect($readme)->not->toContain('sendResult'.'Callback(')
+        ->and($readme)->toContain('sendResult(')
+        ->and($readme)->toContain('ResultCallbackSenderContract')
+        ->and($readme)->toContain('TalktoIncomingCommandResult');
+});

@@ -196,7 +196,8 @@ test('incoming command result constructors set outcome flags', function (): void
     $retryable = TalktoIncomingCommandResult::failedRetryable('Temporary failure', RuntimeException::class);
     $final = TalktoIncomingCommandResult::failedFinal('Final failure', LogicException::class);
 
-    expect($succeeded->succeeded)->toBeTrue()
+    expect($succeeded)->toBeInstanceOf(IncomingCommandResultContract::class)
+        ->and($succeeded->succeeded)->toBeTrue()
         ->and($succeeded->retryable)->toBeFalse()
         ->and($retryable->succeeded)->toBeFalse()
         ->and($retryable->retryable)->toBeTrue()

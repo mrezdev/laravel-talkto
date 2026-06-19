@@ -28,6 +28,7 @@ Use this guide when moving a host application to a newer Laravel Talkto package 
 
 - Incoming handlers can be configured or registered through `TalktoIncomingHandlerRegistryContract`.
 - Outgoing targets can remain in config or be registered through `TalktoOutgoingTargetRegistryContract`.
+- `IncomingCommandResultContract` now uses non-conflicting instance accessors such as `isSucceeded()` and `isRetryable()` instead of names that overlap result factories. This is a pre-public-release API consistency correction; existing `TalktoIncomingCommandResult::succeeded()`, `failedRetryable()`, `failedFinal()`, and `skipped()` factories remain available.
 - `TalktoMetricsCollector` and `TalktoHealthChecker` are read-only observability services.
 - Public commands include `talkto:retry-failed`, `talkto:dlq-reprocess`, and `talkto:report`.
 

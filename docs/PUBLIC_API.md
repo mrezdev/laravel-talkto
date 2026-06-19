@@ -7,7 +7,10 @@ This page lists the package surfaces intended for host applications to depend on
 - `Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler`
 - `Mrezdev\LaravelTalkto\Contracts\TalktoIncomingHandlerRegistryContract`
 - `Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract`
+- `Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract`
 - Callback contracts under `Mrezdev\LaravelTalkto\Contracts` for host-owned result callback implementations.
+
+`IncomingCommandResultContract` exposes non-conflicting instance accessors: `isSucceeded()`, `isRetryable()`, `isSkipped()`, `errorClass()`, `errorMessage()`, `result()`, and `meta()`.
 
 ## App-Level Services
 
@@ -16,6 +19,7 @@ This page lists the package surfaces intended for host applications to depend on
 - `TalktoMetricsCollector` for read-only metrics snapshots and counts.
 - `TalktoHealthChecker` for read-only health summaries.
 - `TalktoOutgoingMessageFactory` and `TalktoFlowFactory` for creating outgoing messages.
+- `TalktoIncomingCommandResult` for incoming handler outcomes through the `succeeded`, `failedRetryable`, `failedFinal`, and `skipped` factories.
 
 ## Commands
 

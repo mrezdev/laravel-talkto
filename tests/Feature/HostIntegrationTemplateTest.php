@@ -97,3 +97,30 @@ test('host stubs stay free of project terms and committed secret values', functi
         expect($combined)->not->toContain($term);
     }
 });
+
+test('host stubs reference real result methods and model fields', function (): void {
+    $combined = implode("\n", array_map(
+        fn (string $path): string => p48ReadPackageFile($path),
+        p48StubPaths(),
+    ));
+
+    expect($combined)->not->toContain('TalktoIncomingCommandResult::failed(')
+        ->and($combined)->not->toContain('->target)')
+        ->and($combined)->not->toContain('->source)')
+        ->and($combined)->not->toContain("'source' => '<source-service>'")
+        ->and($combined)->not->toContain("'target' => '<destination-service>'")
+        ->and($combined)->toContain('failedFinal(')
+        ->and($combined)->toContain('isSucceeded()')
+        ->and($combined)->toContain('source_service')
+        ->and($combined)->toContain('target_service');
+});
+
+test('host config stub route settings align with package route assembly', function (): void {
+    $stub = p48ReadPackageFile('stubs/host/config/talkto.php.stub');
+
+    expect($stub)->toContain("'enabled' => false")
+        ->and($stub)->toContain("'prefix' => 'api'")
+        ->and($stub)->toContain("'receive_uri' => 'talkto/receive'")
+        ->and($stub)->toContain("'receive_name' => 'talkto.receive'")
+        ->and($stub)->not->toContain("'prefix' => 'api/talkto'");
+});

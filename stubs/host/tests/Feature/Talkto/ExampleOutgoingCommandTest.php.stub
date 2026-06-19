@@ -14,7 +14,7 @@ test('source service can create an example outgoing command', function (): void 
 
     $message = app(ExampleCommandSender::class)->send($record);
 
-    expect($message->target)->toBe('<destination-service>')
+    expect($message->target_service)->toBe('<destination-service>')
         ->and($message->command)->toBe('example:sync-record')
         ->and($message->idempotency_key)->toBe($record->idempotencyKey());
 });

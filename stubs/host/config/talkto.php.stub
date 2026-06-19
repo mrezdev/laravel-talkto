@@ -5,7 +5,9 @@ return [
 
     'routes' => [
         'enabled' => false,
-        'prefix' => 'api/talkto',
+        'prefix' => 'api',
+        'receive_uri' => 'talkto/receive',
+        'receive_name' => 'talkto.receive',
         'middleware' => ['api'],
     ],
 

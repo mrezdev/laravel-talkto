@@ -13,7 +13,7 @@ final class ExampleCommandHandler implements CommandHandlerContract
         $payload = $message->payload ?? [];
 
         if (($payload['schema_version'] ?? null) !== 1) {
-            return TalktoIncomingCommandResult::failed([
+            return TalktoIncomingCommandResult::failedFinal('Unsupported schema version.', null, [
                 'code' => 'unsupported_schema_version',
             ]);
         }
@@ -21,7 +21,7 @@ final class ExampleCommandHandler implements CommandHandlerContract
         $externalId = $payload['record']['external_id'] ?? null;
 
         if (! is_string($externalId) || $externalId === '') {
-            return TalktoIncomingCommandResult::failed([
+            return TalktoIncomingCommandResult::failedFinal('Payload did not pass command validation.', null, [
                 'code' => 'validation_failed',
             ]);
         }

@@ -227,15 +227,17 @@ Unknown commands fail by default so existing retry and DLQ behavior can handle t
 
 ## Result Callback Example
 
-Hosts can send a signed result back to the source after a destination command succeeds or fails:
+The package currently exposes callback sender and receiver contracts. Concrete callback sender and receiver services may remain host-owned until the generic callback runtime phase.
+
+After a host app binds `ResultCallbackSenderContract` to its own callback sender implementation, it can send a result back to the source after a destination command succeeds or fails:
 
 ```php
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
+use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
 
-app(ResultCallbackSenderContract::class)->sendResultCallback(
-    messageId: $message->message_id,
-    result: ['processed' => true],
-);
+$result = TalktoIncomingCommandResult::succeeded(['processed' => true]);
+
+app(ResultCallbackSenderContract::class)->sendResult($message, $result);
 ```
 
 Concrete callback sender and receiver services may remain host-owned while implementing the package contracts.

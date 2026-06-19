@@ -65,7 +65,7 @@ final class ExampleCommandHandler implements CommandHandlerContract
         $payload = $message->payload ?? [];
 
         if (($payload['schema_version'] ?? null) !== 1) {
-            return TalktoIncomingCommandResult::failed([
+            return TalktoIncomingCommandResult::failedFinal('Unsupported schema version.', null, [
                 'code' => 'unsupported_schema_version',
             ]);
         }

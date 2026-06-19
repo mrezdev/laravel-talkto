@@ -14,11 +14,19 @@ Result callbacks let the destination report command outcomes back to the source.
 
 `IncomingCommandResultContract` describes the stable fields a callback needs:
 
-- success or failure
-- retryability
-- error class and message
-- result payload
-- metadata
+- `isSucceeded()` for success or failure
+- `isRetryable()` for temporary failures
+- `isSkipped()` for intentionally skipped commands
+- `errorClass()` and `errorMessage()` for redacted failure details
+- `result()` for the result payload
+- `meta()` for metadata
+
+`TalktoIncomingCommandResult` implements this contract and keeps the existing static factories:
+
+- `succeeded($result = [], $meta = [])`
+- `failedRetryable($errorMessage, $errorClass = null, $meta = [])`
+- `failedFinal($errorMessage, $errorClass = null, $meta = [])`
+- `skipped($reason = null, $meta = [])`
 
 ## Boundary
 

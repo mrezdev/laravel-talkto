@@ -6,8 +6,8 @@ use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 test('destination service can handle an example incoming command', function (): void {
     $message = new TalktoMessage([
         'message_id' => 'message-123',
-        'source' => '<source-service>',
-        'target' => '<destination-service>',
+        'source_service' => '<source-service>',
+        'target_service' => '<destination-service>',
         'command' => 'example:sync-record',
         'payload' => [
             'schema_version' => 1,
@@ -20,5 +20,5 @@ test('destination service can handle an example incoming command', function (): 
 
     $result = app(ExampleCommandHandler::class)->handle($message);
 
-    expect($result->ok())->toBeTrue();
+    expect($result->isSucceeded())->toBeTrue();
 });
