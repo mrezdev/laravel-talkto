@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('talkto_messages', function (Blueprint $table) {
+        $this->schema()->create($this->tableName('messages', 'talkto_messages'), function (Blueprint $table) {
             $table->id();
             $table->string('message_id', 100)->unique();
             $table->string('correlation_id', 100)->nullable()->index();
@@ -52,6 +52,22 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('talkto_messages');
+        $this->schema()->dropIfExists($this->tableName('messages', 'talkto_messages'));
+    }
+
+    private function schema(): \Illuminate\Database\Schema\Builder
+    {
+        $connection = config('talkto.database.connection');
+
+        return is_string($connection) && $connection !== ''
+            ? Schema::connection($connection)
+            : Schema::getFacadeRoot();
+    }
+
+    private function tableName(string $key, string $default): string
+    {
+        $table = config("talkto.database.tables.{$key}", $default);
+
+        return is_string($table) && $table !== '' ? $table : $default;
     }
 };

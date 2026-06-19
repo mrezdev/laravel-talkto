@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create(config('talkto.dead_letter.table', 'talkto_dead_letters'), function (Blueprint $table): void {
+        $this->schema()->create($this->deadLettersTable(), function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('talkto_message_id')->nullable()->unique();
             $table->string('message_id', 100)->nullable()->unique();
@@ -34,6 +34,28 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists(config('talkto.dead_letter.table', 'talkto_dead_letters'));
+        $this->schema()->dropIfExists($this->deadLettersTable());
+    }
+
+    private function schema(): \Illuminate\Database\Schema\Builder
+    {
+        $connection = config('talkto.database.connection');
+
+        return is_string($connection) && $connection !== ''
+            ? Schema::connection($connection)
+            : Schema::getFacadeRoot();
+    }
+
+    private function deadLettersTable(): string
+    {
+        $table = config('talkto.database.tables.dead_letters');
+
+        if (is_string($table) && $table !== '') {
+            return $table;
+        }
+
+        $legacy = config('talkto.dead_letter.table');
+
+        return is_string($legacy) && $legacy !== '' ? $legacy : 'talkto_dead_letters';
     }
 };

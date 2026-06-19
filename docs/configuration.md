@@ -16,6 +16,27 @@ The package config is published as `config/talkto.php`. Defaults are conservativ
 
 When enabling package routes for public traffic, include throttle or rate-limit middleware in `talkto.routes.middleware` or wrap the package controller in host-owned routes.
 
+## Storage Connection And Tables
+
+By default, Talkto models and migrations use Laravel's default database connection and the standard package table names.
+
+To store Talkto data on a dedicated connection, configure the connection before running the package migrations:
+
+```dotenv
+TALKTO_DB_CONNECTION=talkto
+```
+
+Optional table names can also be configured:
+
+```dotenv
+TALKTO_MESSAGES_TABLE=talkto_messages
+TALKTO_ATTEMPTS_TABLE=talkto_attempts
+TALKTO_EVENTS_TABLE=talkto_events
+TALKTO_DEAD_LETTERS_TABLE=talkto_dead_letters
+```
+
+Run Talkto migrations after the connection and table names are configured. If multiple services share one Talkto database, run the Talkto migrations once from one service or deployment job; shared database hardening guidance belongs to the shared-storage phase.
+
 ## Peers
 
 Outgoing peer config contains the destination URL, endpoint, secret, and mode. Incoming peer config contains the source secret and allowed commands.
