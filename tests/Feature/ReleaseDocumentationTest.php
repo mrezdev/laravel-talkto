@@ -18,7 +18,7 @@ if (! function_exists('p49ForbiddenProjectTerms')) {
     function p49ForbiddenProjectTerms(): array
     {
         return [
-            'Verify'.'Invoice',
+            'Verify'.'In'.'voice',
             'Dem'.'and',
             'App'.'eal',
             'Hy'.'brid',
@@ -57,6 +57,8 @@ if (! function_exists('p49ReleaseDocPaths')) {
             'docs/release-process.md',
             'docs/versioning.md',
             'docs/private-composer-installation.md',
+            'docs/first-private-repository-commit.md',
+            'docs/first-private-release-tag.md',
             'docs/package-extraction-checklist.md',
             'docs/public-release-readiness.md',
         ];
@@ -105,11 +107,13 @@ test('release docs describe tag based private first versioning', function (): vo
         'no version in composer.json',
         'private-first',
         'license decision',
-        'composer validate --no-check-publish',
+        'composer validate --strict',
         'vendor/bin/pest',
     ] as $term) {
         expect($docs)->toContain($term);
     }
+
+    expect($docs)->not->toContain('composer validate --no-check'.'-publish');
 });
 
 test('readme links to repository ci release and installation docs', function (): void {

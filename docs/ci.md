@@ -1,19 +1,19 @@
 # Continuous Integration
 
-The package includes `.github/workflows/tests.yml` as a future GitHub Actions workflow for a private repository.
+The package includes `.github/workflows/tests.yml` for private repository pull requests and pushes to `main` or `master`.
 
 ## What CI Runs
 
 - Checks out the package repository.
 - Sets up supported PHP versions.
-- Runs `composer validate --no-check-publish`.
+- Runs `composer validate --strict`.
 - Runs `composer install --prefer-dist --no-interaction --no-progress`.
 - Runs the package test suite with `vendor/bin/pest`.
 
 These commands should match the local package workflow:
 
 ```bash
-composer validate --no-check-publish
+composer validate --strict
 composer install --prefer-dist --no-interaction --no-progress
 vendor/bin/pest
 ```

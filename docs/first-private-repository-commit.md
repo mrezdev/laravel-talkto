@@ -16,7 +16,7 @@ cd laravel-talkto-private
 unzip <package-seed-zip> -d .
 git init
 git status --short
-composer validate --no-check-publish
+composer validate --strict
 composer install --prefer-dist --no-interaction --no-progress
 vendor/bin/pest
 git add .

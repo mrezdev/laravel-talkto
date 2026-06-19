@@ -7,12 +7,13 @@ Package versions come from Git tags. `composer.json` intentionally has no static
 1. Confirm the repository is private.
 2. Confirm the license remains proprietary unless the owner approved a different license.
 3. Update `CHANGELOG.md`.
-4. Run `composer validate --no-check-publish`.
+4. Run `composer validate --strict`.
 5. Run `composer install --prefer-dist --no-interaction --no-progress` when dependencies are not installed.
 6. Run `vendor/bin/pest`.
-7. Review docs, repository metadata, and leakage checks.
-8. Create a private Git tag only after tests pass.
-9. Verify a host application can require the tag in a non-production branch.
+7. Run `php artisan talkto:security-audit` in a host test app when applicable.
+8. Review docs, repository metadata, and leakage checks.
+9. Create a private Git tag only after tests pass.
+10. Verify a host application can require the tag in a non-production branch.
 
 ## Tag Names
 

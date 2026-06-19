@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Private Release Readiness Summary
+
+- Aligned public contracts, README examples, host stubs, and docs with the real incoming result and outgoing factory APIs.
+- Added immutable data objects for envelopes, incoming command results, and result callback envelopes.
+- Added the generic signed result callback sender/receiver runtime while preserving host override contracts.
+- Added read-only trace reporting, retry/DLQ hardening, dead-letter lifecycle helpers, and focused retry policy diagnostics.
+- Added centralized redaction, text redaction hardening, and the read-only `talkto:security-audit` command.
+- Added final private release polish for CI, package metadata, release docs, security/support guidance, and repository audit tests.
+
 - Corrected the incoming command result contract to use non-conflicting instance accessors and aligned host stubs/docs with the real result API.
 - Hardened incoming idempotency around `message_id` using the existing message ledger.
 - Added retry/backoff state, due retry command behavior, and conservative HTTP retry classification.

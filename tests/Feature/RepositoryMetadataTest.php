@@ -18,7 +18,7 @@ if (! function_exists('p49ForbiddenProjectTerms')) {
     function p49ForbiddenProjectTerms(): array
     {
         return [
-            'Verify'.'Invoice',
+            'Verify'.'In'.'voice',
             'Dem'.'and',
             'App'.'eal',
             'Hy'.'brid',
@@ -67,6 +67,49 @@ if (! function_exists('p49RepositoryMetadataPaths')) {
 test('repository metadata files exist', function (): void {
     foreach (p49RepositoryMetadataPaths() as $path) {
         expect(p49PackagePath($path))->toBeFile();
+    }
+});
+
+test('github issue and pull request templates request sanitized generic context', function (): void {
+    $templates = [
+        '.github/ISSUE_TEMPLATE/bug_report.md',
+        '.github/ISSUE_TEMPLATE/feature_request.md',
+        '.github/pull_request_template.md',
+    ];
+
+    $combined = implode("\n", array_map(
+        fn (string $path): string => p49ReadPackageFile($path),
+        $templates,
+    ));
+
+    foreach ([
+        'Package version or Git tag',
+        'Laravel version',
+        'PHP version',
+        'Sanitized command output',
+        'talkto:trace',
+        'talkto:security-audit',
+        'minimal generic reproduction',
+        'Do not paste secrets, tokens, signatures, cookies, Authorization headers',
+    ] as $term) {
+        expect($combined)->toContain($term);
+    }
+
+    $pullRequest = p49ReadPackageFile('.github/pull_request_template.md');
+
+    foreach ([
+        'Tests were run',
+        'Documentation was updated when needed',
+        'No application-specific business terms were added',
+        'No secrets, tokens, signatures, cookies, Authorization headers',
+        'No generated artifacts were added',
+        'Changed-files-only ZIP or manifest artifacts are not intended for commit unless explicitly requested',
+    ] as $term) {
+        expect($pullRequest)->toContain($term);
+    }
+
+    foreach (array_merge(p49ForbiddenProjectTerms(), p49ObviousSecretPatterns()) as $term) {
+        expect($combined)->not->toContain($term);
     }
 });
 

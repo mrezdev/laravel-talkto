@@ -29,8 +29,10 @@ Use this guide when moving a host application to a newer Laravel Talkto package 
 - Incoming handlers can be configured or registered through `TalktoIncomingHandlerRegistryContract`.
 - Outgoing targets can remain in config or be registered through `TalktoOutgoingTargetRegistryContract`.
 - `IncomingCommandResultContract` now uses non-conflicting instance accessors such as `isSucceeded()` and `isRetryable()` instead of names that overlap result factories. This is a pre-public-release API consistency correction; existing `TalktoIncomingCommandResult::succeeded()`, `failedRetryable()`, `failedFinal()`, and `skipped()` factories remain available.
+- Immutable data objects are available for envelope, incoming result, and callback envelope shapes: `TalktoEnvelopeData`, `TalktoIncomingCommandResultData`, and `TalktoResultCallbackData`.
+- Generic signed result callbacks are available through `ResultCallbackSenderContract` and `ResultCallbackReceiverContract`; hosts may still override either contract.
 - `TalktoMetricsCollector` and `TalktoHealthChecker` are read-only observability services.
-- Public commands include `talkto:retry-failed`, `talkto:dlq-reprocess`, and `talkto:report`.
+- Public commands include `talkto:retry-failed`, `talkto:dlq-reprocess`, `talkto:report`, `talkto:trace`, and `talkto:security-audit`.
 
 ## Post-Upgrade Checks
 
@@ -41,6 +43,8 @@ Run these checks in a non-production environment:
 3. Send a duplicate `message_id` and confirm it does not execute twice.
 4. Run `php artisan talkto:retry-failed --dry-run`.
 5. Run `php artisan talkto:report --json`.
-6. Confirm queue workers and scheduler entries are configured.
+6. Run `php artisan talkto:security-audit`.
+7. Run `php artisan talkto:trace <message-id>` on smoke messages where applicable.
+8. Confirm queue workers and scheduler entries are configured.
 
 Do not claim public API stability beyond the current release line. Use Git tags as package version boundaries.

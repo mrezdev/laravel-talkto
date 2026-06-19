@@ -6,10 +6,10 @@ Use this document when turning the local package copy into the root of a future 
 
 The package currently lives inside the host applications at:
 
-- Website host: `packages/laravel-talkto`
-- Inventory host: `packages/laravel-talkto`
+- Primary host package copy: `packages/laravel-talkto`
+- Secondary host package copy: `packages/laravel-talkto`
 
-Before extracting, confirm both package copies are synchronized. Treat the Website package copy as canonical only after that sync check passes.
+Before extracting, confirm both package copies are synchronized. Treat the primary package copy as canonical only after that sync check passes.
 
 ## Repository Root Rule
 
@@ -56,7 +56,7 @@ The new repository root should contain files such as `composer.json`, `README.md
 Run these commands from the extracted package repository root:
 
 ```bash
-composer validate --no-check-publish
+composer validate --strict
 composer install --prefer-dist --no-interaction --no-progress
 vendor/bin/pest
 ```

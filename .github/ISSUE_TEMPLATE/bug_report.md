@@ -20,16 +20,26 @@ Describe what happened instead.
 
 ## Reproduction
 
-Provide a minimal package-level reproduction using placeholders only. Do not include host business data, private credentials, or production payloads.
+Provide a minimal generic reproduction using placeholders only.
 
 ## Environment
 
 - PHP version:
-- Laravel component versions:
-- Package version or Git reference:
+- Laravel version:
+- Package version or Git tag:
+
+## Diagnostics
+
+- Sanitized command output:
+- Sanitized `talkto:trace` output, when relevant:
+- Sanitized `talkto:security-audit` output, when relevant:
+
+## Safety Notice
+
+Do not paste secrets, tokens, signatures, cookies, Authorization headers, private credentials, production payloads, or raw signed headers.
 
 ## Checks
 
-- [ ] I removed secrets and private data.
-- [ ] I confirmed this is generic package behavior, not host-specific business logic.
-- [ ] I included relevant test output or a minimal failing test.
+- [ ] I removed secrets and private data from every example.
+- [ ] I confirmed this is generic package behavior.
+- [ ] I included relevant sanitized output or a minimal failing test.

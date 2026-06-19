@@ -7,7 +7,7 @@ This plan describes the first private tag after the package has been committed t
 Run these from the private package repository root:
 
 ```bash
-composer validate --no-check-publish
+composer validate --strict
 composer install --prefer-dist --no-interaction --no-progress
 vendor/bin/pest
 ```

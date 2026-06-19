@@ -29,6 +29,7 @@ This page lists the package surfaces intended for host applications to depend on
 
 - `TalktoEnvelopeData` provides an immutable snapshot of the envelope array shape and can be created from an envelope array or compatible message model.
 - `TalktoIncomingCommandResultData` provides an immutable snapshot of an `IncomingCommandResultContract`.
+- `TalktoResultCallbackData` provides an immutable snapshot of the signed result callback envelope shape.
 - `TalktoTraceSnapshot` provides a stable array shape for read-only trace reports.
 - `TalktoRetryDecision` provides a stable array shape for retry eligibility and scheduling decisions.
 - `TalktoSecurityFinding` and `TalktoSecurityAuditSnapshot` provide stable array shapes for read-only security audit output.

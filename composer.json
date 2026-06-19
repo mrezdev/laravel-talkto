@@ -1,6 +1,6 @@
 {
     "name": "mrezdev/laravel-talkto",
-    "description": "Laravel Talkto provides a reliable and secure service-to-service communication layer for Laravel applications.",
+    "description": "Reliable Laravel service-to-service messaging with signed outbox/inbox envelopes, idempotency, retries, callbacks, observability, and security audit tooling.",
     "type": "library",
     "license": "proprietary",
     "keywords": [
@@ -10,7 +10,12 @@
         "hmac",
         "idempotency",
         "outbox",
-        "callback"
+        "inbox",
+        "retry",
+        "dead-letter",
+        "callback",
+        "observability",
+        "security-audit"
     ],
     "authors": [
         {

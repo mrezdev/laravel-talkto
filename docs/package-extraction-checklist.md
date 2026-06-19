@@ -36,8 +36,8 @@ Use this checklist when moving `packages/laravel-talkto` into its own private re
 
 ## Verify
 
-- Sync the Website and Inventory package copies before extraction.
-- Run Composer validation.
+- Sync the primary and secondary package copies before extraction.
+- Run `composer validate --strict`.
 - Install package dependencies in the extracted repository.
 - Run package tests.
 - Validate no host business leakage exists in package source, docs, metadata, stubs, or tests.

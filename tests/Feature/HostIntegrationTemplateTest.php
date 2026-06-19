@@ -30,7 +30,7 @@ if (! function_exists('p48ForbiddenProjectTerms')) {
     function p48ForbiddenProjectTerms(): array
     {
         return [
-            'Verify'.'Invoice',
+            'Verify'.'In'.'voice',
             'Dem'.'and',
             'App'.'eal',
             'Hy'.'brid',

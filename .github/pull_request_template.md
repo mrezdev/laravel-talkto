@@ -4,9 +4,11 @@ Describe the package-level change.
 
 ## Checks
 
-- [ ] Package tests were run.
+- [ ] Tests were run.
 - [ ] Composer metadata was validated.
-- [ ] Documentation was updated when behavior changed.
+- [ ] Documentation was updated when needed.
 - [ ] Backward compatibility was reviewed.
-- [ ] Security and secret exposure were reviewed.
-- [ ] No host-specific business logic was added to the package.
+- [ ] No application-specific business terms were added.
+- [ ] No secrets, tokens, signatures, cookies, Authorization headers, private credentials, or production payloads were added.
+- [ ] No generated artifacts were added.
+- [ ] Changed-files-only ZIP or manifest artifacts are not intended for commit unless explicitly requested.

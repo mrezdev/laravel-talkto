@@ -61,7 +61,7 @@ test('package source avoids host business terms', function (): void {
     ];
 
     $terms = [
-        'Verify'.'Invoice',
+        'Verify'.'In'.'voice',
         'De'.'mand',
         'Ap'.'peal',
         'Hy'.'brid',

@@ -50,6 +50,7 @@ flowchart LR
 - Retry/backoff state and retry command.
 - Dead Letter Queue storage and reprocess command.
 - Read-only metrics, health summaries, report command, and message trace command.
+- Read-only security audit command and centralized redaction.
 - Signed result callback sender and receiver runtime, with contracts that hosts can override.
 
 ## 60-Second Architecture Overview
@@ -214,6 +215,8 @@ The package provides a generic signed callback runtime through `ResultCallbackSe
 
 Source apps must configure the destination service under `talkto.incoming` and allow the callback command, which defaults to `talkto.result`. Destination apps must configure the source service under `talkto.outgoing` with a callback endpoint and shared secret.
 
+The package receive route depends on `talkto.routes.enabled`; the callback route depends on both `talkto.routes.enabled` and `talkto.callbacks.enabled`.
+
 ```php
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
 use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
@@ -251,6 +254,8 @@ Repository and release preparation:
 - [docs/release-process.md](docs/release-process.md)
 - [docs/versioning.md](docs/versioning.md)
 - [docs/private-composer-installation.md](docs/private-composer-installation.md)
+- [docs/first-private-repository-commit.md](docs/first-private-repository-commit.md)
+- [docs/first-private-release-tag.md](docs/first-private-release-tag.md)
 - [docs/package-extraction-checklist.md](docs/package-extraction-checklist.md)
 - [docs/public-release-readiness.md](docs/public-release-readiness.md)
 
@@ -270,10 +275,12 @@ Host applications should depend on documented contracts and services rather than
 - `TalktoMetricsCollector`
 - `TalktoHealthChecker`
 - `TalktoTraceReporter`
+- `TalktoSecurityAuditor`
 - `talkto:retry-failed`
 - `talkto:dlq-reprocess`
 - `talkto:report`
 - `talkto:trace`
+- `talkto:security-audit`
 
 The detailed public surface is tracked in [docs/PUBLIC_API.md](docs/PUBLIC_API.md).
 
