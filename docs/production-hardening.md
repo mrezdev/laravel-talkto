@@ -55,6 +55,17 @@ TALKTO_REPLAY_PROTECTION_ENABLED=true
 
 Replay protection should stay enabled for production receivers.
 
+## Security Audit Command
+
+Run the PASS/WARN/FAIL audit before enabling Talkto in production:
+
+```bash
+php artisan talkto:audit-security
+php artisan talkto:audit-security --json
+```
+
+The command can be used manually or in CI. Treat `FAIL` checks as deployment blockers. Review every `WARN` check intentionally, especially accepted v1 signatures, missing v2 nonce enforcement, broad command allowlists, exposed routes without throttling, and panel exposure.
+
 ## Panel
 
 Keep the panel disabled in production unless the host has authenticated middleware, a narrow authorization gate, payload visibility rules, and operator procedures in place:

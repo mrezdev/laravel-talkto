@@ -248,7 +248,7 @@ Read more in [docs/scaffolding.md](docs/scaffolding.md) and [docs/transactional-
 
 Laravel Talkto signs canonical message fields using HMAC SHA-256. Incoming requests can be verified for signature, timestamp tolerance, target service, known source service, command allowlist, payload hash, and replay protection.
 
-By default, outgoing messages use backward-compatible v1 signatures and incoming verification accepts v1 and v2. Move to v2 sending only after both peers are ready. Use `talkto:security-audit` to review signature, timestamp, nonce, route middleware, peer secret, and command allowlist posture without mutating state. Never commit real shared secrets.
+By default, outgoing messages use backward-compatible v1 signatures and incoming verification accepts v1 and v2. Move to v2 sending only after both peers are ready. Use `talkto:audit-security` for PASS/WARN/FAIL deployment checks, or `talkto:security-audit` for the detailed finding report. Never commit real shared secrets.
 
 Read more in [docs/security.md](docs/security.md) and [docs/production-hardening.md](docs/production-hardening.md).
 
@@ -334,6 +334,7 @@ Host applications should depend on documented contracts and services rather than
 - `talkto:dlq-reprocess`
 - `talkto:report`
 - `talkto:trace`
+- `talkto:audit-security`
 - `talkto:security-audit`
 
 The detailed public surface is tracked in [docs/PUBLIC_API.md](docs/PUBLIC_API.md).

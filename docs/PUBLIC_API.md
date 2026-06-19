@@ -42,6 +42,7 @@ These data objects are additive. Existing array-based APIs remain supported and 
 - `talkto:dlq-reprocess` with `--id`, `--message-id`, `--direction`, `--limit`, `--dry-run`, and `--force`.
 - `talkto:report` with `--hours`, `--from`, `--to`, `--json`, `--direction`, and `--limit`.
 - `talkto:trace` with `message_id`, `--correlation`, `--json`, `--limit`, and `--payload`.
+- `talkto:audit-security` with `--json`.
 - `talkto:security-audit` with `--json` and `--fail-on`.
 - `TalktoDeadLetterQueue::markReprocessedForMessage()`, `markFailedReprocess()`, and `markIgnored()` for DLQ lifecycle integration.
 

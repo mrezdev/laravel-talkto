@@ -14,6 +14,7 @@ use Mrezdev\LaravelTalkto\Console\Commands\RetryFailedTalktoMessagesCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\ReportTalktoMessagesCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\ReprocessTalktoDeadLettersCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\SecurityAuditTalktoCommand;
+use Mrezdev\LaravelTalkto\Console\Commands\TalktoAuditSecurityCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\TraceTalktoMessageCommand;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackReceiverContract;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
@@ -93,6 +94,7 @@ class LaravelTalktoServiceProvider extends ServiceProvider
                 ReportTalktoMessagesCommand::class,
                 TraceTalktoMessageCommand::class,
                 SecurityAuditTalktoCommand::class,
+                TalktoAuditSecurityCommand::class,
             ]);
         }
 
