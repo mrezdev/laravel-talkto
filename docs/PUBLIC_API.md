@@ -40,6 +40,7 @@ These data objects are additive. Existing array-based APIs remain supported and 
 
 - `talkto:retry-failed` with `--direction`, `--limit`, and `--dry-run`.
 - `talkto:dlq-reprocess` with `--id`, `--message-id`, `--direction`, `--limit`, `--dry-run`, and `--force`.
+- `talkto:prune` with `--type`, `--older-than`, `--dry-run`, and `--limit`.
 - `talkto:recover-stale` with `--dry-run`, `--direction`, `--older-than`, and `--limit`.
 - `talkto:report` with `--hours`, `--from`, `--to`, `--json`, `--direction`, and `--limit`.
 - `talkto:trace` with `message_id`, `--correlation`, `--json`, `--limit`, and `--payload`.

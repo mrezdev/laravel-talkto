@@ -79,6 +79,22 @@ php artisan talkto:recover-stale --limit=50
 
 Always run `--dry-run` first in production. This command does not replace normal retry behavior; it is an operator tool for stale in-flight locks. Schedule it only when your operators want automated stale-lock recovery, and keep the limit small enough for safe review.
 
+## Retention Pruning
+
+Use pruning to keep Talkto storage bounded after operational retention windows expire:
+
+```bash
+php artisan talkto:prune --dry-run
+php artisan talkto:prune --type=events --older-than=30d
+php artisan talkto:prune --type=attempts --older-than=90d
+php artisan talkto:prune --type=dead-letters --older-than=180d
+php artisan talkto:prune --type=messages --older-than=90d
+php artisan talkto:prune --type=all --dry-run
+php artisan talkto:prune --type=all --limit=500
+```
+
+Always run `--dry-run` first in production. Message pruning is conservative: it only deletes old terminal messages and skips active or in-flight rows such as queued, waiting to send, sending, processing, and retryable messages. Pruning is for storage retention, not message recovery; use `talkto:recover-stale` for stuck in-flight messages before pruning. Retention defaults can be changed with `TALKTO_RETENTION_MESSAGES_DAYS`, `TALKTO_RETENTION_ATTEMPTS_DAYS`, `TALKTO_RETENTION_EVENTS_DAYS`, and `TALKTO_RETENTION_DEAD_LETTERS_DAYS`.
+
 ## Panel
 
 Keep the panel disabled in production unless the host has authenticated middleware, a narrow authorization gate, payload visibility rules, and operator procedures in place:

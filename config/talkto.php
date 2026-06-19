@@ -213,6 +213,13 @@ return [
         'stale_after_minutes' => (int) env('TALKTO_STALE_AFTER_MINUTES', 15),
     ],
 
+    'retention' => [
+        'messages_days' => (int) env('TALKTO_RETENTION_MESSAGES_DAYS', 90),
+        'attempts_days' => (int) env('TALKTO_RETENTION_ATTEMPTS_DAYS', 90),
+        'events_days' => (int) env('TALKTO_RETENTION_EVENTS_DAYS', 30),
+        'dead_letters_days' => (int) env('TALKTO_RETENTION_DEAD_LETTERS_DAYS', 180),
+    ],
+
     'panel' => [
         'enabled' => env('TALKTO_PANEL_ENABLED', false),
 

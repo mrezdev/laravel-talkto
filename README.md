@@ -256,7 +256,7 @@ Read more in [docs/security.md](docs/security.md) and [docs/production-hardening
 
 Retry state is stored on message records and processed through `talkto:retry-failed`. Retry policy starts with global defaults and can be overridden by direction, peer/target, and command. Final or exhausted failures can be stored in `talkto_dead_letters` when DLQ support is enabled and migrated. `talkto:dlq-reprocess` lets operators reprocess eligible dead letters deliberately.
 
-Observability is read-only: `TalktoMetricsCollector`, `TalktoHealthChecker`, `talkto:report`, and `talkto:trace` summarize existing message state without dispatching jobs or mutating rows. Use `talkto:trace <message-id>` or `talkto:trace --correlation=<correlation-id>` to inspect one flow across related messages, attempts, events, dead letters, and callbacks with payload redacted by default. Operators can use `talkto:recover-stale --dry-run` before recovering messages stuck in stale in-flight locks.
+Observability is read-only: `TalktoMetricsCollector`, `TalktoHealthChecker`, `talkto:report`, and `talkto:trace` summarize existing message state without dispatching jobs or mutating rows. Use `talkto:trace <message-id>` or `talkto:trace --correlation=<correlation-id>` to inspect one flow across related messages, attempts, events, dead letters, and callbacks with payload redacted by default. Operators can use `talkto:recover-stale --dry-run` before recovering messages stuck in stale in-flight locks, and `talkto:prune --dry-run` before deleting old retention data.
 
 Read more in [docs/recovery-monitoring-template.md](docs/recovery-monitoring-template.md), [docs/production-readiness.md](docs/production-readiness.md), and [docs/troubleshooting.md](docs/troubleshooting.md).
 
@@ -332,6 +332,7 @@ Host applications should depend on documented contracts and services rather than
 - `TalktoSecurityAuditor`
 - `talkto:retry-failed`
 - `talkto:dlq-reprocess`
+- `talkto:prune`
 - `talkto:recover-stale`
 - `talkto:report`
 - `talkto:trace`

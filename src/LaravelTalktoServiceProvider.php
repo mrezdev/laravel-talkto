@@ -15,6 +15,7 @@ use Mrezdev\LaravelTalkto\Console\Commands\ReportTalktoMessagesCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\ReprocessTalktoDeadLettersCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\SecurityAuditTalktoCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\TalktoAuditSecurityCommand;
+use Mrezdev\LaravelTalkto\Console\Commands\TalktoPruneCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\TalktoRecoverStaleCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\TraceTalktoMessageCommand;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackReceiverContract;
@@ -33,6 +34,7 @@ use Mrezdev\LaravelTalkto\Services\TalktoResultCallbackReceiver;
 use Mrezdev\LaravelTalkto\Services\TalktoResultCallbackSender;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 use Mrezdev\LaravelTalkto\Services\TalktoSecurityAuditor;
+use Mrezdev\LaravelTalkto\Services\TalktoPruningService;
 use Mrezdev\LaravelTalkto\Services\TalktoStaleMessageRecoveryService;
 use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelActionExecutor;
 use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelActiveHealthChecker;
@@ -60,6 +62,7 @@ class LaravelTalktoServiceProvider extends ServiceProvider
         $this->app->bind(TalktoRetryPolicy::class);
         $this->app->singleton(TalktoSecurityRedactor::class);
         $this->app->bind(TalktoSecurityAuditor::class);
+        $this->app->bind(TalktoPruningService::class);
         $this->app->bind(TalktoStaleMessageRecoveryService::class);
         $this->app->bind(TalktoDeadLetterQueue::class);
         $this->app->bind(TalktoMetricsCollector::class);
@@ -98,6 +101,7 @@ class LaravelTalktoServiceProvider extends ServiceProvider
                 TraceTalktoMessageCommand::class,
                 SecurityAuditTalktoCommand::class,
                 TalktoAuditSecurityCommand::class,
+                TalktoPruneCommand::class,
                 TalktoRecoverStaleCommand::class,
             ]);
         }
