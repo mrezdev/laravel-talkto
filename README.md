@@ -250,7 +250,7 @@ Laravel Talkto signs canonical message fields using HMAC SHA-256. Incoming reque
 
 By default, outgoing messages use backward-compatible v1 signatures and incoming verification accepts v1 and v2. Move to v2 sending only after both peers are ready. Use `talkto:security-audit` to review signature, timestamp, nonce, route middleware, peer secret, and command allowlist posture without mutating state. Never commit real shared secrets.
 
-Read more in [docs/security.md](docs/security.md).
+Read more in [docs/security.md](docs/security.md) and [docs/production-hardening.md](docs/production-hardening.md).
 
 ## Retry, DLQ, And Observability Summary
 
@@ -296,6 +296,7 @@ Common next stops:
 - [docs/command-contract-template.md](docs/command-contract-template.md)
 - [docs/callback-contract-template.md](docs/callback-contract-template.md)
 - [docs/recovery-monitoring-template.md](docs/recovery-monitoring-template.md)
+- [docs/production-hardening.md](docs/production-hardening.md)
 - [docs/production-rollout-template.md](docs/production-rollout-template.md)
 - [docs/PUBLIC_API.md](docs/PUBLIC_API.md)
 - [UPGRADE.md](UPGRADE.md)

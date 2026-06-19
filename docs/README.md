@@ -35,6 +35,7 @@ Use this page as the documentation map for Laravel Talkto. The root [README](../
 ## Security
 
 - [Security](security.md)
+- [Production hardening](production-hardening.md)
 - [Troubleshooting](troubleshooting.md)
 - [Production readiness](production-readiness.md)
 
@@ -58,6 +59,7 @@ Use this page as the documentation map for Laravel Talkto. The root [README](../
 
 ## Deployment / Production Rollout
 
+- [Production hardening](production-hardening.md)
 - [Production rollout template](production-rollout-template.md)
 - [Production readiness](production-readiness.md)
 - [Troubleshooting](troubleshooting.md)

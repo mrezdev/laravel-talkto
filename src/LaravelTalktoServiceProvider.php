@@ -2,6 +2,11 @@
 
 namespace Mrezdev\LaravelTalkto;
 
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\ServiceProvider;
 use Mrezdev\LaravelTalkto\Console\Commands\MakeTalktoIncomingCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\MakeTalktoIntegrationCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\MakeTalktoOutgoingCommand;
@@ -39,8 +44,6 @@ use Mrezdev\LaravelTalkto\Services\Scaffolding\TalktoIncomingScaffolder;
 use Mrezdev\LaravelTalkto\Services\Scaffolding\TalktoOutgoingScaffolder;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelJsonPresenter;
 use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
-use Illuminate\Support\Facades\Route;
-use Illuminate\Support\ServiceProvider;
 
 class LaravelTalktoServiceProvider extends ServiceProvider
 {
@@ -116,6 +119,7 @@ class LaravelTalktoServiceProvider extends ServiceProvider
         }
 
         if (config('talkto.routes.enabled', false)) {
+            $this->registerRouteRateLimiter();
             $this->loadRoutesFrom(__DIR__.'/../routes/api.php');
         }
 
@@ -144,5 +148,30 @@ class LaravelTalktoServiceProvider extends ServiceProvider
         }
 
         $route->group(__DIR__.'/../routes/panel.php');
+    }
+
+    private function registerRouteRateLimiter(): void
+    {
+        if (! (bool) config('talkto.routes.rate_limit.enabled', true)) {
+            return;
+        }
+
+        $name = config('talkto.routes.rate_limit.name', 'talkto');
+        $name = is_string($name) && $name !== '' ? $name : 'talkto';
+
+        $maxAttempts = (int) config('talkto.routes.rate_limit.max_attempts', 120);
+        $maxAttempts = $maxAttempts > 0 ? $maxAttempts : 120;
+
+        $decayMinutes = (int) config('talkto.routes.rate_limit.decay_minutes', 1);
+        $decayMinutes = $decayMinutes > 0 ? $decayMinutes : 1;
+
+        RateLimiter::for($name, function (Request $request) use ($maxAttempts, $decayMinutes): Limit {
+            $source = $request->header('X-Talkto-Source') ?: $request->input('source');
+            $key = is_string($source) && $source !== ''
+                ? 'source:'.$source
+                : 'ip:'.$request->ip();
+
+            return Limit::perMinute($maxAttempts, $decayMinutes)->by($key);
+        });
     }
 }

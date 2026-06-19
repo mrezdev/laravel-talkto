@@ -14,7 +14,23 @@ The package config is published as `config/talkto.php`. Defaults are conservativ
 
 `talkto.routes.enabled` and `talkto.migrations.enabled` are false by default, and the package service provider also fails closed if those keys are missing. Enable them only when the host application does not already provide the same tables or receive endpoint.
 
-When enabling package routes for public traffic, include throttle or rate-limit middleware in `talkto.routes.middleware` or wrap the package controller in host-owned routes.
+When package routes are enabled, the default route middleware is `api` plus Laravel's named Talkto throttle middleware, `throttle:talkto`. Set `TALKTO_ROUTE_MIDDLEWARE` to a comma-separated list only when the host wants to fully override the route middleware stack.
+
+```dotenv
+TALKTO_ROUTES_ENABLED=true
+TALKTO_ROUTE_MIDDLEWARE=api,throttle:talkto
+```
+
+Route rate limiting is configured under `talkto.routes.rate_limit`:
+
+```dotenv
+TALKTO_RATE_LIMIT_ENABLED=true
+TALKTO_RATE_LIMIT_NAME=talkto
+TALKTO_RATE_LIMIT_MAX_ATTEMPTS=120
+TALKTO_RATE_LIMIT_DECAY_MINUTES=1
+```
+
+Throttling helps reduce request volume, but it does not replace HMAC signatures, timestamp checks, replay protection, peer secrets, or command allowlists.
 
 ## Storage Connection And Tables
 
@@ -131,6 +147,8 @@ Use `allow_all_commands => true` only for trusted internal development cases whe
 ```
 
 Use `php artisan talkto:security-audit` to review signature, timestamp, nonce, route middleware, peer secret, and allowed command settings without mutating state.
+
+For a stricter new-integration profile, see [Production hardening](production-hardening.md).
 
 ## Callbacks
 

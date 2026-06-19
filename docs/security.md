@@ -36,7 +36,9 @@ Laravel Talkto centralizes safe output through `TalktoSecurityRedactor`. Traces,
 
 ## Route Rate Limiting
 
-Package routes are opt-in. If a host exposes them publicly, add throttle or rate-limit middleware through `talkto.routes.middleware` or a host-owned route wrapper.
+Package routes are opt-in. When enabled, their default middleware includes Laravel's named `throttle:talkto` limiter. Hosts can override the route middleware stack with `TALKTO_ROUTE_MIDDLEWARE` or use a host-owned route wrapper.
+
+Rate limiting is a volume control, not an authentication control. Keep signatures, timestamp checks, replay protection, source allowlists, and command allowlists enabled for production receivers.
 
 ## Security Audit
 

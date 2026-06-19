@@ -46,7 +46,18 @@ return [
         // integrations should prefer v2 when they can coordinate both sides.
         'require_signature' => env('TALKTO_REQUIRE_SIGNATURE', true),
         'signature_version' => env('TALKTO_SIGNATURE_VERSION', 'v1'),
-        'accept_versions' => ['v1', 'v2'],
+        'accept_versions' => (static function (): array {
+            $versions = env('TALKTO_ACCEPT_SIGNATURE_VERSIONS');
+
+            if (! is_string($versions) || trim($versions) === '') {
+                return ['v1', 'v2'];
+            }
+
+            return array_values(array_filter(
+                array_map('trim', explode(',', $versions)),
+                static fn (string $version): bool => $version !== ''
+            ));
+        })(),
         // Signed requests always require X-Talkto-Timestamp. require_timestamp
         // only controls unsigned requests when require_signature is false.
         'timestamp_tolerance_seconds' => (int) env('TALKTO_TIMESTAMP_TOLERANCE_SECONDS', 300),
@@ -84,11 +95,36 @@ return [
 
     'routes' => [
         // Disabled by default so existing apps can keep their own receive route.
-        // When enabling public package routes, add host throttle/rate-limit
-        // middleware appropriate for your deployment.
+        // When enabled, the default middleware uses Laravel's named Talkto
+        // throttle. Set TALKTO_ROUTE_MIDDLEWARE to a comma-separated list to
+        // fully override the route middleware stack.
         'enabled' => env('TALKTO_ROUTES_ENABLED', false),
         'prefix' => env('TALKTO_ROUTES_PREFIX', 'api'),
-        'middleware' => ['api'],
+        'middleware' => (static function (): array {
+            $middleware = env('TALKTO_ROUTE_MIDDLEWARE');
+
+            if (is_string($middleware) && trim($middleware) !== '') {
+                return array_values(array_filter(
+                    array_map('trim', explode(',', $middleware)),
+                    static fn (string $name): bool => $name !== ''
+                ));
+            }
+
+            $default = ['api'];
+
+            if (env('TALKTO_RATE_LIMIT_ENABLED', true)) {
+                $limiterName = env('TALKTO_RATE_LIMIT_NAME', 'talkto');
+                $default[] = 'throttle:'.(is_string($limiterName) && $limiterName !== '' ? $limiterName : 'talkto');
+            }
+
+            return $default;
+        })(),
+        'rate_limit' => [
+            'enabled' => env('TALKTO_RATE_LIMIT_ENABLED', true),
+            'name' => env('TALKTO_RATE_LIMIT_NAME', 'talkto'),
+            'max_attempts' => (int) env('TALKTO_RATE_LIMIT_MAX_ATTEMPTS', 120),
+            'decay_minutes' => (int) env('TALKTO_RATE_LIMIT_DECAY_MINUTES', 1),
+        ],
         'receive_uri' => env('TALKTO_RECEIVE_URI', 'talkto/receive'),
         'receive_name' => env('TALKTO_RECEIVE_NAME', 'talkto.receive'),
         'callback_uri' => env('TALKTO_CALLBACK_URI', 'talkto/callback'),
