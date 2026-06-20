@@ -1,19 +1,23 @@
 <?php
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackReceiverContract;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
 use Mrezdev\LaravelTalkto\Data\TalktoResultCallbackData;
+use Mrezdev\LaravelTalkto\Http\Controllers\TalktoResultCallbackController;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoNonce;
 use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
 use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
 use Mrezdev\LaravelTalkto\Services\TalktoResultCallbackEnvelopeBuilder;
 use Mrezdev\LaravelTalkto\Services\TalktoResultCallbackReceiver;
 use Mrezdev\LaravelTalkto\Services\TalktoResultCallbackSender;
+use Mrezdev\LaravelTalkto\Services\TalktoSigner;
 
 beforeEach(function (): void {
     $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');
@@ -58,6 +62,26 @@ test('callback sender builds signed envelope and posts to configured callback en
 
     expect(TalktoEvent::query()->where('message_id', 'p04-send-ok')->where('event_type', 'result_callback_sending_started')->exists())->toBeTrue()
         ->and(TalktoEvent::query()->where('message_id', 'p04-send-ok')->where('event_type', 'result_callback_sent')->exists())->toBeTrue();
+});
+
+test('default v2 callback sender builds nonce and payload hash headers', function (): void {
+    p04UseDefaultV2Security();
+    Http::fake(['https://source.test/callbacks/talkto' => Http::response(['accepted' => true], 200)]);
+
+    $message = p04IncomingMessage('p04-send-v2-default');
+
+    $summary = app(ResultCallbackSenderContract::class)->sendResult(
+        $message,
+        TalktoIncomingCommandResult::succeeded(['processed' => true])
+    );
+
+    expect($summary['sent'])->toBeTrue();
+
+    Http::assertSent(function ($request): bool {
+        return $request->hasHeader('X-Talkto-Signature-Version', 'v2')
+            && $request->hasHeader('X-Talkto-Nonce')
+            && $request->hasHeader('X-Talkto-Payload-Hash');
+    });
 });
 
 test('callback sender skips without sending when callbacks are disabled', function (): void {
@@ -112,6 +136,116 @@ test('callback receiver verifies signed callback and updates original outgoing m
         ->and($message->fresh()->overall_status)->toBe('completed')
         ->and(TalktoEvent::query()->where('message_id', 'p04-receive-success')->where('event_type', 'result_callback_received')->exists())->toBeTrue()
         ->and(TalktoEvent::query()->where('message_id', 'p04-receive-success')->where('event_type', 'result_callback_applied')->exists())->toBeTrue();
+});
+
+test('default v2 callback receiver accepts nonce and creates one nonce ledger row without exposing raw nonce', function (): void {
+    $message = p04OutgoingMessage('p04-receive-v2-success');
+    $rawNonce = 'callback-raw-nonce-never-exposed';
+    [$envelope, $headers] = p04SignedV2Callback(
+        $message,
+        TalktoIncomingCommandResult::succeeded(['processed' => true]),
+        ['nonce' => $rawNonce]
+    );
+
+    $result = app(ResultCallbackReceiverContract::class)->receiveResult($envelope, $headers);
+
+    $storedNonce = TalktoNonce::query()->sole();
+    $encodedResponse = json_encode($result);
+    $encodedEvents = json_encode(TalktoEvent::query()->get()->toArray());
+
+    expect($result)->toMatchArray([
+        'accepted' => true,
+        'status' => 'applied',
+        'original_message_id' => 'p04-receive-v2-success',
+        'duplicate' => false,
+    ])->and(TalktoNonce::query()->count())->toBe(1)
+        ->and($storedNonce->message_id)->toBe($envelope['message_id'])
+        ->and($storedNonce->nonce_hash)->not->toBe($rawNonce)
+        ->and(json_encode($storedNonce->toArray()))->not->toContain($rawNonce)
+        ->and($encodedResponse)->not->toContain($rawNonce)
+        ->and($encodedEvents)->not->toContain($rawNonce);
+});
+
+test('default v2 callback receiver rejects reused nonce with different callback message id', function (): void {
+    $message = p04OutgoingMessage('p04-receive-v2-replay');
+    $rawNonce = 'callback-reused-nonce-value';
+    [$firstEnvelope, $firstHeaders] = p04SignedV2Callback(
+        $message,
+        TalktoIncomingCommandResult::failedRetryable('Temporary failure.'),
+        ['callback_message_id' => 'callback-v2-replay-first', 'nonce' => $rawNonce]
+    );
+    [$secondEnvelope, $secondHeaders] = p04SignedV2Callback(
+        $message,
+        TalktoIncomingCommandResult::failedFinal('Final failure.'),
+        ['callback_message_id' => 'callback-v2-replay-second', 'nonce' => $rawNonce]
+    );
+
+    $first = app(ResultCallbackReceiverContract::class)->receiveResult($firstEnvelope, $firstHeaders);
+    $second = app(ResultCallbackReceiverContract::class)->receiveResult($secondEnvelope, $secondHeaders);
+
+    expect($first)->toMatchArray([
+        'accepted' => true,
+        'status' => 'applied',
+        'duplicate' => false,
+    ])->and($second)->toMatchArray([
+        'accepted' => false,
+        'status' => 'rejected',
+        'duplicate' => false,
+        'error' => 'replay_nonce_reused',
+    ])->and(TalktoNonce::query()->count())->toBe(1)
+        ->and($message->fresh()->destination_action_status)->toBe('failed_retryable')
+        ->and($message->fresh()->overall_status)->toBe('failed_retryable');
+});
+
+test('default v2 callback replay cannot regress status after later successful callback', function (): void {
+    $message = p04OutgoingMessage('p04-receive-v2-no-regress');
+    [$oldEnvelope, $oldHeaders] = p04SignedV2Callback(
+        $message,
+        TalktoIncomingCommandResult::failedRetryable('Temporary failure.'),
+        ['callback_message_id' => 'callback-v2-old', 'nonce' => 'callback-old-nonce']
+    );
+    [$newEnvelope, $newHeaders] = p04SignedV2Callback(
+        $message,
+        TalktoIncomingCommandResult::succeeded(['processed' => true]),
+        ['callback_message_id' => 'callback-v2-new', 'nonce' => 'callback-new-nonce']
+    );
+
+    $old = app(ResultCallbackReceiverContract::class)->receiveResult($oldEnvelope, $oldHeaders);
+    $new = app(ResultCallbackReceiverContract::class)->receiveResult($newEnvelope, $newHeaders);
+    $replay = app(ResultCallbackReceiverContract::class)->receiveResult($oldEnvelope, $oldHeaders);
+
+    expect($old['accepted'])->toBeTrue()
+        ->and($new['accepted'])->toBeTrue()
+        ->and($replay)->toMatchArray([
+            'accepted' => false,
+            'status' => 'rejected',
+            'duplicate' => false,
+            'error' => 'replay_nonce_reused',
+        ])->and($message->fresh()->destination_action_status)->toBe('succeeded')
+        ->and($message->fresh()->overall_status)->toBe('completed')
+        ->and(TalktoNonce::query()->count())->toBe(2);
+});
+
+test('callback route maps reused v2 nonce to conflict', function (): void {
+    $message = p04OutgoingMessage('p04-receive-v2-route-conflict');
+    [$envelope, $headers] = p04SignedV2Callback(
+        $message,
+        TalktoIncomingCommandResult::succeeded(),
+        ['nonce' => 'callback-route-reused-nonce']
+    );
+
+    app(ResultCallbackReceiverContract::class)->receiveResult($envelope, $headers);
+
+    $request = Request::create('/api/talkto/callback', 'POST', $envelope);
+
+    foreach ($headers as $name => $value) {
+        $request->headers->set($name, $value);
+    }
+
+    $response = app(TalktoResultCallbackController::class)->__invoke($request, app(ResultCallbackReceiverContract::class));
+
+    expect($response->getStatusCode())->toBe(409)
+        ->and($response->getData(true)['error'])->toBe('replay_nonce_reused');
 });
 
 test('callback receiver success clears stale failure fields', function (): void {
@@ -451,6 +585,86 @@ function p04SignedCallback(TalktoMessage $original, TalktoIncomingCommandResult 
     ]);
 
     return [$envelope, $headers];
+}
+
+function p04SignedV2Callback(TalktoMessage $original, TalktoIncomingCommandResult $result, array $overrides = []): array
+{
+    p04UseDefaultV2Security();
+
+    $incoming = new TalktoMessage;
+    $incoming->forceFill([
+        'message_id' => $original->message_id,
+        'source_service' => $original->source_service,
+        'target_service' => $original->target_service,
+        'command' => $original->command,
+        'correlation_id' => $original->correlation_id,
+        'business_key' => $original->business_key,
+        'idempotency_key' => $original->idempotency_key,
+    ]);
+
+    $envelope = TalktoResultCallbackData::fromIncomingMessageResult($incoming, $result, [
+        'callback_message_id' => $overrides['callback_message_id'] ?? 'callback-'.$original->message_id,
+    ])->toEnvelope();
+
+    if (isset($overrides['status'])) {
+        $envelope['payload']['status'] = $overrides['status'];
+    }
+
+    $envelope['payload_hash'] = app(TalktoPayloadHasher::class)->hash($envelope['payload']);
+
+    $timestamp = $overrides['timestamp'] ?? now()->toIso8601String();
+    $nonce = $overrides['nonce'] ?? 'callback-nonce-'.$envelope['message_id'];
+    $secret = 'shared-callback-secret';
+    $signature = app(TalktoSigner::class)->signV2(
+        (string) $timestamp,
+        (string) $nonce,
+        (string) $envelope['message_id'],
+        (string) $envelope['source'],
+        (string) $envelope['target'],
+        (string) $envelope['command'],
+        (string) $envelope['payload_hash'],
+        $secret
+    );
+
+    config([
+        'talkto.service' => 'source-service',
+        'talkto.security.signature_version' => 'v2',
+        'talkto.security.accept_versions' => ['v2'],
+        'talkto.security.replay_protection.require_nonce_for_v2' => true,
+        'talkto.incoming.target-service' => [
+            'secret' => $secret,
+            'allowed_commands' => [
+                'talkto.result' => [
+                    'driver' => 'none',
+                ],
+            ],
+        ],
+    ]);
+
+    return [$envelope, [
+        'X-Talkto-Signature' => $signature,
+        'X-Talkto-Timestamp' => (string) $timestamp,
+        'X-Talkto-Message-Id' => (string) $envelope['message_id'],
+        'X-Talkto-Protocol-Version' => '2',
+        'X-Talkto-Signature-Version' => 'v2',
+        'X-Talkto-Payload-Hash' => (string) $envelope['payload_hash'],
+        'X-Talkto-Nonce' => (string) $nonce,
+    ]];
+}
+
+function p04UseDefaultV2Security(): void
+{
+    config([
+        'talkto.service' => 'target-service',
+        'talkto.security.signature_version' => 'v2',
+        'talkto.security.accept_versions' => ['v2'],
+        'talkto.security.replay_protection.require_nonce_for_v2' => true,
+        'talkto.outgoing.source-service' => [
+            'url' => 'https://source.test',
+            'secret' => 'shared-callback-secret',
+            'callback_endpoint' => '/callbacks/talkto',
+        ],
+    ]);
 }
 
 class P04CustomCallbackSender implements ResultCallbackSenderContract

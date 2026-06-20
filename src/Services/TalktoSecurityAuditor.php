@@ -46,9 +46,9 @@ class TalktoSecurityAuditor
         $requireTimestamp = (bool) config('talkto.security.require_timestamp', true);
         $tolerance = (int) config('talkto.security.timestamp_tolerance_seconds', 300);
         $signatureVersion = config('talkto.security.signature_version', 'v2');
-        $acceptVersions = config('talkto.security.accept_versions', []);
+        $acceptVersions = config('talkto.security.accept_versions', ['v2']);
         $replayEnabled = (bool) config('talkto.security.replay_protection.enabled', true);
-        $requireNonceForV2 = (bool) config('talkto.security.replay_protection.require_nonce_for_v2', false);
+        $requireNonceForV2 = (bool) config('talkto.security.replay_protection.require_nonce_for_v2', true);
         $acceptedVersions = $this->validAcceptedVersions($acceptVersions);
         $hasInvalidAcceptedVersions = $this->hasInvalidAcceptedVersions($acceptVersions);
 

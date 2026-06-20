@@ -27,6 +27,7 @@ class TalktoResultCallbackController
             'unknown_source', 'wrong_target', 'command_not_allowed', 'missing_source_secret',
             'callbacks_disabled', 'callback_relationship_mismatch', 'callback_original_command_mismatch',
             'callback_parent_message_mismatch' => 403,
+            'replay_nonce_reused' => 409,
             'original_message_not_found' => 404,
             default => 422,
         };

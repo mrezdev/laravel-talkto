@@ -26,7 +26,13 @@ test('composer metadata is package release friendly', function (): void {
         ->and($composer['autoload']['psr-4']['Mrezdev\\LaravelTalkto\\'])->toBe('src/')
         ->and($composer['autoload-dev']['psr-4']['Mrezdev\\LaravelTalkto\\Tests\\'])->toBe('tests/')
         ->and($composer['extra']['laravel']['providers'])->toContain(LaravelTalktoServiceProvider::class)
-        ->and($composer['scripts']['test'])->toBe('pest');
+        ->and($composer['scripts']['test'])->toBe('pest')
+        ->and($composer['scripts']['analyse'])->toBe('phpstan analyse')
+        ->and($composer['scripts']['format:test'])->toBe('pint --test')
+        ->and($composer['scripts']['check:audit'])->toBe('composer audit')
+        ->and($composer['scripts']['check:composer'])->toBe('composer validate --strict')
+        ->and($composer['scripts']['release:check'])->toContain('composer validate --strict')
+        ->and($composer['scripts']['release:check'])->toContain('pest');
 });
 
 test('service provider exposes config and migration publish tags', function (): void {

@@ -54,9 +54,12 @@
     },
     "scripts": {
         "test": "pest",
+        "analyse": "phpstan analyse",
         "format": "pint",
         "format:test": "pint --test",
-        "analyse": "phpstan analyse"
+        "check:audit": "composer audit",
+        "check:composer": "composer validate --strict",
+        "release:check": "composer validate --strict && composer audit && pint --test && phpstan analyse && pest"
     },
     "config": {
         "allow-plugins": {

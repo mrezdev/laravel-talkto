@@ -5,23 +5,35 @@ The package includes `.github/workflows/tests.yml` for package repository pull r
 ## What CI Runs
 
 - Checks out the package repository.
-- Sets up supported PHP versions.
+- Sets up supported PHP and Laravel/Testbench matrix entries.
 - Removes any local `composer.lock` before dependency resolution.
 - Runs `composer validate --strict`.
-- Runs `composer install --prefer-dist --no-interaction --no-progress`.
+- Applies explicit matrix constraints for every `illuminate/*` component required by the package.
+- Applies the matching `orchestra/testbench` constraint.
+- Runs `composer update --prefer-dist --no-interaction --no-progress --with-all-dependencies`.
 - Runs `composer audit`.
 - Runs `vendor/bin/pint --test`.
 - Runs `vendor/bin/phpstan analyse`.
 - Runs the package test suite with `vendor/bin/pest`.
 
-This library package does not commit `composer.lock`. CI resolves dependencies per PHP and Laravel-compatible matrix entry so PHP 8.2 and PHP 8.3 can each install compatible dependency sets.
+The Linux package test matrix is:
+
+- PHP 8.2 with Laravel 12 components and Orchestra Testbench 10.
+- PHP 8.3 with Laravel 12 components and Orchestra Testbench 10.
+- PHP 8.4 with Laravel 12 components and Orchestra Testbench 10.
+- PHP 8.3 with Laravel 13 components and Orchestra Testbench 11.
+- PHP 8.4 with Laravel 13 components and Orchestra Testbench 11.
+
+CI also includes a focused `windows-pint` job on `windows-latest` to catch CRLF and Laravel Pint formatting issues on Windows.
+
+This library package does not commit `composer.lock`. CI resolves dependencies per PHP and Laravel-compatible matrix entry so each supported dependency set is checked independently.
 
 These commands should match the local package workflow:
 
 ```bash
 rm -f composer.lock
 composer validate --strict
-composer install --prefer-dist --no-interaction --no-progress
+composer update --prefer-dist --no-interaction --no-progress --with-all-dependencies
 composer audit
 vendor/bin/pint --test
 vendor/bin/phpstan analyse

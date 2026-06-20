@@ -50,7 +50,7 @@ class TalktoSignatureVerifier
 
             if (
                 $version === 'v2'
-                && (bool) config('talkto.security.replay_protection.require_nonce_for_v2', false)
+                && (bool) config('talkto.security.replay_protection.require_nonce_for_v2', true)
                 && $nonce === null
             ) {
                 return $this->failure(401, 'missing_nonce');

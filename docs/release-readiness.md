@@ -18,7 +18,7 @@ If dependencies are not installed yet:
 
 ```bash
 rm -f composer.lock
-composer install --prefer-dist --no-interaction --no-progress
+composer update --prefer-dist --no-interaction --no-progress --with-all-dependencies
 ```
 
 This library package does not commit `composer.lock`; dependency resolution should follow Composer constraints for the PHP/Laravel-compatible matrix being tested.
@@ -28,6 +28,27 @@ Fix formatting with:
 ```bash
 vendor/bin/pint
 ```
+
+Composer helper scripts are available for the same local workflow:
+
+```bash
+composer test
+composer analyse
+composer format:test
+composer check:composer
+composer check:audit
+composer release:check
+```
+
+## CI Gate
+
+Confirm GitHub Actions runs the supported package matrix:
+
+- PHP 8.2, PHP 8.3, and PHP 8.4 with Laravel 12 components and Orchestra Testbench 10.
+- PHP 8.3 and PHP 8.4 with Laravel 13 components and Orchestra Testbench 11.
+- The focused Windows Pint job on `windows-latest`.
+
+The workflow should run Composer validation, dependency resolution with matrix constraints, Composer audit, Pint, PHPStan, and Pest. The Windows job is intentionally focused on `vendor/bin/pint --test` equivalent formatting validation.
 
 ## Security And Production Gate
 
@@ -66,4 +87,13 @@ Confirm:
 - Repository metadata has no credentials, private support addresses, production URLs, or host-only business terms.
 - Packagist ownership and repository visibility are intentional.
 
-Create a Git tag only after the quality, security, operations, and metadata gates pass.
+## Manual External Release Steps
+
+These actions are external and must not be represented as completed by CI or Codex:
+
+- Create the GitHub Release for the intended tag.
+- Verify Packagist auto-update points to the intended tag.
+- Verify Packagist package metadata after release.
+- Set or verify GitHub topics: `laravel`, `php`, `hmac`, `service-to-service`, `webhook`, `outbox`, `inbox`, `idempotency`, `retry`, `dead-letter`, `dlq`, `observability`, `laravel-package`, and `distributed-systems`.
+
+Create a Git tag only after the quality, CI, security, operations, and metadata gates pass.

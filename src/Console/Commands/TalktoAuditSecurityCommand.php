@@ -135,7 +135,7 @@ class TalktoAuditSecurityCommand extends Command
             return;
         }
 
-        if ((bool) config('talkto.security.replay_protection.require_nonce_for_v2', false)) {
+        if ((bool) config('talkto.security.replay_protection.require_nonce_for_v2', true)) {
             $checks[] = $this->check('PASS', 'security.v2_nonce', 'v2 nonce enforcement is enabled.');
 
             return;

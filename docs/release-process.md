@@ -9,14 +9,18 @@ Package versions come from Git tags. `composer.json` intentionally has no static
 3. Update `CHANGELOG.md`.
 4. Run `composer validate --strict`.
 5. Run `composer audit`.
-6. Run `composer install --prefer-dist --no-interaction --no-progress` when dependencies are not installed.
+6. Run `composer update --prefer-dist --no-interaction --no-progress --with-all-dependencies` when dependencies are not installed.
 7. Run `vendor/bin/pint --test`.
 8. Run `vendor/bin/phpstan analyse`.
 9. Run `vendor/bin/pest`.
 10. Run `php artisan talkto:audit-security` in a host test app when applicable.
 11. Review docs, repository metadata, and leakage checks.
-12. Create a Git tag only after tests pass.
-13. Verify a host application can require the tag in a non-production branch.
+12. Confirm CI covers PHP 8.2/8.3/8.4 with Laravel 12, PHP 8.3/8.4 with Laravel 13, and the Windows Pint job.
+13. Create a Git tag only after tests pass.
+14. Create the GitHub Release for the intended tag.
+15. Verify Packagist auto-update points to the intended tag and package metadata is correct after release.
+16. Verify GitHub topics are set intentionally.
+17. Verify a host application can require the tag in a non-production branch.
 
 ## Tag Names
 
@@ -30,4 +34,4 @@ Use pre-release tags only when the owner wants an explicit preview channel, for 
 
 ## Public Release Gate
 
-A public release requires the MIT license files, security disclosure contact, maintainer identity, public support policy, Packagist ownership, stable API review, passing CI, and complete docs.
+A public release requires the MIT license files, security disclosure contact, maintainer identity, public support policy, Packagist ownership, stable API review, passing CI, and complete docs. CI and automation must not claim external manual actions, such as GitHub Release creation, GitHub Topics updates, or Packagist verification, as completed.

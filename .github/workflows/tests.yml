@@ -14,9 +14,27 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php-version:
-          - '8.2'
-          - '8.3'
+        include:
+          - name: PHP 8.2 / Laravel 12
+            php-version: '8.2'
+            laravel: '^12.0'
+            testbench: '^10.0'
+          - name: PHP 8.3 / Laravel 12
+            php-version: '8.3'
+            laravel: '^12.0'
+            testbench: '^10.0'
+          - name: PHP 8.4 / Laravel 12
+            php-version: '8.4'
+            laravel: '^12.0'
+            testbench: '^10.0'
+          - name: PHP 8.3 / Laravel 13
+            php-version: '8.3'
+            laravel: '^13.0'
+            testbench: '^11.0'
+          - name: PHP 8.4 / Laravel 13
+            php-version: '8.4'
+            laravel: '^13.0'
+            testbench: '^11.0'
 
     steps:
       - name: Checkout
@@ -36,8 +54,21 @@ jobs:
       - name: Validate Composer metadata
         run: composer validate --strict
 
+      - name: Apply matrix dependency constraints
+        shell: bash
+        run: |
+          composer require --no-update \
+            "illuminate/contracts:${{ matrix.laravel }}" \
+            "illuminate/console:${{ matrix.laravel }}" \
+            "illuminate/database:${{ matrix.laravel }}" \
+            "illuminate/http:${{ matrix.laravel }}" \
+            "illuminate/queue:${{ matrix.laravel }}" \
+            "illuminate/support:${{ matrix.laravel }}" \
+            "illuminate/validation:${{ matrix.laravel }}"
+          composer require --dev --no-update "orchestra/testbench:${{ matrix.testbench }}"
+
       - name: Install dependencies
-        run: composer install --prefer-dist --no-interaction --no-progress
+        run: composer update --prefer-dist --no-interaction --no-progress --with-all-dependencies
 
       - name: Audit Composer dependencies
         run: composer audit
@@ -50,3 +81,35 @@ jobs:
 
       - name: Run package tests
         run: vendor/bin/pest
+
+  windows-pint:
+    name: Windows Pint
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+          extensions: pdo_sqlite, sqlite3
+          coverage: none
+
+      - name: Remove library lock file
+        shell: pwsh
+        run: |
+          if (Test-Path composer.lock) {
+            Remove-Item composer.lock
+          }
+
+      - name: Validate Composer metadata
+        run: composer validate --strict
+
+      - name: Install dependencies
+        run: composer update --prefer-dist --no-interaction --no-progress --with-all-dependencies
+
+      - name: Check formatting on Windows
+        run: vendor\bin\pint --test

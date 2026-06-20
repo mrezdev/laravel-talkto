@@ -4,6 +4,9 @@
 
 ### Changed
 
+- Expanded GitHub Actions release validation to cover explicit PHP/Laravel/Testbench combinations for PHP 8.2/8.3/8.4 on Laravel 12 and PHP 8.3/8.4 on Laravel 13.
+- Hardened repository line-ending attributes and added a focused Windows Pint job to catch CRLF formatting drift.
+- Added Composer release validation scripts and updated release readiness documentation/checklists for local gates, CI matrix coverage, and manual GitHub/Packagist follow-up steps.
 - Changed package license to MIT for public Composer/Packagist distribution.
 - Because Laravel Talkto is still pre-1.0 and has no known production adopters, this release intentionally hardens the default security profile: new installs now use v2 signatures only and require v2 nonce replay protection by default. v1 remains available only as an explicit legacy/manual opt-in path.
 - Added an independent nonce replay ledger and migration that stores nonce hashes/fingerprints instead of raw nonces, payloads, or responses.

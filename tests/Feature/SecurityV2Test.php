@@ -506,6 +506,25 @@ test('v2 nonce can be required by config', function (): void {
         ->and($response->getData(true)['error'])->toBe('missing_nonce');
 });
 
+test('missing v2 nonce requirement config fails closed', function (): void {
+    config([
+        'talkto.security.signature_version' => 'v2',
+        'talkto.security.accept_versions' => ['v2'],
+        'talkto.security.replay_protection' => [
+            'enabled' => true,
+        ],
+    ]);
+
+    $payload = ['id' => 'security-missing-nonce-config'];
+    $headers = securityV2Headers('security-missing-nonce-config', $payload);
+    unset($headers['X-Talkto-Nonce']);
+
+    $response = securityReceive(securityEnvelope('security-missing-nonce-config', $payload), $headers);
+
+    expect($response->getStatusCode())->toBe(401)
+        ->and($response->getData(true)['error'])->toBe('missing_nonce');
+});
+
 test('accept versions config can reject v1 while accepting both versions by default', function (): void {
     config(['talkto.security.accept_versions' => ['v2']]);
     $response = securityReceive(

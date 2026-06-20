@@ -117,7 +117,7 @@ test('github workflow validates composer metadata installs dependencies and runs
     $workflow = p49ReadPackageFile('.github/workflows/tests.yml');
     $lockRemovalPosition = strpos($workflow, 'rm -f composer.lock');
     $validatePosition = strpos($workflow, 'composer validate --strict');
-    $installPosition = strpos($workflow, 'composer install --prefer-dist --no-interaction --no-progress');
+    $installPosition = strpos($workflow, 'composer update --prefer-dist --no-interaction --no-progress --with-all-dependencies');
     $auditPosition = strpos($workflow, 'composer audit');
 
     expect($workflow)->toContain('pull_request')
@@ -126,11 +126,37 @@ test('github workflow validates composer metadata installs dependencies and runs
         ->and($workflow)->toContain('shivammathur/setup-php')
         ->and($workflow)->toContain('rm -f composer.lock')
         ->and($workflow)->toContain('composer validate --strict')
-        ->and($workflow)->toContain('composer install --prefer-dist --no-interaction --no-progress')
+        ->and($workflow)->toContain('composer require --no-update')
+        ->and($workflow)->toContain('composer require --dev --no-update "orchestra/testbench:${{ matrix.testbench }}"')
+        ->and($workflow)->toContain('composer update --prefer-dist --no-interaction --no-progress --with-all-dependencies')
         ->and($workflow)->toContain('composer audit')
         ->and($workflow)->toContain('vendor/bin/pint --test')
         ->and($workflow)->toContain('vendor/bin/phpstan analyse')
-        ->and($workflow)->toContain('vendor/bin/pest');
+        ->and($workflow)->toContain('vendor/bin/pest')
+        ->and($workflow)->toContain('windows-latest')
+        ->and($workflow)->toContain('vendor\bin\pint --test');
+
+    foreach ([
+        "php-version: '8.2'\n            laravel: '^12.0'\n            testbench: '^10.0'",
+        "php-version: '8.3'\n            laravel: '^12.0'\n            testbench: '^10.0'",
+        "php-version: '8.4'\n            laravel: '^12.0'\n            testbench: '^10.0'",
+        "php-version: '8.3'\n            laravel: '^13.0'\n            testbench: '^11.0'",
+        "php-version: '8.4'\n            laravel: '^13.0'\n            testbench: '^11.0'",
+    ] as $matrixEntry) {
+        expect($workflow)->toContain($matrixEntry);
+    }
+
+    foreach ([
+        'illuminate/contracts',
+        'illuminate/console',
+        'illuminate/database',
+        'illuminate/http',
+        'illuminate/queue',
+        'illuminate/support',
+        'illuminate/validation',
+    ] as $component) {
+        expect($workflow)->toContain('"'.$component.':${{ matrix.laravel }}"');
+    }
 
     expect($lockRemovalPosition)->not->toBeFalse()
         ->and($validatePosition)->not->toBeFalse()
@@ -172,7 +198,14 @@ test('gitattributes keeps release docs and excludes development artifacts from a
     $attributes = p49ReadPackageFile('.gitattributes');
 
     foreach ([
-        '* text=auto',
+        '* text=auto eol=lf',
+        '*.php text eol=lf',
+        '*.md text eol=lf',
+        '*.blade.php text eol=lf',
+        '*.yml text eol=lf',
+        '*.json text eol=lf',
+        '*.lock text eol=lf',
+        '*.zip binary',
         '/.github/ export-ignore',
         '/tests/ export-ignore',
         '/vendor/ export-ignore',

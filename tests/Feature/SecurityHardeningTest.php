@@ -264,6 +264,27 @@ test('secure v2 only config produces no critical security auditor findings', fun
         ->and($audit['summary']['severity_counts']['error'])->toBe(0);
 });
 
+test('security auditor treats missing v2 nonce requirement as fail safe enabled', function (): void {
+    config([
+        'talkto.security.require_signature' => true,
+        'talkto.security.require_timestamp' => true,
+        'talkto.security.signature_version' => 'v2',
+        'talkto.security.accept_versions' => ['v2'],
+        'talkto.security.timestamp_tolerance_seconds' => 300,
+        'talkto.security.replay_protection' => [
+            'enabled' => true,
+        ],
+        'talkto.routes.enabled' => false,
+        'talkto.callbacks.enabled' => false,
+        'talkto.outgoing' => [],
+        'talkto.incoming' => [],
+    ]);
+
+    $codes = array_column(app(TalktoSecurityAuditor::class)->audit()->toArray()['findings'], 'code');
+
+    expect($codes)->not->toContain('v2_nonce_not_required');
+});
+
 test('security auditor reports legacy signature and dangerous source config findings', function (): void {
     config([
         'talkto.security.signature_version' => 'v1',

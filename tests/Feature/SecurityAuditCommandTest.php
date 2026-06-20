@@ -92,6 +92,16 @@ test('disabled v2 nonce requirement produces warn', function (): void {
         ->and(Artisan::output())->not->toContain('[FAIL]');
 });
 
+test('missing v2 nonce requirement config is treated as enabled', function (): void {
+    config(['talkto.security.replay_protection' => [
+        'enabled' => true,
+    ]]);
+
+    expect(Artisan::call('talkto:audit-security'))->toBe(0)
+        ->and(Artisan::output())->toContain('[PASS] v2 nonce enforcement is enabled.')
+        ->and(Artisan::output())->not->toContain('[WARN] v2 signatures are accepted without requiring a nonce.');
+});
+
 test('routes enabled without throttle middleware produces warn', function (): void {
     config([
         'talkto.routes.enabled' => true,

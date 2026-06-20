@@ -32,13 +32,20 @@ test('github actions workflow runs composer validation and pest on supported php
         ->and($workflow)->toContain('master')
         ->and($workflow)->toContain("'8.2'")
         ->and($workflow)->toContain("'8.3'")
+        ->and($workflow)->toContain("'8.4'")
+        ->and($workflow)->toContain("laravel: '^12.0'")
+        ->and($workflow)->toContain("laravel: '^13.0'")
+        ->and($workflow)->toContain("testbench: '^10.0'")
+        ->and($workflow)->toContain("testbench: '^11.0'")
         ->and($workflow)->toContain('rm -f composer.lock')
         ->and($workflow)->toContain('composer validate --strict')
-        ->and($workflow)->toContain('composer install --prefer-dist --no-interaction --no-progress')
+        ->and($workflow)->toContain('composer update --prefer-dist --no-interaction --no-progress --with-all-dependencies')
         ->and($workflow)->toContain('composer audit')
         ->and($workflow)->toContain('vendor/bin/pint --test')
         ->and($workflow)->toContain('vendor/bin/phpstan analyse')
-        ->and($workflow)->toContain('vendor/bin/pest');
+        ->and($workflow)->toContain('vendor/bin/pest')
+        ->and($workflow)->toContain('windows-pint')
+        ->and($workflow)->toContain('windows-latest');
 });
 
 test('documentation indexes and local markdown links resolve to existing files', function (): void {
@@ -122,7 +129,9 @@ test('release checklist includes final safety gates before tagging', function ()
         ->and($checklist)->toContain('talkto:security-audit')
         ->and($checklist)->toContain('talkto:trace')
         ->and($checklist)->toContain('no real secrets')
-        ->and($checklist)->toContain('tag only after local tests pass');
+        ->and($checklist)->toContain('tag only after local tests pass')
+        ->and($checklist)->toContain('Windows Pint job')
+        ->and($checklist)->toContain('Verify Packagist auto-update points to the intended tag');
 });
 
 test('github issue and pull request templates are release ready', function (): void {

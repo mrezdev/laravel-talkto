@@ -20,7 +20,8 @@ class TalktoResultCallbackReceiver implements ResultCallbackReceiverContract
     ];
 
     public function __construct(
-        private readonly TalktoSignatureVerifier $verifier
+        private readonly TalktoSignatureVerifier $verifier,
+        private readonly TalktoNonceLedger $nonceLedger
     ) {}
 
     public function receiveResult(array $envelope, array $headers = []): array
@@ -42,6 +43,12 @@ class TalktoResultCallbackReceiver implements ResultCallbackReceiverContract
             $this->recordRejectedIfLinked($callback, (string) ($verification['error'] ?? 'verification_failed'));
 
             return $this->rejected((string) ($verification['error'] ?? 'verification_failed'), $callback->callbackMessageId, $callback->originalMessageId);
+        }
+
+        if (! $this->consumeNonce($verification, $callback->callbackMessageId)) {
+            $this->recordRejectedIfLinked($callback, 'replay_nonce_reused');
+
+            return $this->rejected('replay_nonce_reused', $callback->callbackMessageId, $callback->originalMessageId);
         }
 
         if (! in_array($callback->status, self::VALID_CALLBACK_STATUSES, true)) {
@@ -254,6 +261,28 @@ class TalktoResultCallbackReceiver implements ResultCallbackReceiverContract
             'new_status' => $newStatus,
             'meta' => array_filter($meta, fn (mixed $value): bool => $value !== null),
         ]);
+    }
+
+    private function consumeNonce(array $verification, string $messageId): bool
+    {
+        if (($verification['signature_version'] ?? null) !== 'v2') {
+            return true;
+        }
+
+        $nonce = $verification['nonce'] ?? null;
+
+        if (! is_string($nonce) || $nonce === '') {
+            return ! (bool) config('talkto.security.replay_protection.enabled', true);
+        }
+
+        return $this->nonceLedger->consume(
+            'v2',
+            (string) ($verification['source'] ?? ''),
+            (string) ($verification['target'] ?? ''),
+            $nonce,
+            $messageId,
+            is_string($verification['signed_timestamp'] ?? null) ? $verification['signed_timestamp'] : null
+        );
     }
 
     private function messageModelClass(): string

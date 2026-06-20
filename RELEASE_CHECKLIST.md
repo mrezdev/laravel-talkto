@@ -5,7 +5,10 @@ Use this checklist before tagging or publishing Laravel Talkto.
 ## Code And Metadata
 
 - Run `composer validate --strict`.
+- Run `composer audit`.
 - Run `php -l` on changed PHP files.
+- Run `vendor/bin/pint --test`.
+- Run `vendor/bin/phpstan analyse`.
 - Run focused Pest tests for changed areas and core regressions.
 - Run the full package test suite before creating a tag.
 - Confirm `vendor/`, `node_modules/`, caches, and local ZIP artifacts are not included in the release.
@@ -36,6 +39,12 @@ Use this checklist before tagging or publishing Laravel Talkto.
 
 - Review `CHANGELOG.md`, `UPGRADE.md`, `SECURITY.md`, and README install docs.
 - Verify published docs and examples contain no real secrets, raw signatures, private credentials, or host-only language.
+- Confirm CI passes PHP 8.2/8.3/8.4 with Laravel 12, PHP 8.3/8.4 with Laravel 13, and the Windows Pint job.
 - Tag with the intended semantic version once release versioning is approved.
 - Push the tag only after local tests pass, then verify CI passes.
+- Create the GitHub Release for the intended tag.
+- Verify Packagist auto-update points to the intended tag.
+- Verify Packagist package metadata after release.
+- Verify GitHub topics: `laravel`, `php`, `hmac`, `service-to-service`, `webhook`, `outbox`, `inbox`, `idempotency`, `retry`, `dead-letter`, `dlq`, `observability`, `laravel-package`, and `distributed-systems`.
 - For Packagist or public release, confirm license, repository visibility, security contact, and package ownership first.
+- Do not represent external manual actions as completed by CI or Codex.
