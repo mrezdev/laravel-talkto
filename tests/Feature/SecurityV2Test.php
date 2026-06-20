@@ -6,10 +6,14 @@ use Illuminate\Support\Facades\Queue;
 use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoSignatureException;
 use Mrezdev\LaravelTalkto\Http\Controllers\TalktoReceiveController;
 use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoNonce;
+use Mrezdev\LaravelTalkto\Services\TalktoNonceLedger;
 use Mrezdev\LaravelTalkto\Services\TalktoOutgoingEnvelopeBuilder;
 use Mrezdev\LaravelTalkto\Services\TalktoOutgoingMessageFactory;
 use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
+use Mrezdev\LaravelTalkto\Services\TalktoSecurityAuditor;
 use Mrezdev\LaravelTalkto\Services\TalktoSignatureVerifier;
 use Mrezdev\LaravelTalkto\Services\TalktoSigner;
 
@@ -34,6 +38,61 @@ beforeEach(function (): void {
             ],
         ],
     ]);
+});
+
+test('default v2 security profile accepts nonce and rejects missing or modified nonce', function (): void {
+    Queue::fake();
+    config([
+        'talkto.security.signature_version' => 'v2',
+        'talkto.security.accept_versions' => ['v2'],
+        'talkto.security.replay_protection.require_nonce_for_v2' => true,
+    ]);
+
+    $validPayload = ['id' => 'security-default-v2'];
+    $valid = securityReceive(
+        securityEnvelope('security-default-v2', $validPayload),
+        securityV2Headers('security-default-v2', $validPayload)
+    );
+
+    $missingPayload = ['id' => 'security-default-v2-missing'];
+    $missingHeaders = securityV2Headers('security-default-v2-missing', $missingPayload);
+    unset($missingHeaders['X-Talkto-Nonce']);
+    $missing = securityReceive(securityEnvelope('security-default-v2-missing', $missingPayload), $missingHeaders);
+
+    $modifiedPayload = ['id' => 'security-default-v2-modified'];
+    $modifiedHeaders = securityV2Headers('security-default-v2-modified', $modifiedPayload);
+    $modifiedHeaders['X-Talkto-Nonce'] = 'changed-nonce';
+    $modified = securityReceive(securityEnvelope('security-default-v2-modified', $modifiedPayload), $modifiedHeaders);
+
+    expect($valid->getStatusCode())->toBe(202)
+        ->and($missing->getStatusCode())->toBe(401)
+        ->and($missing->getData(true)['error'])->toBe('missing_nonce')
+        ->and($modified->getStatusCode())->toBe(401)
+        ->and($modified->getData(true)['error'])->toBe('invalid_signature');
+});
+
+test('v1 is rejected by default and passes only when explicitly accepted', function (): void {
+    config([
+        'talkto.security.signature_version' => 'v2',
+        'talkto.security.accept_versions' => ['v2'],
+        'talkto.security.replay_protection.require_nonce_for_v2' => true,
+    ]);
+
+    $rejected = securityReceive(
+        securityEnvelope('security-v1-default-rejected', ['id' => 'security-v1-default-rejected']),
+        securityV1Headers('security-v1-default-rejected', ['id' => 'security-v1-default-rejected'])
+    );
+
+    config(['talkto.security.accept_versions' => ['v1']]);
+
+    $accepted = securityReceive(
+        securityEnvelope('security-v1-explicit-accepted', ['id' => 'security-v1-explicit-accepted']),
+        securityV1Headers('security-v1-explicit-accepted', ['id' => 'security-v1-explicit-accepted'])
+    );
+
+    expect($rejected->getStatusCode())->toBe(401)
+        ->and($rejected->getData(true)['error'])->toBe('unsupported_signature_version')
+        ->and($accepted->getStatusCode())->toBe(202);
 });
 
 test('v1 signed request remains backward compatible without version header', function (): void {
@@ -289,6 +348,149 @@ test('replay protection uses message id ledger and v2 nonce is signed', function
 
     expect($response->getStatusCode())->toBe(401)
         ->and($response->getData(true)['error'])->toBe('invalid_signature');
+});
+
+test('nonce ledger stores hashes and rejects reused v2 nonce with different message id', function (): void {
+    Queue::fake();
+    config([
+        'talkto.security.signature_version' => 'v2',
+        'talkto.security.accept_versions' => ['v2'],
+        'talkto.security.replay_protection.require_nonce_for_v2' => true,
+    ]);
+
+    $nonce = 'raw-shared-nonce-value';
+    $firstPayload = ['id' => 'security-nonce-ledger-first'];
+    $secondPayload = ['id' => 'security-nonce-ledger-second'];
+
+    $first = securityReceive(
+        securityEnvelope('security-nonce-ledger-first', $firstPayload),
+        securityV2Headers('security-nonce-ledger-first', $firstPayload, nonce: $nonce)
+    );
+    $second = securityReceive(
+        securityEnvelope('security-nonce-ledger-second', $secondPayload),
+        securityV2Headers('security-nonce-ledger-second', $secondPayload, nonce: $nonce)
+    );
+
+    $stored = TalktoNonce::query()->firstOrFail();
+
+    expect($first->getStatusCode())->toBe(202)
+        ->and($second->getStatusCode())->toBe(409)
+        ->and($second->getData(true))->toMatchArray([
+            'received' => false,
+            'status' => 'rejected',
+            'error' => 'replay_nonce_reused',
+        ])
+        ->and(TalktoNonce::query()->count())->toBe(1)
+        ->and($stored->nonce_hash)->toBe(app(TalktoNonceLedger::class)->nonceHash('v2', 'source-service', 'target-service', $nonce))
+        ->and($stored->nonce_hash)->not->toBe($nonce)
+        ->and(json_encode($second->getData(true)))->not->toContain($nonce);
+});
+
+test('reusing v2 nonce with changed payload is rejected before business execution', function (): void {
+    Queue::fake();
+    config([
+        'talkto.security.signature_version' => 'v2',
+        'talkto.security.accept_versions' => ['v2'],
+        'talkto.security.replay_protection.require_nonce_for_v2' => true,
+    ]);
+
+    $nonce = 'raw-payload-change-nonce';
+    $originalPayload = ['id' => 'original'];
+    $changedPayload = ['id' => 'changed'];
+
+    $first = securityReceive(
+        securityEnvelope('security-nonce-changed-payload-first', $originalPayload),
+        securityV2Headers('security-nonce-changed-payload-first', $originalPayload, nonce: $nonce)
+    );
+    $changed = securityReceive(
+        securityEnvelope('security-nonce-changed-payload-second', $changedPayload),
+        securityV2Headers('security-nonce-changed-payload-second', $originalPayload, nonce: $nonce)
+    );
+
+    expect($first->getStatusCode())->toBe(202)
+        ->and($changed->getStatusCode())->toBe(422)
+        ->and($changed->getData(true)['error'])->toBe('payload_hash_mismatch');
+
+    Queue::assertPushed(ProcessIncomingTalktoMessage::class, 1);
+});
+
+test('same message id with new nonce keeps existing idempotent duplicate behavior', function (): void {
+    Queue::fake();
+    config([
+        'talkto.security.signature_version' => 'v2',
+        'talkto.security.accept_versions' => ['v2'],
+        'talkto.security.replay_protection.require_nonce_for_v2' => true,
+    ]);
+
+    $payload = ['id' => 'security-same-message-new-nonce'];
+    $envelope = securityEnvelope('security-same-message-new-nonce', $payload);
+
+    $first = securityReceive($envelope, securityV2Headers('security-same-message-new-nonce', $payload, nonce: 'nonce-one'));
+    $second = securityReceive($envelope, securityV2Headers('security-same-message-new-nonce', $payload, nonce: 'nonce-two'));
+
+    expect($first->getStatusCode())->toBe(202)
+        ->and($second->getStatusCode())->toBe(200)
+        ->and($second->getData(true)['status'])->toBe('already_received')
+        ->and(TalktoMessage::query()->where('message_id', 'security-same-message-new-nonce')->count())->toBe(1)
+        ->and(TalktoNonce::query()->count())->toBe(1);
+
+    Queue::assertPushed(ProcessIncomingTalktoMessage::class, 1);
+});
+
+test('nonce replay ledger can be disabled explicitly', function (): void {
+    Queue::fake();
+    config([
+        'talkto.security.signature_version' => 'v2',
+        'talkto.security.accept_versions' => ['v2'],
+        'talkto.security.replay_protection.enabled' => false,
+        'talkto.security.replay_protection.require_nonce_for_v2' => true,
+    ]);
+
+    $nonce = 'disabled-ledger-shared-nonce';
+
+    $first = securityReceive(
+        securityEnvelope('security-disabled-ledger-first', ['id' => 'security-disabled-ledger-first']),
+        securityV2Headers('security-disabled-ledger-first', ['id' => 'security-disabled-ledger-first'], nonce: $nonce)
+    );
+    $second = securityReceive(
+        securityEnvelope('security-disabled-ledger-second', ['id' => 'security-disabled-ledger-second']),
+        securityV2Headers('security-disabled-ledger-second', ['id' => 'security-disabled-ledger-second'], nonce: $nonce)
+    );
+
+    expect($first->getStatusCode())->toBe(202)
+        ->and($second->getStatusCode())->toBe(202)
+        ->and(TalktoNonce::query()->count())->toBe(0);
+
+    Queue::assertPushed(ProcessIncomingTalktoMessage::class, 2);
+});
+
+test('raw nonce is not exposed in nonce storage events responses or audit output', function (): void {
+    config([
+        'talkto.security.signature_version' => 'v2',
+        'talkto.security.accept_versions' => ['v2'],
+        'talkto.security.replay_protection.require_nonce_for_v2' => true,
+    ]);
+
+    $nonce = 'raw-nonce-never-exposed';
+    $payload = ['id' => 'security-raw-nonce-safe'];
+    $first = securityReceive(
+        securityEnvelope('security-raw-nonce-safe', $payload),
+        securityV2Headers('security-raw-nonce-safe', $payload, nonce: $nonce)
+    );
+    $replay = securityReceive(
+        securityEnvelope('security-raw-nonce-replay', ['id' => 'security-raw-nonce-replay']),
+        securityV2Headers('security-raw-nonce-replay', ['id' => 'security-raw-nonce-replay'], nonce: $nonce)
+    );
+
+    $encodedEvents = json_encode(TalktoEvent::query()->get()->toArray());
+    $encodedAudit = json_encode(app(TalktoSecurityAuditor::class)->audit()->toArray());
+
+    expect($first->getStatusCode())->toBe(202)
+        ->and($replay->getStatusCode())->toBe(409)
+        ->and(TalktoNonce::query()->value('nonce_hash'))->not->toBe($nonce)
+        ->and(json_encode($replay->getData(true)))->not->toContain($nonce)
+        ->and($encodedEvents)->not->toContain($nonce)
+        ->and($encodedAudit)->not->toContain($nonce);
 });
 
 test('v2 nonce can be required by config', function (): void {

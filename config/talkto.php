@@ -6,6 +6,7 @@ use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoNonce;
 use Mrezdev\LaravelTalkto\Services\TalktoFlowBuilder;
 
 return [
@@ -21,6 +22,7 @@ return [
         'attempt' => TalktoAttempt::class,
         'event' => TalktoEvent::class,
         'dead_letter' => TalktoDeadLetter::class,
+        'nonce' => TalktoNonce::class,
     ],
 
     'database' => [
@@ -37,6 +39,7 @@ return [
             'attempts' => env('TALKTO_ATTEMPTS_TABLE', 'talkto_attempts'),
             'events' => env('TALKTO_EVENTS_TABLE', 'talkto_events'),
             'dead_letters' => env('TALKTO_DEAD_LETTERS_TABLE', 'talkto_dead_letters'),
+            'nonces' => env('TALKTO_NONCES_TABLE', 'talkto_nonces'),
         ],
     ],
 
@@ -49,16 +52,16 @@ return [
     ],
 
     'security' => [
-        // v1 remains the default for backward compatibility. Enable v2 only
-        // after both peers understand the version and nonce headers. New peer
-        // integrations should prefer v2 when they can coordinate both sides.
+        // v2 is the default and recommended production signing mode. v1 is
+        // legacy/manual opt-in only for rare interoperability, debugging, or
+        // migration cases; new projects should not start with v1.
         'require_signature' => env('TALKTO_REQUIRE_SIGNATURE', true),
-        'signature_version' => env('TALKTO_SIGNATURE_VERSION', 'v1'),
+        'signature_version' => env('TALKTO_SIGNATURE_VERSION', 'v2'),
         'accept_versions' => (static function (): array {
             $versions = env('TALKTO_ACCEPT_SIGNATURE_VERSIONS');
 
             if (! is_string($versions) || trim($versions) === '') {
-                return ['v1', 'v2'];
+                return ['v2'];
             }
 
             return array_values(array_filter(
@@ -74,9 +77,9 @@ return [
         'replay_protection' => [
             'enabled' => env('TALKTO_REPLAY_PROTECTION_ENABLED', true),
             'use_message_id' => true,
-            // Keep false for backward compatibility. Require v2 nonces after
-            // every peer sends X-Talkto-Nonce.
-            'require_nonce_for_v2' => env('TALKTO_REQUIRE_V2_NONCE', false),
+            // Required by default for v2. Set TALKTO_REQUIRE_V2_NONCE=false
+            // only for explicit legacy/manual compatibility work.
+            'require_nonce_for_v2' => env('TALKTO_REQUIRE_V2_NONCE', true),
         ],
         'nonce_header' => 'X-Talkto-Nonce',
         'signature_version_header' => 'X-Talkto-Signature-Version',
@@ -226,6 +229,7 @@ return [
         'attempts_days' => (int) env('TALKTO_RETENTION_ATTEMPTS_DAYS', 90),
         'events_days' => (int) env('TALKTO_RETENTION_EVENTS_DAYS', 30),
         'dead_letters_days' => (int) env('TALKTO_RETENTION_DEAD_LETTERS_DAYS', 180),
+        'nonces_days' => (int) env('TALKTO_RETENTION_NONCES_DAYS', 7),
     ],
 
     'panel' => [

@@ -28,6 +28,7 @@ class TalktoSecurityAuditor
         $this->auditIncomingSources($findings);
         $this->auditRoutes($findings);
         $this->auditCallbacks($findings);
+        $this->auditPanel($findings);
 
         $counts = $this->severityCounts($findings);
         $ok = $counts['error'] === 0 && $counts['critical'] === 0;
@@ -44,7 +45,7 @@ class TalktoSecurityAuditor
         $requireSignature = (bool) config('talkto.security.require_signature', true);
         $requireTimestamp = (bool) config('talkto.security.require_timestamp', true);
         $tolerance = (int) config('talkto.security.timestamp_tolerance_seconds', 300);
-        $signatureVersion = config('talkto.security.signature_version', 'v1');
+        $signatureVersion = config('talkto.security.signature_version', 'v2');
         $acceptVersions = config('talkto.security.accept_versions', []);
         $replayEnabled = (bool) config('talkto.security.replay_protection.enabled', true);
         $requireNonceForV2 = (bool) config('talkto.security.replay_protection.require_nonce_for_v2', false);
@@ -92,15 +93,15 @@ class TalktoSecurityAuditor
                 'error',
                 'invalid_signature_version',
                 'Configured outgoing signature version is not supported.',
-                'Use v1 for backward compatibility or v2 for new peers.',
+                'Use v2 in production. v1 is legacy/manual opt-in only.',
                 ['signature_version' => $signatureVersion]
             );
         } elseif ($signatureVersion === 'v1') {
             $findings[] = $this->finding(
-                'info',
-                'signature_v1_default',
-                'Outgoing signatures use backward-compatible v1.',
-                'Use v2 for new peers after both services support the v2 headers.'
+                'warning',
+                'outgoing_signature_v1',
+                'Outgoing signatures use legacy v1.',
+                'Use v2-only signatures for production. v1 should be a manual legacy/interoperability opt-in only.'
             );
         }
 
@@ -119,7 +120,17 @@ class TalktoSecurityAuditor
                 'warning',
                 'accepts_v1_signatures',
                 'Incoming verification accepts v1 signatures.',
-                'Keep v1 only while old peers still need it; prefer v2 for new peers.',
+                'Accept v1 only as an explicit legacy/manual opt-in. New projects should use v2-only signatures with required nonces.',
+                ['accept_versions' => $acceptedVersions]
+            );
+        }
+
+        if (in_array('v1', $acceptedVersions, true) && in_array('v2', $acceptedVersions, true)) {
+            $findings[] = $this->finding(
+                'warning',
+                'accepts_v1_v2_signatures',
+                'Incoming verification accepts both v1 and v2 signatures.',
+                'Accept both versions only for rare interoperability, debugging, or migration windows; prefer v2-only in production.',
                 ['accept_versions' => $acceptedVersions]
             );
         } elseif ($acceptedVersions === ['v2']) {
@@ -146,7 +157,7 @@ class TalktoSecurityAuditor
                 'warning',
                 'v2_nonce_not_required',
                 'v2 signatures are accepted without requiring a nonce.',
-                'Require v2 nonces after all peers support the v2 nonce header.'
+                'Require v2 nonces for production so signed requests cannot be replayed.'
             );
         }
     }
@@ -243,6 +254,16 @@ class TalktoSecurityAuditor
                     ['source' => $name]
                 );
             }
+
+            if (($source['allow_all_commands'] ?? false) === true) {
+                $findings[] = $this->finding(
+                    'warning',
+                    'incoming_source_all_commands_allowed',
+                    'Incoming source explicitly allows all commands.',
+                    'Use explicit allowed_commands entries for production sources.',
+                    ['source' => $name]
+                );
+            }
         }
     }
 
@@ -294,6 +315,58 @@ class TalktoSecurityAuditor
                 'Callback command is empty or invalid.',
                 'Configure talkto.callbacks.command with the command peers expect.',
                 ['command' => $command]
+            );
+        }
+    }
+
+    private function auditPanel(array &$findings): void
+    {
+        if (! (bool) config('talkto.panel.enabled', false)) {
+            return;
+        }
+
+        $middleware = config('talkto.panel.route.middleware', []);
+        $middleware = is_array($middleware) ? $middleware : [$middleware];
+        $production = app()->environment('production');
+
+        $hasAuth = collect($middleware)->contains(function (mixed $item): bool {
+            return is_string($item) && (str_contains($item, 'auth') || str_contains($item, 'can') || str_contains($item, 'signed'));
+        });
+
+        if (! $hasAuth) {
+            $findings[] = $this->finding(
+                $production ? 'error' : 'warning',
+                'panel_without_auth_middleware',
+                'Talkto panel is enabled without auth-like middleware.',
+                'Keep the panel behind trusted host authentication or authorization middleware.',
+                ['middleware' => array_values($middleware)]
+            );
+        }
+
+        if (! (bool) config('talkto.panel.authorization.enabled', true)) {
+            $findings[] = $this->finding(
+                $production ? 'error' : 'warning',
+                'panel_authorization_disabled',
+                'Talkto panel authorization is disabled.',
+                'Keep panel authorization enabled unless host middleware fully replaces it.'
+            );
+        }
+
+        if ((bool) config('talkto.panel.messages.show_payload', false) || (bool) config('talkto.panel.messages.show_response', false)) {
+            $findings[] = $this->finding(
+                'warning',
+                'panel_payload_response_visible',
+                'Talkto panel payload or response visibility is enabled.',
+                'Keep payload and response body visibility disabled unless operators are explicitly authorized to inspect sensitive host data.'
+            );
+        }
+
+        if ((bool) config('talkto.panel.health.active_checks.enabled', false) || (bool) config('talkto.panel.actions.active_health_checks_enabled', false)) {
+            $findings[] = $this->finding(
+                $production ? 'warning' : 'info',
+                'panel_active_health_checks_enabled',
+                'Talkto panel active health checks are enabled.',
+                'Use active health checks only when outbound checks and target URLs are intentionally approved.'
             );
         }
     }

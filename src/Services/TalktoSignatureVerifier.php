@@ -130,6 +130,11 @@ class TalktoSignatureVerifier
             'ok' => true,
             'status' => 200,
             'error' => null,
+            'signature_version' => $version,
+            'signed_timestamp' => $timestamp,
+            'nonce' => $nonce,
+            'source' => $source,
+            'target' => $target,
         ];
     }
 
@@ -178,10 +183,10 @@ class TalktoSignatureVerifier
 
     private function acceptedVersions(): array
     {
-        $versions = config('talkto.security.accept_versions', ['v1', 'v2']);
+        $versions = config('talkto.security.accept_versions', ['v2']);
 
         if (! is_array($versions) || $versions === []) {
-            return ['v1'];
+            return ['v2'];
         }
 
         return array_values(array_filter($versions, fn (mixed $version): bool => is_string($version) && $version !== ''));

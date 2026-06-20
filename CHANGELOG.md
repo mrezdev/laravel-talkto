@@ -5,6 +5,8 @@
 ### Changed
 
 - Changed package license to MIT for public Composer/Packagist distribution.
+- Because Laravel Talkto is still pre-1.0 and has no known production adopters, this release intentionally hardens the default security profile: new installs now use v2 signatures only and require v2 nonce replay protection by default. v1 remains available only as an explicit legacy/manual opt-in path.
+- Added an independent nonce replay ledger and migration that stores nonce hashes/fingerprints instead of raw nonces, payloads, or responses.
 
 ### Reliability Fixes
 
@@ -34,7 +36,7 @@
 - Added incoming handler registry support for config and programmatic handlers.
 - Added outgoing target registry support for config, aliases, legacy target keys, and programmatic targets.
 - Moved receive, incoming processing, and outgoing send orchestration into pipelines without changing public commands or routes.
-- Added versioned signatures with backward-compatible v1 defaults and opt-in v2 signing.
+- Added versioned signatures. Defaults now use v2-only signing, with v1 available only as explicit legacy/manual opt-in.
 - Added read-only observability metrics, health summaries, and `talkto:report`.
 - Hardened release docs, publish tags, CI validation, public API inventory, and compatibility tests.
 - Added actual private package extraction docs, first private repository commit and tag plans, and the host VCS migration next-step plan.

@@ -37,7 +37,7 @@ beforeEach(function (): void {
     ]);
 });
 
-test('v1 security remains the default and missing version header verifies as v1', function (): void {
+test('legacy v1 opt in keeps missing version header verification compatible', function (): void {
     config([
         'talkto.outgoing.target-app' => [
             'url' => 'https://target.test',
@@ -74,7 +74,7 @@ test('v1 security remains the default and missing version header verifies as v1'
     ]);
 });
 
-test('v2 signing is opt in and accepted versions control verification', function (): void {
+test('accepted versions control legacy v1 and v2 verification', function (): void {
     config([
         'talkto.security.signature_version' => 'v2',
         'talkto.outgoing.target-app' => [

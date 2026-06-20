@@ -7,6 +7,7 @@ use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoNonce;
 
 beforeEach(function (): void {
     config([
@@ -15,6 +16,7 @@ beforeEach(function (): void {
         'talkto.database.tables.attempts' => 'talkto_attempts',
         'talkto.database.tables.events' => 'talkto_events',
         'talkto.database.tables.dead_letters' => 'talkto_dead_letters',
+        'talkto.database.tables.nonces' => 'talkto_nonces',
         'talkto.dead_letter.table' => 'talkto_dead_letters',
     ]);
 });
@@ -26,7 +28,8 @@ test('talkto migrations create default tables on default connection', function (
         ->and(Schema::hasTable('talkto_messages'))->toBeTrue()
         ->and(Schema::hasTable('talkto_attempts'))->toBeTrue()
         ->and(Schema::hasTable('talkto_events'))->toBeTrue()
-        ->and(Schema::hasTable('talkto_dead_letters'))->toBeTrue();
+        ->and(Schema::hasTable('talkto_dead_letters'))->toBeTrue()
+        ->and(Schema::hasTable('talkto_nonces'))->toBeTrue();
 });
 
 test('talkto migrations create custom tables on configured connection', function (): void {
@@ -40,10 +43,12 @@ test('talkto migrations create custom tables on configured connection', function
         ->and(Schema::connection('talkto_testing')->hasTable('custom_talkto_attempts'))->toBeTrue()
         ->and(Schema::connection('talkto_testing')->hasTable('custom_talkto_events'))->toBeTrue()
         ->and(Schema::connection('talkto_testing')->hasTable('custom_talkto_dead_letters'))->toBeTrue()
+        ->and(Schema::connection('talkto_testing')->hasTable('custom_talkto_nonces'))->toBeTrue()
         ->and(Schema::hasTable('custom_talkto_messages'))->toBeFalse()
         ->and(Schema::hasTable('custom_talkto_attempts'))->toBeFalse()
         ->and(Schema::hasTable('custom_talkto_events'))->toBeFalse()
-        ->and(Schema::hasTable('custom_talkto_dead_letters'))->toBeFalse();
+        ->and(Schema::hasTable('custom_talkto_dead_letters'))->toBeFalse()
+        ->and(Schema::hasTable('custom_talkto_nonces'))->toBeFalse();
 });
 
 test('talkto migrations and models work together on configured connection and tables', function (): void {
@@ -98,10 +103,33 @@ test('talkto migrations and models work together on configured connection and ta
         'status' => 'open',
     ]);
 
+    TalktoNonce::query()->create([
+        'nonce_hash' => str_repeat('a', 64),
+        'source_service' => 'source',
+        'target_service' => 'testing',
+        'message_id' => $message->message_id,
+        'signature_version' => 'v2',
+        'signed_timestamp' => now()->toIso8601String(),
+        'used_at' => now(),
+        'expires_at' => now()->addDays(7),
+    ]);
+
     expect(DB::connection('talkto_testing')->table('custom_talkto_messages')->count())->toBe(1)
         ->and(DB::connection('talkto_testing')->table('custom_talkto_attempts')->count())->toBe(1)
         ->and(DB::connection('talkto_testing')->table('custom_talkto_events')->count())->toBe(1)
-        ->and(DB::connection('talkto_testing')->table('custom_talkto_dead_letters')->count())->toBe(1);
+        ->and(DB::connection('talkto_testing')->table('custom_talkto_dead_letters')->count())->toBe(1)
+        ->and(DB::connection('talkto_testing')->table('custom_talkto_nonces')->count())->toBe(1);
+});
+
+test('nonces migration includes hashed nonce ledger columns and indexes', function (): void {
+    $migration = file_get_contents(__DIR__.'/../../database/migrations/2026_06_20_000001_create_talkto_nonces_table.php') ?: '';
+
+    expect($migration)->toContain("\$table->string('nonce_hash', 64)->unique();")
+        ->and($migration)->toContain("\$table->string('source_service', 80)->index();")
+        ->and($migration)->toContain("\$table->string('target_service', 80)->index();")
+        ->and($migration)->toContain("\$table->string('message_id', 100)->nullable()->index();")
+        ->and($migration)->not->toContain('payload')
+        ->and($migration)->not->toContain('response');
 });
 
 test('messages migration includes idempotency fingerprint and query indexes', function (): void {
@@ -151,7 +179,8 @@ test('talkto migration down methods drop custom tables from configured connectio
     expect(Schema::connection('talkto_testing')->hasTable('custom_talkto_messages'))->toBeTrue()
         ->and(Schema::connection('talkto_testing')->hasTable('custom_talkto_attempts'))->toBeTrue()
         ->and(Schema::connection('talkto_testing')->hasTable('custom_talkto_events'))->toBeTrue()
-        ->and(Schema::connection('talkto_testing')->hasTable('custom_talkto_dead_letters'))->toBeTrue();
+        ->and(Schema::connection('talkto_testing')->hasTable('custom_talkto_dead_letters'))->toBeTrue()
+        ->and(Schema::connection('talkto_testing')->hasTable('custom_talkto_nonces'))->toBeTrue();
 
     foreach (array_reverse($migrations) as $migration) {
         $migration->down();
@@ -160,7 +189,8 @@ test('talkto migration down methods drop custom tables from configured connectio
     expect(Schema::connection('talkto_testing')->hasTable('custom_talkto_messages'))->toBeFalse()
         ->and(Schema::connection('talkto_testing')->hasTable('custom_talkto_attempts'))->toBeFalse()
         ->and(Schema::connection('talkto_testing')->hasTable('custom_talkto_events'))->toBeFalse()
-        ->and(Schema::connection('talkto_testing')->hasTable('custom_talkto_dead_letters'))->toBeFalse();
+        ->and(Schema::connection('talkto_testing')->hasTable('custom_talkto_dead_letters'))->toBeFalse()
+        ->and(Schema::connection('talkto_testing')->hasTable('custom_talkto_nonces'))->toBeFalse();
 });
 
 test('dead letter migration keeps legacy table fallback and database table priority', function (): void {
@@ -214,6 +244,7 @@ function talktoStorageUseCustomTables(): void
         'talkto.database.tables.attempts' => 'custom_talkto_attempts',
         'talkto.database.tables.events' => 'custom_talkto_events',
         'talkto.database.tables.dead_letters' => 'custom_talkto_dead_letters',
+        'talkto.database.tables.nonces' => 'custom_talkto_nonces',
     ]);
 }
 
@@ -227,6 +258,7 @@ function talktoStorageMigrationInstances(): array
         include __DIR__.'/../../database/migrations/2026_06_13_000002_create_talkto_attempts_table.php',
         include __DIR__.'/../../database/migrations/2026_06_13_000003_create_talkto_events_table.php',
         include __DIR__.'/../../database/migrations/2026_06_19_000002_create_talkto_dead_letters_table.php',
+        include __DIR__.'/../../database/migrations/2026_06_20_000001_create_talkto_nonces_table.php',
     ];
 }
 

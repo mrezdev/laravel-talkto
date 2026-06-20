@@ -8,10 +8,11 @@ use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoNonce;
 
 class TalktoPruningService
 {
-    private const TYPES = ['messages', 'attempts', 'events', 'dead-letters'];
+    private const TYPES = ['messages', 'attempts', 'events', 'dead-letters', 'nonces'];
 
     private const TERMINAL_MESSAGE_STATUSES = [
         'succeeded',
@@ -56,12 +57,40 @@ class TalktoPruningService
             'attempts' => $this->pruneSimple($this->attemptModelClass(), $cutoff, $limit, $dryRun),
             'events' => $this->pruneSimple($this->eventModelClass(), $cutoff, $limit, $dryRun),
             'dead-letters' => $this->pruneSimple($this->deadLetterModelClass(), $cutoff, $limit, $dryRun),
+            'nonces' => $this->pruneExpiredNonces($cutoff, $limit, $dryRun),
             default => [
                 'candidates' => 0,
                 'deleted' => 0,
                 'cutoff' => $cutoff->toIso8601String(),
             ],
         };
+    }
+
+    private function pruneExpiredNonces(CarbonInterface $cutoff, int $limit, bool $dryRun): array
+    {
+        $modelClass = $this->nonceModelClass();
+
+        $ids = $modelClass::query()
+            ->where('expires_at', '<=', now())
+            ->orWhere('created_at', '<=', $cutoff)
+            ->orderBy('expires_at')
+            ->limit($limit)
+            ->pluck('id')
+            ->all();
+
+        $deleted = 0;
+
+        if (! $dryRun && $ids !== []) {
+            $deleted = $modelClass::query()
+                ->whereKey($ids)
+                ->delete();
+        }
+
+        return [
+            'candidates' => count($ids),
+            'deleted' => $deleted,
+            'cutoff' => $cutoff->toIso8601String(),
+        ];
     }
 
     private function pruneSimple(string $modelClass, CarbonInterface $cutoff, int $limit, bool $dryRun): array
@@ -165,6 +194,7 @@ class TalktoPruningService
             'attempts' => 'attempts_days',
             'events' => 'events_days',
             'dead-letters' => 'dead_letters_days',
+            'nonces' => 'nonces_days',
             default => 'messages_days',
         };
 
@@ -207,5 +237,14 @@ class TalktoPruningService
         return is_string($class) && is_a($class, TalktoDeadLetter::class, true)
             ? $class
             : TalktoDeadLetter::class;
+    }
+
+    private function nonceModelClass(): string
+    {
+        $class = config('talkto.models.nonce', TalktoNonce::class);
+
+        return is_string($class) && is_a($class, TalktoNonce::class, true)
+            ? $class
+            : TalktoNonce::class;
     }
 }

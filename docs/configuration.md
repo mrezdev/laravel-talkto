@@ -49,6 +49,7 @@ TALKTO_MESSAGES_TABLE=talkto_messages
 TALKTO_ATTEMPTS_TABLE=talkto_attempts
 TALKTO_EVENTS_TABLE=talkto_events
 TALKTO_DEAD_LETTERS_TABLE=talkto_dead_letters
+TALKTO_NONCES_TABLE=talkto_nonces
 ```
 
 `talkto.database.tables.dead_letters` is the canonical dead-letter table config path. Older published configs may still contain `talkto.dead_letter.table`; when both are present, `talkto.database.tables.dead_letters` wins.
@@ -129,11 +130,29 @@ Use `allow_all_commands => true` only for trusted internal development cases whe
 
 ## Security
 
-`talkto.security.signature_version` defaults to `v1` for backward compatibility. New peer integrations should prefer `v2` after both services understand the v2 signature headers. Receivers use `talkto.security.accept_versions` to control which versions are allowed.
+`talkto.security.signature_version` defaults to `v2`, and `talkto.security.accept_versions` defaults to `['v2']`. New projects should use v2-only signatures in production.
 
 `talkto.security.timestamp_tolerance_seconds` should stay small enough to limit replay windows while allowing normal clock skew. The default is 300 seconds.
 
-`talkto.security.replay_protection.require_nonce_for_v2` remains false by default for compatibility. Enable it after all v2 peers send `X-Talkto-Nonce`.
+`talkto.security.replay_protection.require_nonce_for_v2` defaults to true. v2 nonces are covered by the signature and consumed by an independent nonce ledger that stores nonce hashes, not raw nonces, payloads, or responses. `message_id` idempotency prevents duplicate business execution; nonce replay protection prevents reuse of a signed request.
+
+Recommended production config:
+
+```dotenv
+TALKTO_SIGNATURE_VERSION=v2
+TALKTO_ACCEPT_SIGNATURE_VERSIONS=v2
+TALKTO_REQUIRE_V2_NONCE=true
+```
+
+Legacy/manual compatibility config:
+
+```dotenv
+TALKTO_SIGNATURE_VERSION=v1
+TALKTO_ACCEPT_SIGNATURE_VERSIONS=v1,v2
+TALKTO_REQUIRE_V2_NONCE=false
+```
+
+Use v1, or accepting both v1 and v2, only for rare interoperability, debugging, or migration cases.
 
 `talkto.security.redacted_keys` lets hosts add extra key names that should be masked in traces, audit output, and safe event excerpts:
 

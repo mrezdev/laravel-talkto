@@ -72,7 +72,23 @@ test('accepted v1 signature version produces warn but does not fail by itself', 
     config(['talkto.security.accept_versions' => ['v1', 'v2']]);
 
     expect(Artisan::call('talkto:audit-security'))->toBe(0)
-        ->and(Artisan::output())->toContain('[WARN] v1 signatures are still accepted.')
+        ->and(Artisan::output())->toContain('[WARN] v1 signatures are still accepted; this should be legacy/manual opt-in only.')
+        ->and(Artisan::output())->not->toContain('[FAIL]');
+});
+
+test('legacy outgoing v1 signature version produces warn', function (): void {
+    config(['talkto.security.signature_version' => 'v1']);
+
+    expect(Artisan::call('talkto:audit-security'))->toBe(0)
+        ->and(Artisan::output())->toContain('[WARN] Outgoing signature version is not v2; v1 is legacy/manual opt-in only.')
+        ->and(Artisan::output())->not->toContain('[FAIL]');
+});
+
+test('disabled v2 nonce requirement produces warn', function (): void {
+    config(['talkto.security.replay_protection.require_nonce_for_v2' => false]);
+
+    expect(Artisan::call('talkto:audit-security'))->toBe(0)
+        ->and(Artisan::output())->toContain('[WARN] v2 signatures are accepted without requiring a nonce.')
         ->and(Artisan::output())->not->toContain('[FAIL]');
 });
 

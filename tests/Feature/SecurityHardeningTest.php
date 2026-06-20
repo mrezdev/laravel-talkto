@@ -232,6 +232,7 @@ test('security auditor reports expected findings without exposing secrets', func
         ->and($codes)->toContain('unsigned_timestamp_disabled')
         ->and($codes)->toContain('invalid_signature_version')
         ->and($codes)->toContain('accepts_v1_signatures')
+        ->and($codes)->toContain('accepts_v1_v2_signatures')
         ->and($codes)->toContain('timestamp_tolerance_high')
         ->and($codes)->toContain('replay_protection_disabled')
         ->and($codes)->toContain('v2_nonce_not_required')
@@ -240,6 +241,48 @@ test('security auditor reports expected findings without exposing secrets', func
         ->and($codes)->toContain('incoming_source_missing_allowed_commands')
         ->and($encoded)->toContain('[redacted]')
         ->and($encoded)->not->toContain('header-token');
+});
+
+test('secure v2 only config produces no critical security auditor findings', function (): void {
+    config([
+        'talkto.security.require_signature' => true,
+        'talkto.security.require_timestamp' => true,
+        'talkto.security.signature_version' => 'v2',
+        'talkto.security.accept_versions' => ['v2'],
+        'talkto.security.timestamp_tolerance_seconds' => 300,
+        'talkto.security.replay_protection.enabled' => true,
+        'talkto.security.replay_protection.require_nonce_for_v2' => true,
+        'talkto.routes.enabled' => false,
+        'talkto.callbacks.enabled' => false,
+        'talkto.outgoing' => [],
+        'talkto.incoming' => [],
+    ]);
+
+    $audit = app(TalktoSecurityAuditor::class)->audit()->toArray();
+
+    expect($audit['summary']['severity_counts']['critical'])->toBe(0)
+        ->and($audit['summary']['severity_counts']['error'])->toBe(0);
+});
+
+test('security auditor reports legacy signature and dangerous source config findings', function (): void {
+    config([
+        'talkto.security.signature_version' => 'v1',
+        'talkto.security.accept_versions' => ['v1', 'v2'],
+        'talkto.security.replay_protection.require_nonce_for_v2' => false,
+        'talkto.incoming.peer-danger' => [
+            'secret' => 'incoming-test-shared-secret',
+            'allow_all_commands' => true,
+        ],
+    ]);
+
+    $codes = array_column(app(TalktoSecurityAuditor::class)->audit()->toArray()['findings'], 'code');
+
+    expect($codes)->toContain('outgoing_signature_v1')
+        ->and($codes)->toContain('accepts_v1_signatures')
+        ->and($codes)->toContain('accepts_v1_v2_signatures')
+        ->and($codes)->toContain('v2_nonce_not_required')
+        ->and($codes)->toContain('incoming_source_missing_allowed_commands')
+        ->and($codes)->toContain('incoming_source_all_commands_allowed');
 });
 
 test('security auditor flags invalid accepted versions missing secrets and command allowlists', function (): void {

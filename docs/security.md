@@ -6,13 +6,13 @@ Laravel Talkto protects service-to-service messages with explicit peer configura
 
 The package signs a canonical string containing message id, timestamp, source, target, command, and payload hash with HMAC SHA-256.
 
-`v1` signatures remain the default for backward compatibility. `v2` signatures add explicit version, payload hash, and nonce headers and are recommended for new peer integrations once both services support them.
+`v2` signatures are the default and recommended production mode. `v2` adds explicit version, payload hash, and nonce headers, and the nonce is included in the signed material. `v1` remains available only as an explicit legacy/manual opt-in for rare interoperability, debugging, or migration cases; new projects should not start with v1.
 
 ## Verification
 
 Incoming requests are rejected when required headers are missing, the timestamp is outside tolerance, the source is unknown, the target is wrong, the command is not allowed, the payload hash differs, or the signature is invalid.
 
-`talkto.security.accept_versions` controls which signature versions receivers accept. Keep `v1` only while older peers still need it. After a v2 migration, enable `talkto.security.replay_protection.require_nonce_for_v2` so v2 requests must include a nonce.
+`talkto.security.accept_versions` controls which signature versions receivers accept. New installs accept only `v2`. Keep `v1`, or `v1,v2`, only as an explicit legacy/manual compatibility choice. v2 requests require `X-Talkto-Nonce` by default.
 
 Timestamp tolerance limits replay windows and clock skew. The default is 300 seconds; unusually high values increase risk, and zero or negative values should be avoided.
 
@@ -23,6 +23,24 @@ Payloads are normalized before hashing so object key order does not change the S
 ## Replay Protection
 
 Allowed commands can require an idempotency key. The receive lifecycle checks duplicate message ids and completed idempotency keys before queueing work.
+
+The v2 nonce replay ledger is separate from message id idempotency. `message_id` prevents duplicate business execution; the nonce ledger prevents reuse of a signed request. Legitimate retries should keep the same `message_id` but send a fresh nonce. The nonce ledger stores a SHA-256 nonce fingerprint with source, target, signature version, timestamps, and expiry metadata. It does not store raw nonces, payloads, or responses.
+
+Recommended production signing config:
+
+```dotenv
+TALKTO_SIGNATURE_VERSION=v2
+TALKTO_ACCEPT_SIGNATURE_VERSIONS=v2
+TALKTO_REQUIRE_V2_NONCE=true
+```
+
+Legacy/manual compatibility config:
+
+```dotenv
+TALKTO_SIGNATURE_VERSION=v1
+TALKTO_ACCEPT_SIGNATURE_VERSIONS=v1,v2
+TALKTO_REQUIRE_V2_NONCE=false
+```
 
 ## Command Allowlist
 

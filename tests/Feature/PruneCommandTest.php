@@ -5,6 +5,7 @@ use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoNonce;
 use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
 
 beforeEach(function (): void {
@@ -18,6 +19,7 @@ beforeEach(function (): void {
         'talkto.retention.attempts_days' => 90,
         'talkto.retention.events_days' => 30,
         'talkto.retention.dead_letters_days' => 180,
+        'talkto.retention.nonces_days' => 7,
     ]);
 });
 
@@ -76,6 +78,16 @@ test('old dead letters are pruned and recent dead letters are retained', functio
         ->and(Artisan::output())->toContain('Dead letters deleted: 1')
         ->and(TalktoDeadLetter::query()->where('message_id', 'prune-old-dead-letter')->exists())->toBeFalse()
         ->and(TalktoDeadLetter::query()->where('message_id', 'prune-recent-dead-letter')->exists())->toBeTrue();
+});
+
+test('expired nonces are pruned and fresh nonces are retained', function (): void {
+    oldNonce('prune-old-nonce');
+    recentNonce('prune-recent-nonce');
+
+    expect(Artisan::call('talkto:prune', ['--type' => 'nonces']))->toBe(0)
+        ->and(Artisan::output())->toContain('Nonces deleted: 1')
+        ->and(TalktoNonce::query()->where('message_id', 'prune-old-nonce')->exists())->toBeFalse()
+        ->and(TalktoNonce::query()->where('message_id', 'prune-recent-nonce')->exists())->toBeTrue();
 });
 
 test('old terminal messages are pruned and recent terminal messages are retained', function (): void {
@@ -166,6 +178,7 @@ test('type all prunes all supported categories safely', function (): void {
     oldEvent('type-all-event');
     oldAttempt('type-all-attempt');
     oldDeadLetter('type-all-dead-letter');
+    oldNonce('type-all-nonce');
     terminalMessage('type-all-message', now()->subDays(120));
     talktoMessage('type-all-active', 'processing', now()->subDays(120));
 
@@ -174,6 +187,7 @@ test('type all prunes all supported categories safely', function (): void {
         ->and(TalktoEvent::query()->count())->toBe(0)
         ->and(TalktoAttempt::query()->count())->toBe(0)
         ->and(TalktoDeadLetter::query()->count())->toBe(0)
+        ->and(TalktoNonce::query()->count())->toBe(0)
         ->and(TalktoMessage::query()->where('message_id', 'type-all-message')->exists())->toBeFalse()
         ->and(TalktoMessage::query()->where('message_id', 'type-all-active')->exists())->toBeTrue();
 });
@@ -331,6 +345,36 @@ function oldDeadLetter(string $messageId, ?TalktoMessage $message = null, mixed 
 function recentDeadLetter(string $messageId): TalktoDeadLetter
 {
     return oldDeadLetter($messageId, null, now()->subDays(5));
+}
+
+function oldNonce(string $messageId): TalktoNonce
+{
+    return TalktoNonce::query()->create([
+        'nonce_hash' => hash('sha256', 'old-'.$messageId),
+        'source_service' => 'source',
+        'target_service' => 'testing',
+        'message_id' => $messageId,
+        'signature_version' => 'v2',
+        'signed_timestamp' => now()->subDays(8)->toIso8601String(),
+        'used_at' => now()->subDays(8),
+        'expires_at' => now()->subDay(),
+        'created_at' => now()->subDays(8),
+        'updated_at' => now()->subDays(8),
+    ]);
+}
+
+function recentNonce(string $messageId): TalktoNonce
+{
+    return TalktoNonce::query()->create([
+        'nonce_hash' => hash('sha256', 'recent-'.$messageId),
+        'source_service' => 'source',
+        'target_service' => 'testing',
+        'message_id' => $messageId,
+        'signature_version' => 'v2',
+        'signed_timestamp' => now()->toIso8601String(),
+        'used_at' => now(),
+        'expires_at' => now()->addDays(7),
+    ]);
 }
 
 function timestamped(mixed $model, mixed $createdAt): mixed

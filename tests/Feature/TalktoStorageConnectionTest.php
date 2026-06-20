@@ -7,6 +7,7 @@ use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoNonce;
 
 beforeEach(function (): void {
     config([
@@ -15,6 +16,7 @@ beforeEach(function (): void {
         'talkto.database.tables.attempts' => 'talkto_attempts',
         'talkto.database.tables.events' => 'talkto_events',
         'talkto.database.tables.dead_letters' => 'talkto_dead_letters',
+        'talkto.database.tables.nonces' => 'talkto_nonces',
         'talkto.dead_letter.table' => 'talkto_dead_letters',
     ]);
 });
@@ -23,7 +25,8 @@ test('talkto models use default connection when storage connection is null', fun
     expect((new TalktoMessage)->getConnectionName())->toBeNull()
         ->and((new TalktoAttempt)->getConnectionName())->toBeNull()
         ->and((new TalktoEvent)->getConnectionName())->toBeNull()
-        ->and((new TalktoDeadLetter)->getConnectionName())->toBeNull();
+        ->and((new TalktoDeadLetter)->getConnectionName())->toBeNull()
+        ->and((new TalktoNonce)->getConnectionName())->toBeNull();
 });
 
 test('talkto models use configured storage connection', function (): void {
@@ -32,14 +35,16 @@ test('talkto models use configured storage connection', function (): void {
     expect((new TalktoMessage)->getConnectionName())->toBe('talkto_testing')
         ->and((new TalktoAttempt)->getConnectionName())->toBe('talkto_testing')
         ->and((new TalktoEvent)->getConnectionName())->toBe('talkto_testing')
-        ->and((new TalktoDeadLetter)->getConnectionName())->toBe('talkto_testing');
+        ->and((new TalktoDeadLetter)->getConnectionName())->toBe('talkto_testing')
+        ->and((new TalktoNonce)->getConnectionName())->toBe('talkto_testing');
 });
 
 test('talkto models use default table names', function (): void {
     expect((new TalktoMessage)->getTable())->toBe('talkto_messages')
         ->and((new TalktoAttempt)->getTable())->toBe('talkto_attempts')
         ->and((new TalktoEvent)->getTable())->toBe('talkto_events')
-        ->and((new TalktoDeadLetter)->getTable())->toBe('talkto_dead_letters');
+        ->and((new TalktoDeadLetter)->getTable())->toBe('talkto_dead_letters')
+        ->and((new TalktoNonce)->getTable())->toBe('talkto_nonces');
 });
 
 test('talkto models use configured table names', function (): void {
@@ -48,12 +53,14 @@ test('talkto models use configured table names', function (): void {
         'talkto.database.tables.attempts' => 'custom_talkto_attempts',
         'talkto.database.tables.events' => 'custom_talkto_events',
         'talkto.database.tables.dead_letters' => 'custom_talkto_dead_letters',
+        'talkto.database.tables.nonces' => 'custom_talkto_nonces',
     ]);
 
     expect((new TalktoMessage)->getTable())->toBe('custom_talkto_messages')
         ->and((new TalktoAttempt)->getTable())->toBe('custom_talkto_attempts')
         ->and((new TalktoEvent)->getTable())->toBe('custom_talkto_events')
-        ->and((new TalktoDeadLetter)->getTable())->toBe('custom_talkto_dead_letters');
+        ->and((new TalktoDeadLetter)->getTable())->toBe('custom_talkto_dead_letters')
+        ->and((new TalktoNonce)->getTable())->toBe('custom_talkto_nonces');
 });
 
 test('talkto message queries use configured connection and table', function (): void {

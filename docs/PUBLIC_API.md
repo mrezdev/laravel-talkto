@@ -71,7 +71,7 @@ These data objects are additive. Existing array-based APIs remain supported and 
 - Callback receive endpoint is opt-in through `talkto.routes.enabled` and `talkto.callbacks.enabled`, and uses `talkto.routes.callback_uri`.
 - Outgoing targets resolve from config, aliases, and `TalktoOutgoingTargetRegistryContract`.
 - Outgoing HTTP transport resolves through `TalktoHttpClient`; signing and envelope creation remain package-owned.
-- Signatures use backward-compatible v1 by default; v2 is opt-in for sending and accepted by default for receiving.
+- Signatures use v2 by default; v1 is legacy/manual opt-in only. New installs accept v2 only and require v2 nonces.
 - Retry/backoff state is stored on `talkto_messages`.
 - Dead letters use `talkto_dead_letters` when enabled and migrated.
 - Observability reports and traces are read-only and do not dispatch jobs or mutate rows.

@@ -16,7 +16,7 @@ Run these checks in a non-production host application after installing or upgrad
 12. Run `php artisan talkto:dlq-reprocess --dry-run`.
 13. Run `php artisan talkto:retry-failed --dry-run`.
 14. Run `php artisan talkto:report --json`.
-15. Confirm v1 signing works by default.
+15. Confirm v2 signing works by default and v1 works only when explicitly accepted.
 16. Test v2 only after both peers are configured to send or accept v2.
 
 Use throwaway services, queues, test databases, and non-production secrets. Do not paste real secrets, signatures, or payloads into reports or tickets.

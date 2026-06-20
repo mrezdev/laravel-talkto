@@ -92,7 +92,7 @@ class TalktoResultCallbackEnvelopeBuilder
 
     private function signatureVersion(): string
     {
-        $version = config('talkto.security.signature_version', 'v1');
+        $version = config('talkto.security.signature_version', 'v2');
 
         if (in_array($version, ['v1', 'v2'], true)) {
             return $version;

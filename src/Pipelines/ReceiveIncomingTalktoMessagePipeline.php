@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Validator;
 use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoNonceLedger;
 use Mrezdev\LaravelTalkto\Services\TalktoSignatureVerifier;
 use Throwable;
 
@@ -62,6 +63,14 @@ class ReceiveIncomingTalktoMessagePipeline
 
         if ($existingMessage) {
             return $this->duplicateResponse($existingMessage, 'already_received');
+        }
+
+        if (! $this->consumeNonce($verification, $messageId)) {
+            return new JsonResponse([
+                'received' => false,
+                'status' => 'rejected',
+                'error' => 'replay_nonce_reused',
+            ], 409);
         }
 
         $idempotencyFingerprint = $this->idempotencyFingerprint($envelope);
@@ -178,6 +187,31 @@ class ReceiveIncomingTalktoMessagePipeline
             'status' => $status,
             'message_id' => $message->message_id,
         ], 200);
+    }
+
+    private function consumeNonce(array $verification, string $messageId): bool
+    {
+        if (($verification['signature_version'] ?? null) !== 'v2') {
+            return true;
+        }
+
+        $nonce = $verification['nonce'] ?? null;
+
+        if (! is_string($nonce) || $nonce === '') {
+            return ! (bool) config('talkto.security.replay_protection.enabled', true);
+        }
+
+        // Existing message_id duplicates are answered before this point to
+        // preserve the package's idempotent duplicate response. New requests,
+        // including idempotency-key duplicates, must consume a fresh nonce.
+        return app(TalktoNonceLedger::class)->consume(
+            'v2',
+            (string) ($verification['source'] ?? ''),
+            (string) ($verification['target'] ?? ''),
+            $nonce,
+            $messageId,
+            is_string($verification['signed_timestamp'] ?? null) ? $verification['signed_timestamp'] : null
+        );
     }
 
     private function idempotencyProtectedStatuses(): array

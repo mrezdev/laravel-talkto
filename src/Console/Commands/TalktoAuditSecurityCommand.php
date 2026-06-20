@@ -79,7 +79,7 @@ class TalktoAuditSecurityCommand extends Command
      */
     private function auditDefaultSignatureVersion(array &$checks): void
     {
-        $version = config('talkto.security.signature_version', 'v1');
+        $version = config('talkto.security.signature_version', 'v2');
 
         if ($version === 'v2') {
             $checks[] = $this->check('PASS', 'security.signature_version', 'Default outgoing signature version is v2.');
@@ -87,7 +87,7 @@ class TalktoAuditSecurityCommand extends Command
             return;
         }
 
-        $checks[] = $this->check('WARN', 'security.signature_version', 'Default outgoing signature version is not v2.', [
+        $checks[] = $this->check('WARN', 'security.signature_version', 'Outgoing signature version is not v2; v1 is legacy/manual opt-in only.', [
             'signature_version' => is_scalar($version) ? (string) $version : get_debug_type($version),
         ]);
     }
@@ -111,7 +111,7 @@ class TalktoAuditSecurityCommand extends Command
         }
 
         if (in_array('v1', $acceptedVersions['valid'], true)) {
-            $checks[] = $this->check('WARN', 'security.accept_versions', 'v1 signatures are still accepted.', [
+            $checks[] = $this->check('WARN', 'security.accept_versions', 'v1 signatures are still accepted; this should be legacy/manual opt-in only.', [
                 'accept_versions' => $acceptedVersions['valid'],
             ]);
 
@@ -248,13 +248,23 @@ class TalktoAuditSecurityCommand extends Command
             $checks[] = $this->check('PASS', 'panel.exposure', 'Talkto panel is enabled with auth-like middleware.', [
                 'middleware' => $middleware,
             ]);
-
-            return;
+        } else {
+            $checks[] = $this->check($production ? 'FAIL' : 'WARN', 'panel.exposure', 'Talkto panel is enabled without auth-like middleware.', [
+                'middleware' => $middleware,
+            ]);
         }
 
-        $checks[] = $this->check($production ? 'FAIL' : 'WARN', 'panel.exposure', 'Talkto panel is enabled without auth-like middleware.', [
-            'middleware' => $middleware,
-        ]);
+        if (! (bool) config('talkto.panel.authorization.enabled', true)) {
+            $checks[] = $this->check($production ? 'FAIL' : 'WARN', 'panel.authorization', 'Talkto panel authorization is disabled.');
+        }
+
+        if ((bool) config('talkto.panel.messages.show_payload', false) || (bool) config('talkto.panel.messages.show_response', false)) {
+            $checks[] = $this->check('WARN', 'panel.message_visibility', 'Talkto panel payload or response visibility is enabled.');
+        }
+
+        if ((bool) config('talkto.panel.health.active_checks.enabled', false) || (bool) config('talkto.panel.actions.active_health_checks_enabled', false)) {
+            $checks[] = $this->check($production ? 'WARN' : 'PASS', 'panel.active_health_checks', 'Talkto panel active health checks setting was reviewed.');
+        }
     }
 
     /**
@@ -262,7 +272,7 @@ class TalktoAuditSecurityCommand extends Command
      */
     private function acceptedVersions(): array
     {
-        $versions = config('talkto.security.accept_versions', ['v1', 'v2']);
+        $versions = config('talkto.security.accept_versions', ['v2']);
 
         if (! is_array($versions)) {
             return ['valid' => [], 'invalid' => true, 'raw' => $versions];

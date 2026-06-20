@@ -4,7 +4,7 @@ Use this checklist before exposing Laravel Talkto package routes to network traf
 
 ## Strict V2 Receive Profile
 
-For new integrations, prefer v2 signatures with nonce and replay protection:
+For production, use v2-only signatures with nonce and replay protection. These are the package defaults for new installs:
 
 ```dotenv
 TALKTO_ROUTES_ENABLED=true
@@ -44,9 +44,9 @@ TALKTO_ROUTE_MIDDLEWARE=api,throttle:internal-talkto
 
 ## Signature Version
 
-Use v2 for new integrations. v1 remains available mainly for compatibility with existing peers that have not moved to v2 headers.
+Use v2 for new integrations. v1 remains available only as an explicit legacy/manual opt-in for rare interoperability, debugging, or migration cases. New projects should not start with v1 or accept both v1 and v2.
 
-Require v2 nonces in production after every peer sends `X-Talkto-Nonce`:
+Require v2 nonces in production:
 
 ```dotenv
 TALKTO_REQUIRE_V2_NONCE=true
@@ -54,6 +54,8 @@ TALKTO_REPLAY_PROTECTION_ENABLED=true
 ```
 
 Replay protection should stay enabled for production receivers.
+
+The nonce replay ledger stores hashes/fingerprints, not raw nonces, payloads, or responses. It is independent from message id idempotency: `message_id` prevents duplicate business execution, while the nonce prevents reuse of a signed request.
 
 ## Security Audit Command
 
@@ -88,12 +90,13 @@ php artisan talkto:prune --dry-run
 php artisan talkto:prune --type=events --older-than=30d
 php artisan talkto:prune --type=attempts --older-than=90d
 php artisan talkto:prune --type=dead-letters --older-than=180d
+php artisan talkto:prune --type=nonces --older-than=7d
 php artisan talkto:prune --type=messages --older-than=90d
 php artisan talkto:prune --type=all --dry-run
 php artisan talkto:prune --type=all --limit=500
 ```
 
-Always run `--dry-run` first in production. Message pruning is conservative: it only deletes old terminal messages and skips active or in-flight rows such as queued, waiting to send, sending, processing, and retryable messages. Pruning is for storage retention, not message recovery; use `talkto:recover-stale` for stuck in-flight messages before pruning. Retention defaults can be changed with `TALKTO_RETENTION_MESSAGES_DAYS`, `TALKTO_RETENTION_ATTEMPTS_DAYS`, `TALKTO_RETENTION_EVENTS_DAYS`, and `TALKTO_RETENTION_DEAD_LETTERS_DAYS`.
+Always run `--dry-run` first in production. Message pruning is conservative: it only deletes old terminal messages and skips active or in-flight rows such as queued, waiting to send, sending, processing, and retryable messages. Pruning is for storage retention, not message recovery; use `talkto:recover-stale` for stuck in-flight messages before pruning. Retention defaults can be changed with `TALKTO_RETENTION_MESSAGES_DAYS`, `TALKTO_RETENTION_ATTEMPTS_DAYS`, `TALKTO_RETENTION_EVENTS_DAYS`, `TALKTO_RETENTION_DEAD_LETTERS_DAYS`, and `TALKTO_RETENTION_NONCES_DAYS`.
 
 ## Panel
 

@@ -23,6 +23,7 @@ beforeEach(function (): void {
     config([
         'talkto.security.require_signature' => true,
         'talkto.security.signature_version' => 'v1',
+        'talkto.security.accept_versions' => ['v1'],
         'talkto.service' => 'target-service',
         'talkto.callbacks.enabled' => true,
         'talkto.outgoing.source-service' => [
@@ -438,6 +439,7 @@ function p04SignedCallback(TalktoMessage $original, TalktoIncomingCommandResult 
 
     config([
         'talkto.service' => 'source-service',
+        'talkto.security.accept_versions' => ['v1'],
         'talkto.incoming.target-service' => [
             'secret' => 'shared-callback-secret',
             'allowed_commands' => [

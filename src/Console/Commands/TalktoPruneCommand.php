@@ -8,19 +8,19 @@ use Mrezdev\LaravelTalkto\Services\TalktoPruningService;
 class TalktoPruneCommand extends Command
 {
     protected $signature = 'talkto:prune
-        {--type=all : messages, attempts, events, dead-letters, or all}
+        {--type=all : messages, attempts, events, dead-letters, nonces, or all}
         {--older-than= : Override retention age, for example 90d, 12h, or 90 for days}
         {--dry-run : Report pruning candidates without deleting records}
         {--limit=100 : Maximum records to delete per type}';
 
-    protected $description = 'Safely prune old Talkto messages, attempts, events, and dead letters.';
+    protected $description = 'Safely prune old Talkto messages, attempts, events, dead letters, and nonce ledger rows.';
 
     public function handle(TalktoPruningService $pruning): int
     {
         $type = (string) $this->option('type');
 
-        if (! in_array($type, ['messages', 'attempts', 'events', 'dead-letters', 'all'], true)) {
-            $this->error('Invalid --type. Use messages, attempts, events, dead-letters, or all.');
+        if (! in_array($type, ['messages', 'attempts', 'events', 'dead-letters', 'nonces', 'all'], true)) {
+            $this->error('Invalid --type. Use messages, attempts, events, dead-letters, nonces, or all.');
 
             return self::FAILURE;
         }

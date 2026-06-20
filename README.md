@@ -40,7 +40,7 @@ flowchart LR
 
 - Signed command envelopes with HMAC SHA-256.
 - Payload hashing and timestamp tolerance checks.
-- Optional v2 signatures with nonce support.
+- v2 signatures by default with required nonce replay protection.
 - Outbox/inbox persistence on `talkto_messages`.
 - Attempt and lifecycle event tracking.
 - Incoming command handler contracts and registry.
@@ -251,7 +251,7 @@ Hosts that need custom proxy, TLS, tracing, circuit breaker, or test transport b
 
 Laravel Talkto signs canonical message fields using HMAC SHA-256. Incoming requests can be verified for signature, timestamp tolerance, target service, known source service, command allowlist, payload hash, and replay protection.
 
-By default, outgoing messages use backward-compatible v1 signatures and incoming verification accepts v1 and v2. Move to v2 sending only after both peers are ready. Use `talkto:audit-security` for PASS/WARN/FAIL deployment checks, or `talkto:security-audit` for the detailed finding report. Never commit real shared secrets.
+By default, outgoing messages use v2 signatures, incoming verification accepts v2 only, and v2 requests require a nonce. v1 remains available only as an explicit legacy/manual opt-in for rare interoperability, debugging, or migration cases. Use `talkto:audit-security` for PASS/WARN/FAIL deployment checks, or `talkto:security-audit` for the detailed finding report. Never commit real shared secrets.
 
 Read more in [docs/security.md](docs/security.md) and [docs/production-hardening.md](docs/production-hardening.md).
 
@@ -259,7 +259,7 @@ Read more in [docs/security.md](docs/security.md) and [docs/production-hardening
 
 Retry state is stored on message records and processed through `talkto:retry-failed`. Retry policy starts with global defaults and can be overridden by direction, peer/target, and command. Final or exhausted failures can be stored in `talkto_dead_letters` when DLQ support is enabled and migrated. `talkto:dlq-reprocess` lets operators reprocess eligible dead letters deliberately.
 
-Observability is read-only: `TalktoMetricsCollector`, `TalktoHealthChecker`, `talkto:report`, and `talkto:trace` summarize existing message state without dispatching jobs or mutating rows. Use `talkto:trace <message-id>` or `talkto:trace --correlation=<correlation-id>` to inspect one flow across related messages, attempts, events, dead letters, and callbacks with payload redacted by default. Operators can use `talkto:recover-stale --dry-run` before recovering messages stuck in stale in-flight locks, and `talkto:prune --dry-run` before deleting old retention data.
+Observability is read-only: `TalktoMetricsCollector`, `TalktoHealthChecker`, `talkto:report`, and `talkto:trace` summarize existing message state without dispatching jobs or mutating rows. Use `talkto:trace <message-id>` or `talkto:trace --correlation=<correlation-id>` to inspect one flow across related messages, attempts, events, dead letters, and callbacks with payload redacted by default. Operators can use `talkto:recover-stale --dry-run` before recovering messages stuck in stale in-flight locks, and `talkto:prune --dry-run` before deleting old retention data including expired nonce ledger rows.
 
 Read more in [docs/recovery-monitoring-template.md](docs/recovery-monitoring-template.md), [docs/production-readiness.md](docs/production-readiness.md), and [docs/troubleshooting.md](docs/troubleshooting.md).
 

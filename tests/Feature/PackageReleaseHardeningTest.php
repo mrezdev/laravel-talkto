@@ -88,7 +88,8 @@ test('release config contains required top level keys and safe defaults', functi
 
     expect($defaults['routes']['enabled'])->toBeFalse()
         ->and($defaults['migrations']['enabled'])->toBeFalse()
-        ->and($defaults['security']['signature_version'])->toBe('v1')
-        ->and($defaults['security']['accept_versions'])->toBe(['v1', 'v2'])
+        ->and($defaults['security']['signature_version'])->toBe('v2')
+        ->and($defaults['security']['accept_versions'])->toBe(['v2'])
+        ->and($defaults['security']['replay_protection']['require_nonce_for_v2'])->toBeTrue()
         ->and($defaults['observability']['enabled'])->toBeTrue();
 });

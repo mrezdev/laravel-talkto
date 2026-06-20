@@ -7,6 +7,7 @@ use Mrezdev\LaravelTalkto\Services\TalktoSigner;
 test('signer and verifier accept a valid signed envelope', function (): void {
     config([
         'talkto.service' => 'target-service',
+        'talkto.security.accept_versions' => ['v1'],
         'talkto.incoming.source-service' => [
             'secret' => 'fake-test-secret',
             'allowed_commands' => [
@@ -44,7 +45,7 @@ test('signer and verifier accept a valid signed envelope', function (): void {
         'X-Talkto-Message-Id' => 'message-1',
     ]);
 
-    expect($result)->toBe([
+    expect($result)->toMatchArray([
         'ok' => true,
         'status' => 200,
         'error' => null,
