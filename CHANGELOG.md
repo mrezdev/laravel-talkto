@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Documentation
+
+- Reworked the README into a concise public entry point for what Laravel Talkto does, when to use it, Packagist installation with `composer require mrezdev/laravel-talkto`, secure v2 configuration, sending/receiving commands, callbacks, retry/DLQ, observability, and support links.
+- Added a cleaner documentation map and expanded production-oriented installation, configuration, security, and production hardening guidance.
+- Added architecture diagrams and outgoing-only, incoming-only, and bidirectional callback examples using the package's current public APIs and contracts.
+- Expanded troubleshooting guidance with safe fixes for install, publishing, migration, signature, nonce, idempotency, queue, callback, DLQ, panel, and Packagist issues.
+- Aligned security, support, and upgrade guidance with v2 defaults, required v2 nonces, nonce hash storage, and v1 legacy/manual opt-in compatibility.
+
 ### Changed
 
 - Expanded GitHub Actions release validation to cover explicit PHP/Laravel/Testbench combinations for PHP 8.2/8.3/8.4 on Laravel 12 and PHP 8.3/8.4 on Laravel 13.

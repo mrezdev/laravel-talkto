@@ -7,20 +7,50 @@ Use this guide when moving a host application to a newer Laravel Talkto package 
 - Review `CHANGELOG.md`, `README.md`, and `docs/upgrading.md`.
 - Back up any published host-owned `config/talkto.php` changes before republishing.
 - Compare package migrations with host table ownership before enabling `talkto.migrations.enabled`.
+- Publish and review new migrations before running them.
 - Keep queue workers paused or drainable during rollout if the host has in-flight messages.
 
-## Security v1/v2
+## Pre-1.0 Security Hardening
 
-- v1 signatures remain the default outgoing format.
-- Verification accepts v1 and v2 by default.
-- Enable v2 sending with `talkto.security.signature_version = v2` only after both peers have upgraded.
-- Force `talkto.security.accept_versions = ['v2']` only after all old senders have stopped using v1.
-- Signed requests always require `X-Talkto-Timestamp`.
+Laravel Talkto hardened its defaults before a stable 1.0 release:
+
+- outgoing signatures default to `v2`
+- incoming verification accepts `v2` by default
+- v2 nonces are required by default
+- replay protection is enabled by default
+- v1 is legacy/manual opt-in only
+
+Recommended production env:
+
+```dotenv
+TALKTO_SIGNATURE_VERSION=v2
+TALKTO_ACCEPT_SIGNATURE_VERSIONS=v2
+TALKTO_REQUIRE_V2_NONCE=true
+TALKTO_REPLAY_PROTECTION_ENABLED=true
+```
+
+The nonce replay ledger requires the package nonce migration. If upgrading a host app that receives v2 traffic, publish and run migrations:
+
+```bash
+php artisan vendor:publish --tag=laravel-talkto-migrations
+php artisan migrate
+```
+
+Use legacy compatibility only for a documented migration window:
+
+```dotenv
+TALKTO_SIGNATURE_VERSION=v1
+TALKTO_ACCEPT_SIGNATURE_VERSIONS=v1,v2
+TALKTO_REQUIRE_V2_NONCE=false
+```
+
+Return to v2-only once all peers are upgraded.
 
 ## Migration Notes
 
-- Retry/backoff uses columns on `talkto_messages`, including retry counts and `next_retry_at`.
+- Retry/backoff uses columns on `talkto_messages`, including retry counts and retry timestamps.
 - DLQ support uses `talkto_dead_letters` when the DLQ migration is installed.
+- Nonce replay protection uses `talkto_nonces` and stores nonce hashes/fingerprints only.
 - Observability reports read existing `talkto_messages`, `talkto_attempts`, `talkto_events`, and `talkto_dead_letters` tables.
 - No project-specific business tables or mappings are included.
 
@@ -28,11 +58,11 @@ Use this guide when moving a host application to a newer Laravel Talkto package 
 
 - Incoming handlers can be configured or registered through `TalktoIncomingHandlerRegistryContract`.
 - Outgoing targets can remain in config or be registered through `TalktoOutgoingTargetRegistryContract`.
-- `IncomingCommandResultContract` now uses non-conflicting instance accessors such as `isSucceeded()` and `isRetryable()` instead of names that overlap result factories. This is a pre-public-release API consistency correction; existing `TalktoIncomingCommandResult::succeeded()`, `failedRetryable()`, `failedFinal()`, and `skipped()` factories remain available.
-- Immutable data objects are available for envelope, incoming result, and callback envelope shapes: `TalktoEnvelopeData`, `TalktoIncomingCommandResultData`, and `TalktoResultCallbackData`.
+- `IncomingCommandResultContract` uses instance accessors such as `isSucceeded()` and `isRetryable()`.
+- `TalktoIncomingCommandResult::succeeded()`, `failedRetryable()`, `failedFinal()`, and `skipped()` factories remain available.
 - Generic signed result callbacks are available through `ResultCallbackSenderContract` and `ResultCallbackReceiverContract`; hosts may still override either contract.
 - `TalktoMetricsCollector` and `TalktoHealthChecker` are read-only observability services.
-- Public commands include `talkto:retry-failed`, `talkto:dlq-reprocess`, `talkto:report`, `talkto:trace`, and `talkto:security-audit`.
+- Public commands include `talkto:retry-failed`, `talkto:dlq-reprocess`, `talkto:prune`, `talkto:recover-stale`, `talkto:report`, `talkto:trace`, `talkto:security-audit`, and `talkto:audit-security`.
 
 ## Post-Upgrade Checks
 
@@ -41,10 +71,11 @@ Run these checks in a non-production environment:
 1. Send one outgoing test message.
 2. Receive one incoming test message.
 3. Send a duplicate `message_id` and confirm it does not execute twice.
-4. Run `php artisan talkto:retry-failed --dry-run`.
-5. Run `php artisan talkto:report --json`.
-6. Run `php artisan talkto:security-audit`.
-7. Run `php artisan talkto:trace <message-id>` on smoke messages where applicable.
-8. Confirm queue workers and scheduler entries are configured.
+4. Confirm v2 nonce replay protection rejects a reused signed request.
+5. Run `php artisan talkto:retry-failed --dry-run`.
+6. Run `php artisan talkto:report --json`.
+7. Run `php artisan talkto:security-audit`.
+8. Run `php artisan talkto:trace <message-id>` on smoke messages where applicable.
+9. Confirm queue workers and scheduler entries are configured.
 
 Do not claim public API stability beyond the current release line. Use Git tags as package version boundaries.

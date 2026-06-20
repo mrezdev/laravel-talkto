@@ -1,92 +1,62 @@
 # Laravel Talkto Documentation
 
-Use this page as the documentation map for Laravel Talkto. The root [README](../README.md) gives the quick GitHub overview; these pages go deeper by task.
+This is the public documentation map for Laravel Talkto. The root [README](../README.md) is the quick entry point; these pages go deeper by task.
 
-## Getting Started
+## Start Here
 
-- [Installation](installation.md)
-- [Installing into existing apps](installing-into-existing-apps.md)
-- [New service onboarding](new-service-onboarding.md)
-- [Smoke tests](SMOKE_TESTS.md)
+- [Installation](installation.md) - install from Packagist, publish real package assets, run migrations, and perform first checks.
+- [Configuration](configuration.md) - configure service names, routes, storage, peers, security, queues, callbacks, retry, DLQ, panel, and retention.
+- [Security](security.md) - understand v2 signatures, nonce replay protection, safe defaults, and dangerous manual settings.
+- [Production hardening](production-hardening.md) - checklist for a real Laravel host app before exposing Talkto traffic.
+- [Troubleshooting](troubleshooting.md) - symptoms, likely causes, and safe fixes.
 
-## Configuration
+## Concepts
 
-- [Configuration](configuration.md)
-- [Extending Laravel Talkto](extending.md)
-- [HTTP client extension](http-client.md)
+- [Architecture](architecture.md) - outgoing, incoming, callback, retry, and DLQ flows.
+- [Sending commands](sending-commands.md) - source-side command creation.
+- [Handling commands](handling-commands.md) - receiver-side handlers and results.
+- [Result callbacks](result-callbacks.md) - signed callback runtime.
+- [Extending Laravel Talkto](extending.md) - supported extension points.
+- [Public API](PUBLIC_API.md) - public contracts, services, commands, config, and publish tags.
+
+## Examples
+
+- [Outgoing-only example](examples/outgoing-only.md)
+- [Incoming-only example](examples/incoming-only.md)
+- [Bidirectional callback example](examples/bidirectional-callback.md)
+- [Command contract template](command-contract-template.md)
+- [Callback contract template](callback-contract-template.md)
 - [Host integration template](host-integration-template.md)
 
-## Sending Commands
+## Operations
 
-- [Sending commands](sending-commands.md)
-- [HTTP client extension](http-client.md)
-- [Scaffolding generators](scaffolding.md)
-- [Transactional outgoing](transactional-outgoing.md)
-- [Command contract template](command-contract-template.md)
-
-## Receiving Commands
-
-- [Handling commands](handling-commands.md)
-- [Scaffolding generators](scaffolding.md)
-- [Local HTTP end-to-end template](local-http-e2e-template.md)
-
-## Callbacks
-
-- [Result callbacks](result-callbacks.md)
-- [Callback runtime and override template](callback-contract-template.md)
-
-## Security
-
-- [Security](security.md)
-- [Production hardening](production-hardening.md)
-- [Release readiness](release-readiness.md)
-- [Troubleshooting](troubleshooting.md)
-- [Production readiness](production-readiness.md)
-
-## Retry, DLQ, Recovery
-
-- [Recovery and monitoring template](recovery-monitoring-template.md)
-- [Production hardening](production-hardening.md)
-- [Troubleshooting](troubleshooting.md)
-
-## Observability
-
+- [Recovery and monitoring](recovery-monitoring-template.md)
 - [Talkto Panel](panel.md)
-- [Recovery and monitoring template](recovery-monitoring-template.md)
-- [Troubleshooting](troubleshooting.md)
 - [Testing](testing.md)
 - [Smoke tests](SMOKE_TESTS.md)
-
-## Testing And Local E2E
-
-- [Local HTTP end-to-end template](local-http-e2e-template.md)
-- [Testing](testing.md)
-
-## Deployment / Production Rollout
-
-- [Production hardening](production-hardening.md)
 - [Production rollout template](production-rollout-template.md)
-- [Production readiness](production-readiness.md)
-- [Troubleshooting](troubleshooting.md)
-
-## Repository / Release Process
-
-- [Private repository setup](private-repository-setup.md)
-- [CI](ci.md)
 - [Release readiness](release-readiness.md)
 - [Release process](release-process.md)
+- [CI](ci.md)
 - [Versioning](versioning.md)
-- [Private Composer installation](private-composer-installation.md)
-- [Package extraction checklist](package-extraction-checklist.md)
-- [First private repository commit](first-private-repository-commit.md)
-- [First private release tag](first-private-release-tag.md)
-- [Host VCS migration next step](host-vcs-migration-next-step.md)
-- [Actual private extraction](actual-private-extraction.md)
-- [Public release readiness](public-release-readiness.md)
 
-## Public API And Upgrade Notes
+## Package Development
 
-- [Public API](PUBLIC_API.md)
+- [Scaffolding generators](scaffolding.md)
+- [Transactional outgoing](transactional-outgoing.md)
+- [HTTP client extension](http-client.md)
+- [Local HTTP end-to-end template](local-http-e2e-template.md)
+- [Installing into existing apps](installing-into-existing-apps.md)
+- [New service onboarding](new-service-onboarding.md)
+
+## Upgrade And Support
+
 - [Package upgrading notes](upgrading.md)
 - [Root upgrade guide](../UPGRADE.md)
 - [Root changelog](../CHANGELOG.md)
+- [Security policy](../SECURITY.md)
+- [Support policy](../SUPPORT.md)
+
+## Maintainer Notes
+
+Internal extraction and private repository notes live under [docs/internal](internal/README.md). They are not part of the normal user documentation path.

@@ -52,15 +52,15 @@ if (! function_exists('p49ReleaseDocPaths')) {
     function p49ReleaseDocPaths(): array
     {
         return [
-            'docs/private-repository-setup.md',
+            'docs/internal/private-repository-setup.md',
             'docs/ci.md',
             'docs/release-readiness.md',
             'docs/release-process.md',
             'docs/versioning.md',
-            'docs/private-composer-installation.md',
-            'docs/first-private-repository-commit.md',
-            'docs/first-private-release-tag.md',
-            'docs/package-extraction-checklist.md',
+            'docs/internal/private-composer-installation.md',
+            'docs/internal/first-private-repository-commit.md',
+            'docs/internal/first-private-release-tag.md',
+            'docs/internal/package-extraction-checklist.md',
             'docs/public-release-readiness.md',
         ];
     }
@@ -123,7 +123,15 @@ test('release docs describe tag based public ready versioning and quality gates'
 test('readme links to repository ci release and installation docs', function (): void {
     $readme = p49ReadPackageFile('README.md');
 
-    foreach (p49ReleaseDocPaths() as $path) {
+    foreach ([
+        'docs/installation.md',
+        'docs/README.md',
+        'docs/security.md',
+        'docs/production-hardening.md',
+        'CHANGELOG.md',
+        'UPGRADE.md',
+        'SUPPORT.md',
+    ] as $path) {
         expect($readme)->toContain($path);
     }
 });

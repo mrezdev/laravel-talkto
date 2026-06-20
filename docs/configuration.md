@@ -1,27 +1,67 @@
 # Configuration
 
-The package config is published as `config/talkto.php`. Defaults are conservative and generic.
+Publish the config after installing from Packagist:
+
+```bash
+composer require mrezdev/laravel-talkto
+php artisan vendor:publish --tag=laravel-talkto-config
+```
+
+This page explains the important config areas without duplicating the whole `config/talkto.php` file.
 
 ## Service Name
 
-`talkto.service` identifies the current Laravel app inside signed envelopes. Use a stable machine-readable name, such as `source-service` or `target-service`.
+`talkto.service` identifies the current Laravel app inside signed envelopes and storage scoping.
 
-## Models
+```dotenv
+TALKTO_SERVICE=website-service
+```
 
-`talkto.models` lets a host application replace package Eloquent models with compatible subclasses. The configured classes must extend the package model classes.
+Use a stable machine-readable value. Do not change it casually after messages exist.
 
-## Routes And Migrations
+## Publishing And Migrations
 
-`talkto.routes.enabled` and `talkto.migrations.enabled` are false by default, and the package service provider also fails closed if those keys are missing. Enable them only when the host application does not already provide the same tables or receive endpoint.
+Supported publish tags:
 
-When package routes are enabled, the default route middleware is `api` plus Laravel's named Talkto throttle middleware, `throttle:talkto`. Set `TALKTO_ROUTE_MIDDLEWARE` to a comma-separated list only when the host wants to fully override the route middleware stack.
+- `laravel-talkto-config`
+- `talkto-config`
+- `laravel-talkto-migrations`
+- `talkto-migrations`
+- `talkto-panel-views`
+
+Publish migrations and run them when the host app is ready to own the package tables:
+
+```bash
+php artisan vendor:publish --tag=laravel-talkto-migrations
+php artisan migrate
+```
+
+Package migration loading is disabled by default:
+
+```dotenv
+TALKTO_MIGRATIONS_ENABLED=false
+```
+
+Set it to true only when the host intentionally wants the package service provider to load migrations directly.
+
+## Routes
+
+Package API routes are disabled by default:
+
+```dotenv
+TALKTO_ROUTES_ENABLED=false
+```
+
+When enabled, the package registers the receive and callback routes under `talkto.routes.prefix`, which defaults to `api`.
 
 ```dotenv
 TALKTO_ROUTES_ENABLED=true
-TALKTO_ROUTE_MIDDLEWARE=api,throttle:talkto
+TALKTO_ROUTES_PREFIX=api
+TALKTO_RECEIVE_URI=talkto/receive
+TALKTO_CALLBACK_URI=talkto/callback
 ```
 
-Route rate limiting is configured under `talkto.routes.rate_limit`:
+The default middleware is `api` plus `throttle:talkto` when route rate limiting is enabled.
 
 ```dotenv
 TALKTO_RATE_LIMIT_ENABLED=true
@@ -30,21 +70,85 @@ TALKTO_RATE_LIMIT_MAX_ATTEMPTS=120
 TALKTO_RATE_LIMIT_DECAY_MINUTES=1
 ```
 
-Throttling helps reduce request volume, but it does not replace HMAC signatures, timestamp checks, replay protection, peer secrets, or command allowlists.
+## Outgoing Targets
 
-## Storage Connection And Tables
+Configure destination services under `talkto.outgoing`:
 
-By default, Talkto models and migrations use Laravel's default database connection and the standard package table names.
+```php
+'outgoing' => [
+    'inventory-service' => [
+        'url' => env('TALKTO_INVENTORY_URL'),
+        'endpoint' => '/api/talkto/receive',
+        'secret' => env('TALKTO_TO_INVENTORY_SECRET'),
+        'callback_endpoint' => '/api/talkto/callback',
+        'headers' => [],
+        'timeout' => 20,
+        'mode' => 'reliable',
+    ],
+],
+```
 
-To store Talkto data on a dedicated connection, configure the connection before running the package migrations:
+Targets can also be registered programmatically through `TalktoOutgoingTargetRegistryContract`. Programmatic targets override config targets with the same name.
+
+## Incoming Sources
+
+Configure trusted source services under `talkto.incoming`:
+
+```php
+'incoming' => [
+    'website-service' => [
+        'secret' => env('TALKTO_FROM_WEBSITE_SECRET'),
+        'allowed_commands' => [
+            'catalog.reserve-stock' => [
+                'driver' => 'handler',
+                'handler' => App\Talkto\Handlers\ReserveStockHandler::class,
+                'idempotency' => 'required',
+            ],
+            'talkto.result' => [
+                'driver' => 'none',
+            ],
+        ],
+        'allow_all_commands' => false,
+    ],
+],
+```
+
+Incoming command authorization is fail-closed. Missing or empty `allowed_commands` rejects all commands for that source. Do not use `allow_all_commands=true` in production.
+
+Global incoming handlers can also be configured under `talkto.incoming.handlers` or registered through `TalktoIncomingHandlerRegistryContract`.
+
+## Signature Settings
+
+Recommended production values:
+
+```dotenv
+TALKTO_REQUIRE_SIGNATURE=true
+TALKTO_SIGNATURE_VERSION=v2
+TALKTO_ACCEPT_SIGNATURE_VERSIONS=v2
+TALKTO_TIMESTAMP_TOLERANCE_SECONDS=300
+```
+
+`signature_version` controls outgoing signing. `accept_versions` controls what receivers accept. v2 is the default and recommended production mode. v1 is legacy/manual opt-in only.
+
+## Replay Protection And Nonces
+
+Recommended production values:
+
+```dotenv
+TALKTO_REPLAY_PROTECTION_ENABLED=true
+TALKTO_REQUIRE_V2_NONCE=true
+TALKTO_NONCES_TABLE=talkto_nonces
+TALKTO_RETENTION_NONCES_DAYS=7
+```
+
+The nonce ledger stores hashes/fingerprints only. Raw nonce values are not stored. Legitimate retries should keep the same `message_id` but use a new nonce.
+
+## Storage And Model Overrides
+
+Talkto models use the default database connection unless `TALKTO_DB_CONNECTION` is set.
 
 ```dotenv
 TALKTO_DB_CONNECTION=talkto
-```
-
-Optional table names can also be configured:
-
-```dotenv
 TALKTO_MESSAGES_TABLE=talkto_messages
 TALKTO_ATTEMPTS_TABLE=talkto_attempts
 TALKTO_EVENTS_TABLE=talkto_events
@@ -52,142 +156,110 @@ TALKTO_DEAD_LETTERS_TABLE=talkto_dead_letters
 TALKTO_NONCES_TABLE=talkto_nonces
 ```
 
-`talkto.database.tables.dead_letters` is the canonical dead-letter table config path. Older published configs may still contain `talkto.dead_letter.table`; when both are present, `talkto.database.tables.dead_letters` wins.
+Compatible model subclasses can be configured under `talkto.models`. The configured classes must extend the package model classes.
 
-Run Talkto migrations after the connection and table names are configured. If multiple services share one Talkto database, run the Talkto migrations once from one service or deployment job.
-
-## Shared Talkto Database
-
-Talkto can store several services in one Talkto database as long as each app has a stable `talkto.service` value. Outgoing rows are owned by the service in `source_service`; incoming rows are owned by the service in `target_service`.
-
-Queued processing is scoped to the current service by default:
+When several services share one Talkto database, keep current-service storage enforcement enabled:
 
 ```dotenv
 TALKTO_ENFORCE_CURRENT_SERVICE_STORAGE_SCOPE=true
 ```
 
-With this default, an outgoing job only sends rows where `source_service` matches `talkto.service`, and an incoming processing job only handles rows where `target_service` matches `talkto.service`. Jobs that find another service's row log a warning and exit without mutating the row.
+## Queues
 
-The panel is also scoped to rows involving the current service by default:
+Talkto uses queued jobs for outgoing sends and incoming processing. The job classes are configurable under `talkto.jobs`.
 
-```dotenv
-TALKTO_PANEL_CURRENT_SERVICE_ONLY=true
+```bash
+php artisan queue:work
 ```
 
-Set `TALKTO_PANEL_CURRENT_SERVICE_ONLY=false` only for a trusted central observer panel. Mutating actions still respect `TALKTO_ENFORCE_CURRENT_SERVICE_STORAGE_SCOPE`, so a central observer can inspect shared data without retrying or reprocessing another service's rows unless storage enforcement is explicitly disabled.
+Use normal Laravel queue process management in production.
 
-Passive connection health always compares configured peers to the current service. For outgoing peers it counts current-service-to-peer rows; for incoming peers it counts peer-to-current-service rows.
+## Retry
 
-## Peers
+Global retry settings live under `talkto.retry`:
 
-Outgoing peer config contains the destination URL, endpoint, secret, and mode. Incoming peer config contains the source secret and allowed commands.
+- `enabled`
+- `max_attempts`
+- `backoff_seconds`
+- `outgoing_enabled`
+- `incoming_enabled`
+- `retryable_statuses`
+- `final_failure_status`
+- `retryable_http_statuses`
+- `retry_server_errors`
+- `jitter_seconds`
 
-```php
-'outgoing' => [
-    'target-service' => [
-        'url' => env('TALKTO_TARGET_SERVICE_URL'),
-        'secret' => env('TALKTO_TO_TARGET_SERVICE_SECRET'),
-        'endpoint' => '/api/talkto/receive',
-        'callback_endpoint' => '/api/talkto/callback',
-    ],
-],
-
-'incoming' => [
-    'source-service' => [
-        'secret' => env('TALKTO_FROM_SOURCE_SERVICE_SECRET'),
-        // Missing or empty allowed_commands rejects all commands.
-        'allowed_commands' => [
-            'domain.command' => [
-                'driver' => 'handler',
-                'handler' => App\Talkto\Handlers\DomainCommandHandler::class,
-                'idempotency' => 'required',
-            ],
-            'talkto.result' => [
-                'driver' => 'none',
-            ],
-        ],
-    ],
-],
-```
-
-Incoming command authorization is fail-closed. A known source with no `allowed_commands`, an empty `allowed_commands` array, or a command missing from the allowlist is rejected with `command_not_allowed`.
-
-Both indexed and associative allowlists are supported:
-
-```php
-'allowed_commands' => [
-    'orders.mark-paid',
-    'invoices.sync-status',
-],
-
-'allowed_commands' => [
-    'orders.mark-paid' => ['driver' => 'handler'],
-    'invoices.sync-status' => true,
-],
-```
-
-Use `allow_all_commands => true` only for trusted internal development cases where every command from that source is intentionally accepted. `allow_all_commands => false` does not bypass the allowlist.
-
-## Security
-
-`talkto.security.signature_version` defaults to `v2`, and `talkto.security.accept_versions` defaults to `['v2']`. New projects should use v2-only signatures in production.
-
-`talkto.security.timestamp_tolerance_seconds` should stay small enough to limit replay windows while allowing normal clock skew. The default is 300 seconds.
-
-`talkto.security.replay_protection.require_nonce_for_v2` defaults to true. v2 nonces are covered by the signature and consumed by an independent nonce ledger that stores nonce hashes, not raw nonces, payloads, or responses. `message_id` idempotency prevents duplicate business execution; nonce replay protection prevents reuse of a signed request.
-
-Recommended production config:
-
-```dotenv
-TALKTO_SIGNATURE_VERSION=v2
-TALKTO_ACCEPT_SIGNATURE_VERSIONS=v2
-TALKTO_REQUIRE_V2_NONCE=true
-```
-
-Legacy/manual compatibility config:
-
-```dotenv
-TALKTO_SIGNATURE_VERSION=v1
-TALKTO_ACCEPT_SIGNATURE_VERSIONS=v1,v2
-TALKTO_REQUIRE_V2_NONCE=false
-```
-
-Use v1, or accepting both v1 and v2, only for rare interoperability, debugging, or migration cases.
-
-`talkto.security.redacted_keys` lets hosts add extra key names that should be masked in traces, audit output, and safe event excerpts:
-
-```php
-'security' => [
-    'redacted_keys' => [
-        'custom_credential',
-        'session_secret',
-    ],
-],
-```
-
-Use `php artisan talkto:security-audit` to review signature, timestamp, nonce, route middleware, peer secret, and allowed command settings without mutating state.
-
-For a stricter new-integration profile, see [Production hardening](production-hardening.md).
+Overrides can be configured by direction, peer target/source, and command.
 
 ## Callbacks
 
-`talkto.callbacks.command` defaults to `talkto.result`, and `talkto.callbacks.endpoint` defaults to `/api/talkto/callback`. Source apps should allow the callback command under the destination service in `talkto.incoming`. Destination apps should configure the source service in `talkto.outgoing` with a shared secret and callback endpoint.
+Callbacks are enabled by default:
 
-## Retry Policy
+```dotenv
+TALKTO_CALLBACKS_ENABLED=true
+TALKTO_CALLBACK_COMMAND=talkto.result
+TALKTO_CALLBACK_ENDPOINT=/api/talkto/callback
+TALKTO_CALLBACK_TIMEOUT_SECONDS=20
+```
 
-Global retry keys remain the base policy: `talkto.retry.enabled`, `max_attempts`, `backoff_seconds`, direction enablement, retryable statuses, final failure status, retryable HTTP statuses, and server-error retry behavior.
+For result callbacks, the source app must allow the callback command under the destination service in `talkto.incoming`. The destination app must configure the source in `talkto.outgoing`.
 
-Optional overrides are resolved in this order:
+## Dead Letter Queue
 
-1. Global `talkto.retry` values.
-2. `talkto.retry.directions.outgoing` or `talkto.retry.directions.incoming`.
-3. `talkto.retry.targets.<peer>`, where outgoing uses `target_service` and incoming uses `source_service`.
-4. `talkto.retry.commands.<command>`.
+Final failures can be stored in the DLQ:
 
-Supported override keys include `enabled`, `max_attempts`, `backoff_seconds`, `retryable_statuses`, `final_failure_status`, `retryable_http_statuses`, `retry_server_errors`, and `jitter_seconds`. A positive message-level `max_attempts` still wins over config.
+```dotenv
+TALKTO_DEAD_LETTER_ENABLED=true
+TALKTO_DEAD_LETTER_AUTO_STORE=true
+TALKTO_DEAD_LETTER_ALLOW_REPROCESS=true
+TALKTO_DEAD_LETTER_MAX_REPROCESS_ATTEMPTS=3
+```
 
-`jitter_seconds` defaults to `0`, preserving deterministic backoff unless a host explicitly configures jitter.
+Review before reprocessing:
 
-## Aliases
+```bash
+php artisan talkto:dlq-reprocess --dry-run
+```
 
-`talkto.aliases` is optional. Use it only for host-local shortcuts that resolve to canonical peer names.
+## Panel
+
+The optional panel is disabled by default:
+
+```dotenv
+TALKTO_PANEL_ENABLED=false
+```
+
+If enabled, keep `web` and `auth` or stronger admin middleware on the panel route stack, keep authorization enabled, and keep payload/response visibility off unless operators are allowed to inspect that data.
+
+```dotenv
+TALKTO_PANEL_AUTHORIZATION_ENABLED=true
+TALKTO_PANEL_GATE=viewTalktoPanel
+TALKTO_PANEL_SHOW_PAYLOAD=false
+TALKTO_PANEL_SHOW_RESPONSE=false
+```
+
+Publish panel views only when customizing them:
+
+```bash
+php artisan vendor:publish --tag=talkto-panel-views
+```
+
+## Observability And Retention
+
+Read-only reporting and health settings live under `talkto.observability`.
+
+Retention settings:
+
+```dotenv
+TALKTO_RETENTION_MESSAGES_DAYS=90
+TALKTO_RETENTION_ATTEMPTS_DAYS=90
+TALKTO_RETENTION_EVENTS_DAYS=30
+TALKTO_RETENTION_DEAD_LETTERS_DAYS=180
+TALKTO_RETENTION_NONCES_DAYS=7
+```
+
+Preview pruning before deleting data:
+
+```bash
+php artisan talkto:prune --dry-run
+```

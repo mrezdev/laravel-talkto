@@ -30,3 +30,4 @@
 /coverage/ export-ignore
 /build/ export-ignore
 /dist/ export-ignore
+/docs/internal/ export-ignore

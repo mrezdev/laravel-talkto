@@ -1,125 +1,217 @@
 # Production Hardening
 
-Use this checklist before exposing Laravel Talkto package routes to network traffic. Routes are disabled by default and should stay disabled until the host application has reviewed route ownership, peer secrets, queue workers, storage, monitoring, and rollback steps.
+Use this checklist before a Laravel host app sends or receives Talkto traffic in production.
 
-## Strict V2 Receive Profile
+## Secret Management
 
-For production, use v2-only signatures with nonce and replay protection. These are the package defaults for new installs:
+- Store peer secrets in environment variables or a secret manager.
+- Use a different shared secret for each service pair and direction when possible.
+- Never commit secrets, raw signatures, raw nonce values, private URLs, or production payloads.
+- Rotate secrets carefully across both services so senders and receivers stay in sync.
+
+## V2 Signatures
+
+Use v2-only signatures for normal production deployments:
 
 ```dotenv
-TALKTO_ROUTES_ENABLED=true
 TALKTO_REQUIRE_SIGNATURE=true
 TALKTO_SIGNATURE_VERSION=v2
 TALKTO_ACCEPT_SIGNATURE_VERSIONS=v2
-TALKTO_REQUIRE_V2_NONCE=true
+```
+
+Never use `TALKTO_REQUIRE_SIGNATURE=false` in production.
+
+## Nonce Replay Protection
+
+Keep v2 nonce protection enabled:
+
+```dotenv
 TALKTO_REPLAY_PROTECTION_ENABLED=true
-TALKTO_ROUTE_MIDDLEWARE=api,throttle:talkto
-TALKTO_RATE_LIMIT_ENABLED=true
-TALKTO_RATE_LIMIT_NAME=talkto
-TALKTO_RATE_LIMIT_MAX_ATTEMPTS=120
-TALKTO_RATE_LIMIT_DECAY_MINUTES=1
-TALKTO_PANEL_ENABLED=false
-```
-
-Enable package routes only when the host is ready to receive public or private network traffic on the package endpoints. Existing applications can keep package routes disabled and wrap package services in host-owned controllers instead.
-
-## Route Throttling
-
-The default package route middleware is `api,throttle:talkto` when route rate limiting is enabled. The service provider registers the named `talkto` Laravel rate limiter when package routes are enabled.
-
-Throttling reduces accidental or abusive request volume, but it is not a replacement for HMAC signatures, timestamp checks, nonce checks, replay protection, peer allowlists, or command allowlists.
-
-Override the package route middleware with `TALKTO_ROUTE_MIDDLEWARE` only when the host owns an equivalent stack:
-
-```dotenv
-TALKTO_ROUTE_MIDDLEWARE=api,auth:sanctum,throttle:talkto
-```
-
-If the limiter name changes, keep the middleware and limiter config aligned:
-
-```dotenv
-TALKTO_RATE_LIMIT_NAME=internal-talkto
-TALKTO_ROUTE_MIDDLEWARE=api,throttle:internal-talkto
-```
-
-## Signature Version
-
-Use v2 for new integrations. v1 remains available only as an explicit legacy/manual opt-in for rare interoperability, debugging, or migration cases. New projects should not start with v1 or accept both v1 and v2.
-
-Require v2 nonces in production:
-
-```dotenv
 TALKTO_REQUIRE_V2_NONCE=true
-TALKTO_REPLAY_PROTECTION_ENABLED=true
 ```
 
-Replay protection should stay enabled for production receivers.
+Publish and run the nonce migration before receiving v2 traffic. The ledger stores nonce hashes, not raw nonces.
 
-The nonce replay ledger stores hashes/fingerprints, not raw nonces, payloads, or responses. It is independent from message id idempotency: `message_id` prevents duplicate business execution, while the nonce prevents reuse of a signed request.
+## Timestamp Window
 
-## Security Audit Command
+Keep `TALKTO_TIMESTAMP_TOLERANCE_SECONDS` narrow enough for replay resistance and wide enough for normal clock skew. The default is 300 seconds. Monitor clocks on all participating hosts.
 
-Run the PASS/WARN/FAIL audit before enabling Talkto in production:
+## Source And Target Service Names
 
-```bash
-php artisan talkto:audit-security
-php artisan talkto:audit-security --json
-```
-
-The command can be used manually or in CI. Treat `FAIL` checks as deployment blockers. Review every `WARN` check intentionally, especially accepted v1 signatures, missing v2 nonce enforcement, broad command allowlists, exposed routes without throttling, and panel exposure.
-
-## Stale Message Recovery
-
-Use stale recovery when a worker crashes or a message remains stuck in `sending` or `processing` with an old lock:
-
-```bash
-php artisan talkto:recover-stale --dry-run
-php artisan talkto:recover-stale --direction=outgoing
-php artisan talkto:recover-stale --older-than=30
-php artisan talkto:recover-stale --limit=50
-```
-
-Always run `--dry-run` first in production. This command does not replace normal retry behavior; it is an operator tool for stale in-flight locks. Schedule it only when your operators want automated stale-lock recovery, and keep the limit small enough for safe review.
-
-## Retention Pruning
-
-Use pruning to keep Talkto storage bounded after operational retention windows expire:
-
-```bash
-php artisan talkto:prune --dry-run
-php artisan talkto:prune --type=events --older-than=30d
-php artisan talkto:prune --type=attempts --older-than=90d
-php artisan talkto:prune --type=dead-letters --older-than=180d
-php artisan talkto:prune --type=nonces --older-than=7d
-php artisan talkto:prune --type=messages --older-than=90d
-php artisan talkto:prune --type=all --dry-run
-php artisan talkto:prune --type=all --limit=500
-```
-
-Always run `--dry-run` first in production. Message pruning is conservative: it only deletes old terminal messages and skips active or in-flight rows such as queued, waiting to send, sending, processing, and retryable messages. Pruning is for storage retention, not message recovery; use `talkto:recover-stale` for stuck in-flight messages before pruning. Retention defaults can be changed with `TALKTO_RETENTION_MESSAGES_DAYS`, `TALKTO_RETENTION_ATTEMPTS_DAYS`, `TALKTO_RETENTION_EVENTS_DAYS`, `TALKTO_RETENTION_DEAD_LETTERS_DAYS`, and `TALKTO_RETENTION_NONCES_DAYS`.
-
-## Panel
-
-Keep the panel disabled in production unless the host has authenticated middleware, a narrow authorization gate, payload visibility rules, and operator procedures in place:
+Set a stable service name in every app:
 
 ```dotenv
-TALKTO_PANEL_ENABLED=false
+TALKTO_SERVICE=website-service
 ```
 
-When enabling it for trusted operators, keep every panel route, including POST actions, behind host-owned auth or stricter admin middleware:
+Make sure outgoing target names and incoming source names match the values signed into envelopes. A mismatch should fail verification.
+
+## Command Allowlist
+
+Every incoming source should explicitly allow only the commands it accepts:
 
 ```php
-'panel' => [
-    'route' => [
-        'middleware' => ['web', 'auth'],
+'incoming' => [
+    'website-service' => [
+        'secret' => env('TALKTO_FROM_WEBSITE_SECRET'),
+        'allowed_commands' => [
+            'catalog.reserve-stock' => [
+                'driver' => 'handler',
+                'handler' => App\Talkto\Handlers\ReserveStockHandler::class,
+                'idempotency' => 'required',
+            ],
+        ],
+        'allow_all_commands' => false,
     ],
 ],
 ```
 
-Keep `TALKTO_PANEL_SHOW_PAYLOAD=false` and `TALKTO_PANEL_SHOW_RESPONSE=false` unless operators are explicitly allowed to inspect those values. List views avoid loading heavy payload/response columns, and detail/trace views redact common secrets such as authorization headers, cookies, API keys, Talkto signatures, tokens, secrets, and passwords. Redaction is only a safety layer; it is not a substitute for access control.
+Never use `allow_all_commands=true` in production.
 
-Run the audit command after panel config changes:
+## Routes
+
+Package routes are disabled by default:
+
+```dotenv
+TALKTO_ROUTES_ENABLED=false
+```
+
+Enable them only when the host is ready to expose the package receive and callback endpoints:
+
+```dotenv
+TALKTO_ROUTES_ENABLED=true
+TALKTO_ROUTES_PREFIX=api
+TALKTO_ROUTE_MIDDLEWARE=api,throttle:talkto
+TALKTO_RATE_LIMIT_ENABLED=true
+```
+
+Rate limiting reduces request volume. It does not replace signatures, timestamp checks, nonce protection, peer secrets, or command allowlists.
+
+## Queue Workers And Retry Behavior
+
+Run queue workers with your normal process manager:
 
 ```bash
-php artisan talkto:audit-security
+php artisan queue:work
 ```
+
+Review retry settings before production:
+
+- `talkto.retry.enabled`
+- `talkto.retry.outgoing_enabled`
+- `talkto.retry.incoming_enabled`
+- `talkto.retry.max_attempts`
+- `talkto.retry.backoff_seconds`
+- direction, peer, and command overrides
+
+Incoming retries are opt-in because handlers may perform host-owned side effects.
+
+## Failed Jobs And DLQ
+
+Keep dead-letter storage enabled unless you have a host-owned replacement:
+
+```dotenv
+TALKTO_DEAD_LETTER_ENABLED=true
+TALKTO_DEAD_LETTER_AUTO_STORE=true
+```
+
+Review DLQ rows before reprocessing:
+
+```bash
+php artisan talkto:dlq-reprocess --dry-run
+```
+
+Use `--force` only for operator-approved recovery.
+
+## Callback Verification
+
+Callbacks use signed envelopes too. The source app must configure the destination as an incoming source and allow the callback command, which defaults to `talkto.result`.
+
+Callback v2 nonces are consumed by the same nonce replay ledger. A replayed callback should be rejected with `replay_nonce_reused`.
+
+## Panel Access Control
+
+The panel is disabled by default:
+
+```dotenv
+TALKTO_PANEL_ENABLED=false
+```
+
+Never enable panel routes without host-owned auth/admin middleware and the configured authorization gate. Keep POST action routes behind the same protections.
+
+```dotenv
+TALKTO_PANEL_AUTHORIZATION_ENABLED=true
+TALKTO_PANEL_GATE=viewTalktoPanel
+```
+
+## Payload And Response Visibility
+
+Keep payload and response bodies hidden in production:
+
+```dotenv
+TALKTO_PANEL_SHOW_PAYLOAD=false
+TALKTO_PANEL_SHOW_RESPONSE=false
+```
+
+Redaction is a safety layer, not access control. Do not expose sensitive host data to operators who should not see it.
+
+## Logging And Redaction
+
+- Use `talkto.security.redacted_keys` for host-specific secret names.
+- Do not log raw signatures, raw nonces, authorization headers, cookies, or full production payloads.
+- Use `talkto:trace` without `--payload` by default.
+
+## Migrations And Pruning
+
+Publish and review migrations before running them:
+
+```bash
+php artisan vendor:publish --tag=laravel-talkto-migrations
+php artisan migrate
+```
+
+Use pruning only after retention windows are approved:
+
+```bash
+php artisan talkto:prune --dry-run
+php artisan talkto:prune --type=nonces --older-than=7d --dry-run
+php artisan talkto:prune --type=all --limit=500
+```
+
+Message pruning is conservative and skips active/in-flight rows.
+
+## Deployment Checklist
+
+- `composer validate --strict` passes.
+- `composer audit` passes.
+- `vendor/bin/pint --test` passes.
+- `vendor/bin/phpstan analyse` passes.
+- `vendor/bin/pest` passes.
+- Config cache is refreshed after env/config changes.
+- Migrations are published, reviewed, and run in the correct order.
+- Queue workers are running.
+- `php artisan talkto:security-audit` has no deployment-blocking findings.
+- `php artisan talkto:audit-security` has no FAIL checks.
+- Package routes are intentionally enabled or intentionally disabled.
+- Panel is disabled or protected by auth/admin middleware and gate.
+
+## Post-Deploy Smoke Checks
+
+Run these in a non-production or carefully controlled production smoke path:
+
+```bash
+php artisan talkto:report --hours=1 --direction=all --limit=20
+php artisan talkto:retry-failed --dry-run
+php artisan talkto:dlq-reprocess --dry-run
+php artisan talkto:trace <message-id>
+```
+
+Also verify one outgoing command, one incoming command, one duplicate `message_id`, and one callback if callbacks are enabled.
+
+## Rollback Notes
+
+- Keep previous config values available during rollout.
+- Pause or drain workers before rolling back code that changes handler behavior.
+- Do not delete Talkto tables during rollback.
+- If v2 rollout fails, prefer fixing secrets, timestamps, headers, or nonce migrations over disabling signatures.
+- If you temporarily accept v1 during migration, document the reason and remove it after peers are upgraded.

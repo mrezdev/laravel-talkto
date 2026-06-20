@@ -4,26 +4,46 @@ Laravel Talkto is open-sourced software licensed under the MIT license.
 
 ## Supported Versions
 
-Supported versions are defined by the active release line and Git tags.
+Supported versions are defined by the active release line and Git tags. Pre-1.0 releases may include security-hardening changes that require host configuration review.
 
 ## Reporting Vulnerabilities
 
-Report suspected vulnerabilities through the repository security advisory workflow or the maintainer-approved security contact for the published package.
+Report suspected vulnerabilities through the repository security advisory workflow or the maintainer-approved public security contact for the published package.
 
-Do not include real shared secrets, production payloads, private credentials, raw signatures, nonce values, authorization headers, cookies, or sensitive headers in issue text, pull requests, logs, screenshots, or documentation.
+Do not include real shared secrets, production payloads, private credentials, raw signatures, raw nonce values, authorization headers, cookies, private host names, or sensitive headers in issues, pull requests, logs, screenshots, or documentation.
 
-## Secret Handling
+## Safe Production Defaults
 
-Keep peer secrets in environment variables or a secret manager. Do not commit real secrets in package config, docs, tests, examples, or reports.
+New installs default to the recommended v2 profile:
 
-## Signatures And Replay Protection
+```dotenv
+TALKTO_REQUIRE_SIGNATURE=true
+TALKTO_SIGNATURE_VERSION=v2
+TALKTO_ACCEPT_SIGNATURE_VERSIONS=v2
+TALKTO_REQUIRE_V2_NONCE=true
+TALKTO_REPLAY_PROTECTION_ENABLED=true
+```
 
-v1 signatures remain the default for backward compatibility. v2 signatures include version, timestamp, nonce support, message ID, source, target, command, and payload hash. Prefer v2 for new peers after both services can send and verify the v2 headers.
+v2 signatures include timestamp, payload hash, signature version, message fields, and nonce support. The nonce is signed, and changing it invalidates the signature. The nonce ledger stores hashes/fingerprints only; raw nonce values are not stored.
 
-Signed requests always require `X-Talkto-Timestamp`. Keep `talkto.security.timestamp_tolerance_seconds` tight enough for replay resistance and loose enough for normal clock skew.
+v1 is legacy/manual opt-in only for rare compatibility windows. New projects should use v2-only signing and verification.
 
-Replay protection relies on the existing `message_id` ledger and unique constraint. Duplicate message IDs should be treated as already received rather than executed again.
+## Production Warnings
 
-After all v2 peers send `X-Talkto-Nonce`, enable `talkto.security.replay_protection.require_nonce_for_v2`.
+Do not use these settings in normal production deployments:
 
-Run `php artisan talkto:security-audit` in host test environments to review signature, timestamp, nonce, route middleware, peer secret, and command allowlist posture without mutating state.
+- `TALKTO_REQUIRE_SIGNATURE=false`
+- `TALKTO_REPLAY_PROTECTION_ENABLED=false`
+- `TALKTO_REQUIRE_V2_NONCE=false`
+- accepting `v1` without a documented migration reason
+- `allow_all_commands=true`
+- missing or empty `allowed_commands`
+- panel routes without auth/admin middleware and gate protection
+- payload/response visibility enabled for operators who should not see that data
+
+Run a read-only audit in host test environments before production:
+
+```bash
+php artisan talkto:security-audit
+php artisan talkto:audit-security
+```

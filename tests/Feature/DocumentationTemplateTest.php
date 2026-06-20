@@ -51,6 +51,14 @@ if (! function_exists('p48RequiredDocPaths')) {
     {
         return [
             'docs/README.md',
+            'docs/installation.md',
+            'docs/configuration.md',
+            'docs/security.md',
+            'docs/production-hardening.md',
+            'docs/architecture.md',
+            'docs/examples/outgoing-only.md',
+            'docs/examples/incoming-only.md',
+            'docs/examples/bidirectional-callback.md',
             'docs/host-integration-template.md',
             'docs/new-service-onboarding.md',
             'docs/local-http-e2e-template.md',
@@ -67,7 +75,7 @@ if (! function_exists('p48RequiredDocPaths')) {
 if (! function_exists('p48DocumentationText')) {
     function p48DocumentationText(): string
     {
-        $paths = array_merge(['README.md'], p48RequiredDocPaths());
+        $paths = array_merge(['README.md', 'SECURITY.md', 'SUPPORT.md', 'UPGRADE.md'], p48RequiredDocPaths());
 
         return implode("\n", array_map(
             fn (string $path): string => p48ReadPackageFile($path),
@@ -82,17 +90,22 @@ test('required onboarding docs exist', function (): void {
     }
 });
 
-test('readme links to the new service onboarding kit', function (): void {
+test('readme links to the public documentation map', function (): void {
     $readme = p48ReadPackageFile('README.md');
 
     foreach ([
         'docs/README.md',
-        'docs/new-service-onboarding.md',
-        'docs/local-http-e2e-template.md',
-        'docs/command-contract-template.md',
-        'docs/callback-contract-template.md',
+        'docs/installation.md',
+        'docs/configuration.md',
+        'docs/security.md',
+        'docs/production-hardening.md',
+        'docs/architecture.md',
+        'docs/examples/outgoing-only.md',
+        'docs/examples/incoming-only.md',
+        'docs/examples/bidirectional-callback.md',
         'docs/recovery-monitoring-template.md',
-        'docs/production-rollout-template.md',
+        'docs/troubleshooting.md',
+        'docs/PUBLIC_API.md',
     ] as $link) {
         expect($readme)->toContain($link);
     }
@@ -152,19 +165,21 @@ test('readme contains github landing sections', function (): void {
     $readme = p48ReadPackageFile('README.md');
 
     foreach ([
-        '## What Laravel Talkto Is',
+        '## What It Does',
         '## When To Use It',
         '## When Not To Use It',
-        '## Core Features',
-        '## 60-Second Architecture Overview',
-        '## Requirements',
         '## Installation',
         '## 5-Minute Quickstart',
-        '## Security Model Summary',
-        '## Retry, DLQ, And Observability Summary',
+        '## Secure Defaults',
+        '## Sending Commands',
+        '## Receiving Commands',
+        '## Result Callbacks',
+        '## Retry, DLQ, And Observability',
+        '## Optional Panel',
+        '## Testing And Local Validation',
         '## Documentation Map',
-        '## Public API / Extension Points',
-        '## Current Maturity / Release Status',
+        '## Security',
+        '## Versioning, Changelog, License, And Support',
     ] as $heading) {
         expect($readme)->toContain($heading);
     }
@@ -199,4 +214,19 @@ test('readme and docs avoid fake callback api and describe mit release metadata'
         ->and($combined)->toContain('sendResult(')
         ->and($composer['license'] ?? null)->toBe('MIT')
         ->and(strtolower($combined))->toContain('mit license');
+});
+
+test('phase three docs describe safe public installation and v2 nonce security', function (): void {
+    $combined = p48DocumentationText()."\n".p48ReadPackageFile('docs/architecture.md');
+
+    expect($combined)->toContain('composer require mrezdev/laravel-talkto')
+        ->and($combined)->toContain('TALKTO_SIGNATURE_VERSION=v2')
+        ->and($combined)->toContain('TALKTO_ACCEPT_SIGNATURE_VERSIONS=v2')
+        ->and($combined)->toContain('TALKTO_REQUIRE_V2_NONCE=true')
+        ->and(strtolower($combined))->toContain('raw nonce')
+        ->and($combined)->toContain('allow_all_commands=true')
+        ->and($combined)->toContain('TalktoOutgoingMessageFactory')
+        ->and($combined)->toContain('TalktoIncomingCommandHandler')
+        ->and($combined)->toContain('ResultCallbackSenderContract')
+        ->and($combined)->toContain('```mermaid');
 });

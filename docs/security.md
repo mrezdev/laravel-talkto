@@ -1,40 +1,69 @@
 # Security
 
-Laravel Talkto protects service-to-service messages with explicit peer configuration and signed envelopes.
+Laravel Talkto protects service-to-service commands with explicit peer configuration, HMAC signatures, timestamp checks, payload hashes, command allowlists, message id idempotency, and v2 nonce replay protection.
 
-## Signing
+## Recommended Production Defaults
 
-The package signs a canonical string containing message id, timestamp, source, target, command, and payload hash with HMAC SHA-256.
-
-`v2` signatures are the default and recommended production mode. `v2` adds explicit version, payload hash, and nonce headers, and the nonce is included in the signed material. `v1` remains available only as an explicit legacy/manual opt-in for rare interoperability, debugging, or migration cases; new projects should not start with v1.
-
-## Verification
-
-Incoming requests are rejected when required headers are missing, the timestamp is outside tolerance, the source is unknown, the target is wrong, the command is not allowed, the payload hash differs, or the signature is invalid.
-
-`talkto.security.accept_versions` controls which signature versions receivers accept. New installs accept only `v2`. Keep `v1`, or `v1,v2`, only as an explicit legacy/manual compatibility choice. v2 requests require `X-Talkto-Nonce` by default.
-
-Timestamp tolerance limits replay windows and clock skew. The default is 300 seconds; unusually high values increase risk, and zero or negative values should be avoided.
-
-## Payload Hashing
-
-Payloads are normalized before hashing so object key order does not change the SHA-256 hash.
-
-## Replay Protection
-
-Allowed commands can require an idempotency key. The receive lifecycle checks duplicate message ids and completed idempotency keys before queueing work.
-
-The v2 nonce replay ledger is separate from message id idempotency. `message_id` prevents duplicate business execution; the nonce ledger prevents reuse of a signed request. Legitimate retries should keep the same `message_id` but send a fresh nonce. The nonce ledger stores a SHA-256 nonce fingerprint with source, target, signature version, timestamps, and expiry metadata. It does not store raw nonces, payloads, or responses.
-
-Recommended production signing config:
+New installs default to v2-only signing and v2 nonce requirements:
 
 ```dotenv
+TALKTO_REQUIRE_SIGNATURE=true
 TALKTO_SIGNATURE_VERSION=v2
 TALKTO_ACCEPT_SIGNATURE_VERSIONS=v2
 TALKTO_REQUIRE_V2_NONCE=true
+TALKTO_REPLAY_PROTECTION_ENABLED=true
 ```
 
-Legacy/manual compatibility config:
+v1 is legacy/manual opt-in only. New projects should not start with v1.
+
+## What V2 Verifies
+
+v2 signed requests require:
+
+- `X-Talkto-Timestamp`
+- `X-Talkto-Payload-Hash`
+- `X-Talkto-Signature`
+- `X-Talkto-Signature-Version`
+- `X-Talkto-Nonce`
+
+The package signs canonical message fields, including the timestamp, payload hash, source, target, command, message id, and nonce. Changing the nonce invalidates the signature.
+
+Incoming verification rejects requests when the signature is invalid, the timestamp is outside tolerance, the source is unknown, the target service does not match, the command is not allowed, the payload hash differs, or nonce replay protection fails.
+
+## Nonce Replay Protection
+
+v2 nonce replay protection is separate from `message_id` idempotency:
+
+- `message_id` idempotency prevents duplicate business execution for the same logical message.
+- Nonce replay protection prevents reuse of a signed HTTP request.
+
+Legitimate retries should use the same `message_id` and a new nonce. The nonce is signed, so a captured request cannot be changed to use a different nonce.
+
+The nonce ledger stores nonce hashes/fingerprints with source, target, signature version, timestamp, message id, and expiry metadata. It does not store raw nonce values, payloads, or responses.
+
+## Timestamp Window
+
+`talkto.security.timestamp_tolerance_seconds` defaults to 300 seconds. Keep the window tight enough to reduce replay risk while allowing normal clock skew between services.
+
+## Safe Defaults And Dangerous Manual Settings
+
+| Area | Safe default | Dangerous/manual setting |
+| --- | --- | --- |
+| Signatures | `TALKTO_REQUIRE_SIGNATURE=true` | `TALKTO_REQUIRE_SIGNATURE=false` |
+| Signature version | `TALKTO_SIGNATURE_VERSION=v2` | `TALKTO_SIGNATURE_VERSION=v1` for new integrations |
+| Accepted versions | `TALKTO_ACCEPT_SIGNATURE_VERSIONS=v2` | accepting `v1` without a migration reason |
+| V2 nonce | `TALKTO_REQUIRE_V2_NONCE=true` | `TALKTO_REQUIRE_V2_NONCE=false` |
+| Replay protection | `TALKTO_REPLAY_PROTECTION_ENABLED=true` | replay protection disabled |
+| Command authorization | explicit `allowed_commands` | missing `allowed_commands` |
+| Broad commands | `allow_all_commands=false` | `allow_all_commands=true` in production |
+| Panel access | panel disabled or protected by auth/admin gate | panel enabled without auth/admin middleware or gate |
+| Payload visibility | payload/response hidden | payload/response visibility enabled in production |
+
+Do not use the dangerous/manual settings in normal production deployments.
+
+## Legacy Compatibility
+
+Use this only for a temporary migration where at least one peer cannot send v2 yet:
 
 ```dotenv
 TALKTO_SIGNATURE_VERSION=v1
@@ -42,22 +71,57 @@ TALKTO_ACCEPT_SIGNATURE_VERSIONS=v1,v2
 TALKTO_REQUIRE_V2_NONCE=false
 ```
 
-## Command Allowlist
+This is not recommended for new projects or normal production use. Keep the migration window short, document the reason, and return to v2-only after all peers are upgraded.
 
-Each incoming peer should define `allowed_commands`. Missing or overly broad allowlists let a known peer attempt commands that were not intentionally exposed.
+## Command Allowlists
 
-## Secrets
+Every incoming source should define explicit commands:
 
-Keep peer secrets in environment variables or a secret manager. Do not place real secrets in package docs, host docs, reports, or tests.
+```php
+'incoming' => [
+    'website-service' => [
+        'secret' => env('TALKTO_FROM_WEBSITE_SECRET'),
+        'allowed_commands' => [
+            'catalog.reserve-stock' => [
+                'driver' => 'handler',
+                'handler' => App\Talkto\Handlers\ReserveStockHandler::class,
+                'idempotency' => 'required',
+            ],
+        ],
+        'allow_all_commands' => false,
+    ],
+],
+```
 
-Laravel Talkto centralizes safe output through `TalktoSecurityRedactor`. Traces, audit output, and callback event excerpts redact common secret-like keys, Talkto shared secrets from configured peers, and sensitive headers such as `Authorization`, `X-Talkto-Signature`, `X-Talkto-Nonce`, `Cookie`, and `Set-Cookie`. Add host-specific key names with `talkto.security.redacted_keys`.
+Missing or empty `allowed_commands` rejects all commands for that source. That is intentional.
 
-## Route Rate Limiting
+## Secrets And Redaction
 
-Package routes are opt-in. When enabled, their default middleware includes Laravel's named `throttle:talkto` limiter. Hosts can override the route middleware stack with `TALKTO_ROUTE_MIDDLEWARE` or use a host-owned route wrapper.
+Store peer secrets in environment variables or a secret manager. Do not place real secrets in docs, tests, config committed to Git, logs, issues, screenshots, or support requests.
 
-Rate limiting is a volume control, not an authentication control. Keep signatures, timestamp checks, replay protection, source allowlists, and command allowlists enabled for production receivers.
+Laravel Talkto redacts common secret-like keys, configured Talkto shared secrets, and sensitive headers such as `Authorization`, `Cookie`, `Set-Cookie`, `X-Talkto-Signature`, and `X-Talkto-Nonce`. Add host-specific keys with `talkto.security.redacted_keys`.
 
-## Security Audit
+## Routes And Panel
 
-Run `php artisan talkto:security-audit` for a read-only configuration review. Use `--json` for automation and `--fail-on=error` or `--fail-on=critical` in CI-style checks. The command reports findings and recommendations without changing config, database rows, cache entries, routes, queues, or files.
+Package routes are disabled by default. When enabled, keep HMAC verification, timestamp checks, nonce replay protection, source config, and command allowlists in place. Rate limiting is useful, but it is not authentication.
+
+The optional panel is disabled by default. If enabled, keep it behind host-owned auth/admin middleware and the configured gate. Keep payload and response visibility disabled unless operators are explicitly authorized to view that data.
+
+## Security Audit Commands
+
+Use the detailed read-only audit before production:
+
+```bash
+php artisan talkto:security-audit
+php artisan talkto:security-audit --json
+php artisan talkto:security-audit --fail-on=error
+```
+
+The compatibility PASS/WARN/FAIL audit command is also registered:
+
+```bash
+php artisan talkto:audit-security
+php artisan talkto:audit-security --json
+```
+
+Both commands are read-only. They do not change config, database rows, cache entries, routes, queues, or files.
