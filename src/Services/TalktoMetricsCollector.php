@@ -10,6 +10,9 @@ use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Support\TalktoMetricsSnapshot;
 
+/**
+ * Read-only public service for Talkto message metrics.
+ */
 class TalktoMetricsCollector
 {
     public function collect(?CarbonInterface $from = null, ?CarbonInterface $to = null, string $direction = 'all'): TalktoMetricsSnapshot

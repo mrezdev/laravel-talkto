@@ -4,6 +4,9 @@ namespace Mrezdev\LaravelTalkto\Data;
 
 use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
 
+/**
+ * Immutable public snapshot of an incoming command result.
+ */
 final readonly class TalktoIncomingCommandResultData
 {
     public function __construct(

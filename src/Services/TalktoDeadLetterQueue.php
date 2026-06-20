@@ -9,6 +9,9 @@ use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Throwable;
 
+/**
+ * Public service for dead-letter lifecycle integration.
+ */
 class TalktoDeadLetterQueue
 {
     public const STATUS_OPEN = 'open';

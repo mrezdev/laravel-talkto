@@ -17,7 +17,7 @@ This is the public documentation map for Laravel Talkto. The root [README](../RE
 - [Handling commands](handling-commands.md) - receiver-side handlers and results.
 - [Result callbacks](result-callbacks.md) - signed callback runtime.
 - [Extending Laravel Talkto](extending.md) - supported extension points.
-- [Public API](PUBLIC_API.md) - public contracts, services, commands, config, and publish tags.
+- [Public API](PUBLIC_API.md) - supported public surface, extension points, and internal boundary.
 
 ## Examples
 

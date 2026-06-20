@@ -7,6 +7,9 @@ use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler;
 use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingHandlerRegistryContract;
 use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoIncomingHandler;
 
+/**
+ * Public registry for programmatic incoming command handler registration.
+ */
 class TalktoIncomingHandlerRegistry implements TalktoIncomingHandlerRegistryContract
 {
     private array $handlers = [];

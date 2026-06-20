@@ -6,6 +6,9 @@ use Illuminate\Support\Facades\Http;
 use Mrezdev\LaravelTalkto\Contracts\TalktoHttpClient;
 use Mrezdev\LaravelTalkto\Data\TalktoHttpResponse;
 
+/**
+ * @internal Default transport behind TalktoHttpClient.
+ */
 class LaravelTalktoHttpClient implements TalktoHttpClient
 {
     public function post(string $url, array $headers, array $envelope, int $timeout): TalktoHttpResponse

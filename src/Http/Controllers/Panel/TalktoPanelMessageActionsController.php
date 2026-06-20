@@ -11,6 +11,9 @@ use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelMessageQuery;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelAuthorizer;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelJsonPresenter;
 
+/**
+ * @internal Optional panel controller; use panel routes/views rather than this class.
+ */
 class TalktoPanelMessageActionsController
 {
     public function retry(

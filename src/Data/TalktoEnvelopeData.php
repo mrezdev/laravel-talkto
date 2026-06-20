@@ -5,6 +5,9 @@ namespace Mrezdev\LaravelTalkto\Data;
 use Illuminate\Database\Eloquent\Model;
 use InvalidArgumentException;
 
+/**
+ * Immutable public snapshot of a Talkto envelope payload.
+ */
 final readonly class TalktoEnvelopeData
 {
     public function __construct(

@@ -5,6 +5,9 @@ namespace Mrezdev\LaravelTalkto\Services;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Support\TalktoRetryDecision;
 
+/**
+ * Public service for retry eligibility and scheduling decisions.
+ */
 class TalktoRetryPolicy
 {
     public function settingsFor(TalktoMessage $message): array

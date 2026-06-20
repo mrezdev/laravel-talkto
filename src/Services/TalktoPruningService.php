@@ -10,6 +10,9 @@ use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoNonce;
 
+/**
+ * @internal Runtime service behind the prune command.
+ */
 class TalktoPruningService
 {
     private const TYPES = ['messages', 'attempts', 'events', 'dead-letters', 'nonces'];

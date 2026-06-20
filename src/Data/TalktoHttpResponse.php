@@ -2,6 +2,9 @@
 
 namespace Mrezdev\LaravelTalkto\Data;
 
+/**
+ * Public response value returned by Talkto HTTP client implementations.
+ */
 class TalktoHttpResponse
 {
     public function __construct(

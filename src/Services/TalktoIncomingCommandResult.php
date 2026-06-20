@@ -5,6 +5,8 @@ namespace Mrezdev\LaravelTalkto\Services;
 use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
 
 /**
+ * Public result object for incoming command handler outcomes.
+ *
  * @phpstan-consistent-constructor
  */
 class TalktoIncomingCommandResult implements IncomingCommandResultContract

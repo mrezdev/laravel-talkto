@@ -12,6 +12,9 @@ use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResolver;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 use Throwable;
 
+/**
+ * @internal Runtime orchestration pipeline behind incoming command handling.
+ */
 class ProcessIncomingTalktoMessagePipeline
 {
     private const PROCESSABLE_STATUSES = ['queued', 'pending'];

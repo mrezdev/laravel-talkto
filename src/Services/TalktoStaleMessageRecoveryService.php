@@ -8,6 +8,9 @@ use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 
+/**
+ * @internal Runtime service behind stale message recovery.
+ */
 class TalktoStaleMessageRecoveryService
 {
     public function __construct(

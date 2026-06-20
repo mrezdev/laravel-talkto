@@ -10,6 +10,9 @@ use Mrezdev\LaravelTalkto\Data\TalktoResultCallbackData;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 
+/**
+ * @internal Default receiver behind ResultCallbackReceiverContract.
+ */
 class TalktoResultCallbackReceiver implements ResultCallbackReceiverContract
 {
     private const VALID_CALLBACK_STATUSES = [

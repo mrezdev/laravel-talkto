@@ -4,6 +4,9 @@ namespace Mrezdev\LaravelTalkto\Support;
 
 use Carbon\CarbonInterface;
 
+/**
+ * Public read-only snapshot returned by security audits.
+ */
 final readonly class TalktoSecurityAuditSnapshot
 {
     /**

@@ -6,6 +6,9 @@ use Illuminate\Database\Eloquent\Model;
 use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
 use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
 
+/**
+ * Immutable public snapshot of a signed result callback envelope.
+ */
 final readonly class TalktoResultCallbackData
 {
     public function __construct(

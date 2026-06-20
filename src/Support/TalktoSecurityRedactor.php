@@ -2,6 +2,9 @@
 
 namespace Mrezdev\LaravelTalkto\Support;
 
+/**
+ * Public helper for redacting sensitive Talkto payload, header, and config values.
+ */
 class TalktoSecurityRedactor
 {
     private const REDACTED = '[redacted]';

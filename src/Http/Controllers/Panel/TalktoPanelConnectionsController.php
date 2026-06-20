@@ -12,6 +12,9 @@ use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelConnectionRegistry;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelAuthorizer;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelConnection;
 
+/**
+ * @internal Optional panel controller; use panel routes/views rather than this class.
+ */
 class TalktoPanelConnectionsController
 {
     public function index(

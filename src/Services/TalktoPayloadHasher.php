@@ -6,6 +6,9 @@ use JsonException;
 use JsonSerializable;
 use RuntimeException;
 
+/**
+ * Advanced public utility for deterministic Talkto payload hashes.
+ */
 class TalktoPayloadHasher
 {
     public function hash(mixed $payload): string

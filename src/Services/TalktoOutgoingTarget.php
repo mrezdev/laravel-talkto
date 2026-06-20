@@ -4,6 +4,9 @@ namespace Mrezdev\LaravelTalkto\Services;
 
 use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoOutgoingTarget;
 
+/**
+ * Public value object describing a configured outgoing target.
+ */
 class TalktoOutgoingTarget
 {
     public function __construct(

@@ -10,6 +10,9 @@ use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
 use Throwable;
 
+/**
+ * @internal Default sender behind ResultCallbackSenderContract.
+ */
 class TalktoResultCallbackSender implements ResultCallbackSenderContract
 {
     public function __construct(

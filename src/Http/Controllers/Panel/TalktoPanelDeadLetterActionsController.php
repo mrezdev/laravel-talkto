@@ -9,6 +9,9 @@ use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelActionExecutor;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelAuthorizer;
 
+/**
+ * @internal Optional panel controller; use panel routes/views rather than this class.
+ */
 class TalktoPanelDeadLetterActionsController
 {
     public function reprocess(

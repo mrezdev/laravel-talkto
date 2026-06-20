@@ -2,6 +2,9 @@
 
 namespace Mrezdev\LaravelTalkto\Services;
 
+/**
+ * Creates fluent outgoing Talkto flow builders.
+ */
 class TalktoFlowFactory
 {
     public function __construct(

@@ -6,6 +6,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackReceiverContract;
 
+/**
+ * @internal Package route adapter; use callback contracts instead.
+ */
 class TalktoResultCallbackController
 {
     public function __invoke(Request $request, ResultCallbackReceiverContract $receiver): JsonResponse

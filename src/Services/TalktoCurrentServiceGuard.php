@@ -4,6 +4,9 @@ namespace Mrezdev\LaravelTalkto\Services;
 
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 
+/**
+ * @internal Runtime guard for package-owned current-service scoping.
+ */
 class TalktoCurrentServiceGuard
 {
     public function currentService(): string

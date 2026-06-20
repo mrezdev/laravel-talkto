@@ -9,6 +9,9 @@ use Mrezdev\LaravelTalkto\Data\TalktoEnvelopeData;
 use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoOutgoingTarget;
 use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoSignatureException;
 
+/**
+ * @internal Runtime envelope builder behind outgoing delivery.
+ */
 class TalktoOutgoingEnvelopeBuilder
 {
     public function __construct(

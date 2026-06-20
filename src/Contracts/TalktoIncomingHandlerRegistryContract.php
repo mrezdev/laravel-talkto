@@ -2,6 +2,9 @@
 
 namespace Mrezdev\LaravelTalkto\Contracts;
 
+/**
+ * Registry contract for programmatic incoming command handler registration.
+ */
 interface TalktoIncomingHandlerRegistryContract
 {
     public function register(string $command, string $handlerClass): void;

@@ -10,6 +10,9 @@ use Mrezdev\LaravelTalkto\Data\TalktoResultCallbackData;
 use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoOutgoingTarget;
 use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoSignatureException;
 
+/**
+ * @internal Runtime envelope builder behind result callbacks.
+ */
 class TalktoResultCallbackEnvelopeBuilder
 {
     public function __construct(

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Public API Boundary
+
+- Defined the documented public API boundary for contracts, DTOs, commands, config, publish tags, extension points, exceptions, and internal implementation categories.
+- Added `@internal` annotations to representative implementation-only controllers, jobs, pipelines, and runtime services while keeping documented contracts and public factories unmarked.
+- Clarified the documented v2 nonce setting as `talkto.security.replay_protection.require_nonce_for_v2`.
+
 ### Documentation
 
 - Reworked the README into a concise public entry point for what Laravel Talkto does, when to use it, Packagist installation with `composer require mrezdev/laravel-talkto`, secure v2 configuration, sending/receiving commands, callbacks, retry/DLQ, observability, and support links.

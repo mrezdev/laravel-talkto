@@ -2,6 +2,9 @@
 
 namespace Mrezdev\LaravelTalkto\Services;
 
+/**
+ * @internal Runtime signature verifier behind receive and callback endpoints.
+ */
 class TalktoSignatureVerifier
 {
     public function __construct(

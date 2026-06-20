@@ -12,6 +12,9 @@ use Mrezdev\LaravelTalkto\Services\TalktoOutgoingEnvelopeBuilder;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 use Throwable;
 
+/**
+ * @internal Runtime orchestration pipeline behind outgoing message delivery.
+ */
 class SendOutgoingTalktoMessagePipeline
 {
     private int $talktoMessageId;

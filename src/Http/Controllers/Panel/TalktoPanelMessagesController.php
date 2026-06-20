@@ -10,6 +10,9 @@ use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelAuthorizer;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelJsonPresenter;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelMessageFilters;
 
+/**
+ * @internal Optional panel controller; use panel routes/views rather than this class.
+ */
 class TalktoPanelMessagesController
 {
     public function index(

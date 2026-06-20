@@ -13,6 +13,9 @@ use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
 use Mrezdev\LaravelTalkto\Support\TalktoTraceSnapshot;
 use Throwable;
 
+/**
+ * Read-only public service for message and correlation traces.
+ */
 class TalktoTraceReporter
 {
     public function __construct(private readonly TalktoSecurityRedactor $redactor) {}

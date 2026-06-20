@@ -2,6 +2,9 @@
 
 namespace Mrezdev\LaravelTalkto\Support;
 
+/**
+ * Public read-only snapshot returned by Talkto trace reporting.
+ */
 final readonly class TalktoTraceSnapshot
 {
     public function __construct(

@@ -5,6 +5,9 @@ namespace Mrezdev\LaravelTalkto\Services;
 use Illuminate\Database\QueryException;
 use Mrezdev\LaravelTalkto\Models\TalktoNonce;
 
+/**
+ * @internal Replay-protection ledger behind v2 nonce enforcement.
+ */
 class TalktoNonceLedger
 {
     public function nonceHash(string $signatureVersion, string $source, string $target, string $nonce): string

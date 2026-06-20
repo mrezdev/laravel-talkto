@@ -6,6 +6,9 @@ use Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract;
 use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoOutgoingTarget;
 use Mrezdev\LaravelTalkto\Exceptions\UnknownTalktoOutgoingTarget;
 
+/**
+ * Public registry for programmatic outgoing target registration.
+ */
 class TalktoOutgoingTargetRegistry implements TalktoOutgoingTargetRegistryContract
 {
     private array $targets = [];

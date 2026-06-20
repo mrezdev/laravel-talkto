@@ -6,6 +6,9 @@ use Mrezdev\LaravelTalkto\Support\TalktoSecurityAuditSnapshot;
 use Mrezdev\LaravelTalkto\Support\TalktoSecurityFinding;
 use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
 
+/**
+ * Read-only public service for security posture snapshots.
+ */
 class TalktoSecurityAuditor
 {
     private const VALID_SIGNATURE_VERSIONS = ['v1', 'v2'];

@@ -13,6 +13,9 @@ use Mrezdev\LaravelTalkto\Pipelines\ProcessIncomingTalktoMessagePipeline;
 use Mrezdev\LaravelTalkto\Services\TalktoCurrentServiceGuard;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 
+/**
+ * @internal Queue job used by the package receive pipeline.
+ */
 class ProcessIncomingTalktoMessage implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;

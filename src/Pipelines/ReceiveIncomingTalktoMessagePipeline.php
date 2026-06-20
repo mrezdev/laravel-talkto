@@ -14,6 +14,9 @@ use Mrezdev\LaravelTalkto\Services\TalktoNonceLedger;
 use Mrezdev\LaravelTalkto\Services\TalktoSignatureVerifier;
 use Throwable;
 
+/**
+ * @internal Runtime orchestration pipeline behind the receive endpoint.
+ */
 class ReceiveIncomingTalktoMessagePipeline
 {
     public function receive(Request $request, TalktoSignatureVerifier $verifier): JsonResponse

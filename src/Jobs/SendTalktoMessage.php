@@ -14,6 +14,9 @@ use Mrezdev\LaravelTalkto\Services\TalktoCurrentServiceGuard;
 use Mrezdev\LaravelTalkto\Services\TalktoOutgoingEnvelopeBuilder;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 
+/**
+ * @internal Queue job used by the package outgoing send pipeline.
+ */
 class SendTalktoMessage implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;

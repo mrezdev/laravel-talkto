@@ -11,6 +11,9 @@ use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Throwable;
 
+/**
+ * Fluent builder for transactional outgoing Talkto flows.
+ */
 class TalktoFlowBuilder
 {
     protected ?string $target = null;

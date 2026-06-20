@@ -2,6 +2,9 @@
 
 namespace Mrezdev\LaravelTalkto\Contracts;
 
+/**
+ * Describes the stable outcome shape returned by incoming command handlers.
+ */
 interface IncomingCommandResultContract
 {
     public function isSucceeded(): bool;

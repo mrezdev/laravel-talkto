@@ -10,6 +10,9 @@ use Mrezdev\LaravelTalkto\Handlers\NoopIncomingCommandHandler;
 use Mrezdev\LaravelTalkto\Handlers\SkippedIncomingCommandHandler;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 
+/**
+ * @internal Runtime resolver behind incoming command processing.
+ */
 class TalktoIncomingCommandResolver
 {
     public function __construct(private readonly TalktoIncomingHandlerRegistryContract $registry) {}

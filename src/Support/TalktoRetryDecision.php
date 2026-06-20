@@ -2,6 +2,9 @@
 
 namespace Mrezdev\LaravelTalkto\Support;
 
+/**
+ * Public read-only snapshot returned by retry policy evaluation.
+ */
 final readonly class TalktoRetryDecision
 {
     public function __construct(

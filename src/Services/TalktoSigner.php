@@ -2,6 +2,9 @@
 
 namespace Mrezdev\LaravelTalkto\Services;
 
+/**
+ * Advanced public utility for deterministic Talkto signature creation.
+ */
 class TalktoSigner
 {
     public function canonicalString(

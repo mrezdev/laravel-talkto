@@ -2,6 +2,9 @@
 
 namespace Mrezdev\LaravelTalkto\Support;
 
+/**
+ * Public read-only security finding value object.
+ */
 final readonly class TalktoSecurityFinding
 {
     public function __construct(

@@ -13,6 +13,9 @@ use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Throwable;
 
+/**
+ * Creates outgoing Talkto message records through the documented public API.
+ */
 class TalktoOutgoingMessageFactory
 {
     public function __construct(

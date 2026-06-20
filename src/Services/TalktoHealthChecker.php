@@ -7,6 +7,9 @@ use Illuminate\Database\Eloquent\Builder;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 
+/**
+ * Read-only public service for package health summaries.
+ */
 class TalktoHealthChecker
 {
     public function __construct(private readonly TalktoMetricsCollector $metrics) {}
