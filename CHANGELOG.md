@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Testing
+
+- Added a local two-service E2E smoke test covering v2 signing, nonce replay protection, idempotency, payload tamper rejection, and signed result callback replay safety without external servers.
+- Added `docs/smoke-tests.md` with the focused smoke test command and local-only safety expectations.
+
 ### Internal Refactor
 
 - Added internal backed enums for Talkto lifecycle statuses and directions, plus a shared internal model resolver, while keeping persisted database values and public APIs unchanged.

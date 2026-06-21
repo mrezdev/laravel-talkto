@@ -33,7 +33,7 @@ This is the public documentation map for Laravel Talkto. The root [README](../RE
 - [Recovery and monitoring](recovery-monitoring-template.md)
 - [Talkto Panel](panel.md)
 - [Testing](testing.md)
-- [Smoke tests](SMOKE_TESTS.md)
+- [Smoke tests](smoke-tests.md)
 - [Production rollout template](production-rollout-template.md)
 - [Release readiness](release-readiness.md)
 - [Release process](release-process.md)
