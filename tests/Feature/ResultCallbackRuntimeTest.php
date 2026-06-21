@@ -226,6 +226,133 @@ test('default v2 callback replay cannot regress status after later successful ca
         ->and(TalktoNonce::query()->count())->toBe(2);
 });
 
+test('default v2 callback receiver ignores stale retryable failure after success with fresh nonce', function (): void {
+    $message = p04OutgoingMessage('p04-receive-v2-stale-retryable');
+    [$successEnvelope, $successHeaders] = p04SignedV2Callback(
+        $message,
+        TalktoIncomingCommandResult::succeeded(['processed' => true]),
+        ['callback_message_id' => 'callback-v2-stale-success', 'nonce' => 'callback-v2-stale-success-nonce']
+    );
+    [$staleEnvelope, $staleHeaders] = p04SignedV2Callback(
+        $message,
+        TalktoIncomingCommandResult::failedRetryable('Temporary failure.', RuntimeException::class),
+        ['callback_message_id' => 'callback-v2-stale-retryable', 'nonce' => 'callback-v2-stale-retryable-nonce']
+    );
+
+    $success = app(ResultCallbackReceiverContract::class)->receiveResult($successEnvelope, $successHeaders);
+    $stale = app(ResultCallbackReceiverContract::class)->receiveResult($staleEnvelope, $staleHeaders);
+    $message->refresh();
+
+    $encodedResponse = (string) json_encode($stale);
+    $encodedEvents = (string) json_encode(TalktoEvent::query()->where('message_id', $message->message_id)->get()->toArray());
+
+    expect($success)->toMatchArray([
+        'accepted' => true,
+        'status' => 'applied',
+        'duplicate' => false,
+    ])->and($stale)->toMatchArray([
+        'accepted' => true,
+        'status' => 'stale_ignored',
+        'duplicate' => false,
+    ])->and($message->destination_action_status)->toBe('succeeded')
+        ->and($message->overall_status)->toBe('completed')
+        ->and($message->completed_at)->not->toBeNull()
+        ->and($message->failed_at)->toBeNull()
+        ->and($message->last_error)->toBeNull()
+        ->and(TalktoNonce::query()->count())->toBe(2)
+        ->and($encodedResponse)->not->toContain('callback-v2-stale-retryable-nonce')
+        ->and($encodedEvents)->not->toContain('callback-v2-stale-retryable-nonce')
+        ->and(TalktoEvent::query()->where('message_id', $message->message_id)->where('event_type', 'result_callback_stale_ignored')->where('meta->ignored_destination_action_status', 'failed_retryable')->exists())->toBeTrue();
+});
+
+test('default v2 callback receiver ignores stale skipped result after success with fresh nonce', function (): void {
+    $message = p04OutgoingMessage('p04-receive-v2-stale-skipped');
+    [$successEnvelope, $successHeaders] = p04SignedV2Callback(
+        $message,
+        TalktoIncomingCommandResult::succeeded(['processed' => true]),
+        ['callback_message_id' => 'callback-v2-skipped-success', 'nonce' => 'callback-v2-skipped-success-nonce']
+    );
+    [$skippedEnvelope, $skippedHeaders] = p04SignedV2Callback(
+        $message,
+        TalktoIncomingCommandResult::skipped('Not needed.'),
+        ['callback_message_id' => 'callback-v2-stale-skipped', 'nonce' => 'callback-v2-stale-skipped-nonce']
+    );
+
+    app(ResultCallbackReceiverContract::class)->receiveResult($successEnvelope, $successHeaders);
+    $skipped = app(ResultCallbackReceiverContract::class)->receiveResult($skippedEnvelope, $skippedHeaders);
+    $message->refresh();
+
+    expect($skipped)->toMatchArray([
+        'accepted' => true,
+        'status' => 'stale_ignored',
+        'duplicate' => false,
+    ])->and($message->destination_action_status)->toBe('succeeded')
+        ->and($message->overall_status)->toBe('completed')
+        ->and(TalktoNonce::query()->count())->toBe(2);
+});
+
+test('default v2 callback receiver ignores stale retryable failure after final failure with fresh nonce', function (): void {
+    $message = p04OutgoingMessage('p04-receive-v2-final-no-downgrade');
+    [$finalEnvelope, $finalHeaders] = p04SignedV2Callback(
+        $message,
+        TalktoIncomingCommandResult::failedFinal('Final failure.', LogicException::class),
+        ['callback_message_id' => 'callback-v2-final-first', 'nonce' => 'callback-v2-final-first-nonce']
+    );
+    [$retryableEnvelope, $retryableHeaders] = p04SignedV2Callback(
+        $message,
+        TalktoIncomingCommandResult::failedRetryable('Temporary failure.', RuntimeException::class),
+        ['callback_message_id' => 'callback-v2-final-stale-retryable', 'nonce' => 'callback-v2-final-stale-retryable-nonce']
+    );
+
+    $final = app(ResultCallbackReceiverContract::class)->receiveResult($finalEnvelope, $finalHeaders);
+    $retryable = app(ResultCallbackReceiverContract::class)->receiveResult($retryableEnvelope, $retryableHeaders);
+    $message->refresh();
+
+    expect($final)->toMatchArray([
+        'accepted' => true,
+        'status' => 'applied',
+    ])->and($retryable)->toMatchArray([
+        'accepted' => true,
+        'status' => 'stale_ignored',
+        'duplicate' => false,
+    ])->and($message->destination_action_status)->toBe('failed_final')
+        ->and($message->overall_status)->toBe('failed_final')
+        ->and($message->last_error)->toBe('Final failure.')
+        ->and(TalktoNonce::query()->count())->toBe(2);
+});
+
+test('default v2 callback receiver can recover retryable failure with later success', function (): void {
+    $message = p04OutgoingMessage('p04-receive-v2-retryable-recovers');
+    [$retryableEnvelope, $retryableHeaders] = p04SignedV2Callback(
+        $message,
+        TalktoIncomingCommandResult::failedRetryable('Temporary failure.', RuntimeException::class),
+        ['callback_message_id' => 'callback-v2-recover-retryable', 'nonce' => 'callback-v2-recover-retryable-nonce']
+    );
+    [$successEnvelope, $successHeaders] = p04SignedV2Callback(
+        $message,
+        TalktoIncomingCommandResult::succeeded(['processed' => true]),
+        ['callback_message_id' => 'callback-v2-recover-success', 'nonce' => 'callback-v2-recover-success-nonce']
+    );
+
+    $retryable = app(ResultCallbackReceiverContract::class)->receiveResult($retryableEnvelope, $retryableHeaders);
+    $success = app(ResultCallbackReceiverContract::class)->receiveResult($successEnvelope, $successHeaders);
+    $message->refresh();
+
+    expect($retryable)->toMatchArray([
+        'accepted' => true,
+        'status' => 'applied',
+    ])->and($success)->toMatchArray([
+        'accepted' => true,
+        'status' => 'applied',
+        'duplicate' => false,
+    ])->and($message->destination_action_status)->toBe('succeeded')
+        ->and($message->overall_status)->toBe('completed')
+        ->and($message->completed_at)->not->toBeNull()
+        ->and($message->failed_at)->toBeNull()
+        ->and($message->last_error)->toBeNull()
+        ->and(TalktoNonce::query()->count())->toBe(2);
+});
+
 test('callback route maps reused v2 nonce to conflict', function (): void {
     $message = p04OutgoingMessage('p04-receive-v2-route-conflict');
     [$envelope, $headers] = p04SignedV2Callback(
@@ -304,8 +431,8 @@ test('callback receiver handles skipped retryable and final results', function (
     }
 });
 
-test('callback receiver failure sets failure fields and clears stale completed timestamp', function (): void {
-    $message = p04OutgoingMessage('p04-receive-failure-clears-completed', [
+test('callback receiver ignores stale failure for completed messages', function (): void {
+    $message = p04OutgoingMessage('p04-receive-failure-after-completed', [
         'destination_action_status' => 'succeeded',
         'overall_status' => 'completed',
         'completed_at' => now()->subMinute(),
@@ -317,13 +444,14 @@ test('callback receiver failure sets failure fields and clears stale completed t
 
     expect($result)->toMatchArray([
         'accepted' => true,
-        'status' => 'applied',
+        'status' => 'stale_ignored',
         'duplicate' => false,
-    ])->and($message->destination_action_status)->toBe('failed_retryable')
-        ->and($message->overall_status)->toBe('failed_retryable')
-        ->and($message->completed_at)->toBeNull()
-        ->and($message->failed_at)->not->toBeNull()
-        ->and($message->last_error)->toBe('Temporary failure.');
+    ])->and($message->destination_action_status)->toBe('succeeded')
+        ->and($message->overall_status)->toBe('completed')
+        ->and($message->completed_at)->not->toBeNull()
+        ->and($message->failed_at)->toBeNull()
+        ->and($message->last_error)->toBeNull()
+        ->and(TalktoEvent::query()->where('message_id', $message->message_id)->where('event_type', 'result_callback_stale_ignored')->exists())->toBeTrue();
 });
 
 test('callback receiver rejects invalid callback status and linked mismatches', function (): void {

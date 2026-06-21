@@ -20,12 +20,17 @@ use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
 use Mrezdev\LaravelTalkto\Pipelines\ProcessIncomingTalktoMessagePipeline;
 use Mrezdev\LaravelTalkto\Pipelines\ReceiveIncomingTalktoMessagePipeline;
 use Mrezdev\LaravelTalkto\Pipelines\SendOutgoingTalktoMessagePipeline;
+use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelActionExecutor;
+use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelMessageQuery;
 use Mrezdev\LaravelTalkto\Services\TalktoFlowBuilder;
 use Mrezdev\LaravelTalkto\Services\TalktoFlowFactory;
 use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
 use Mrezdev\LaravelTalkto\Services\TalktoOutgoingMessageFactory;
 use Mrezdev\LaravelTalkto\Services\TalktoSecurityAuditor;
 use Mrezdev\LaravelTalkto\Services\TalktoTraceReporter;
+use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelActionResult;
+use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelJsonPresenter;
+use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelMessageFilters;
 use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
 
 function publicApiBoundaryPath(string $path): string
@@ -107,6 +112,11 @@ test('representative implementation internals are marked internal', function ():
         ReceiveIncomingTalktoMessagePipeline::class,
         ProcessIncomingTalktoMessagePipeline::class,
         SendOutgoingTalktoMessagePipeline::class,
+        TalktoPanelActionExecutor::class,
+        TalktoPanelMessageQuery::class,
+        TalktoPanelActionResult::class,
+        TalktoPanelJsonPresenter::class,
+        TalktoPanelMessageFilters::class,
     ];
 
     foreach ($internalTypes as $internalType) {

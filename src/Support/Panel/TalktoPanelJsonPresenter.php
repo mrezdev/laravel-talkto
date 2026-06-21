@@ -6,6 +6,9 @@ use Carbon\CarbonInterface;
 use Illuminate\Contracts\Support\Arrayable;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 
+/**
+ * @internal Optional panel implementation detail.
+ */
 class TalktoPanelJsonPresenter
 {
     private const REDACTED = '[redacted]';

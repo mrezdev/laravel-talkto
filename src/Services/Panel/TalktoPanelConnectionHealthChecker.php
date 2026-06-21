@@ -12,6 +12,9 @@ use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelConnection;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelConnectionHealth;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelHealthStatus;
 
+/**
+ * @internal Optional panel implementation detail.
+ */
 class TalktoPanelConnectionHealthChecker
 {
     public function __construct(

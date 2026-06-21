@@ -70,6 +70,25 @@ test('panel action routes are registered when panel is enabled', function (): vo
         ->and(Route::has('talkto.panel.dead-letters.reprocess'))->toBeTrue();
 });
 
+test('panel action executor uses translated result messages', function (): void {
+    $source = file_get_contents(__DIR__.'/../../src/Services/Panel/TalktoPanelActionExecutor.php') ?: '';
+
+    expect($source)->toContain("actionText('retry_disabled')")
+        ->and($source)->toContain("actionText('retry_dispatched')")
+        ->and($source)->toContain("actionText('dead_letter_reprocess_dispatched')")
+        ->and($source)->toContain('talkto::panel.actions.{$key}');
+
+    foreach ([
+        'Panel retry action is disabled.',
+        'Unsupported message direction.',
+        'Message is not retryable.',
+        'Retry job dispatched.',
+        'Dead letter reprocess job dispatched.',
+    ] as $message) {
+        expect($source)->not->toContain($message);
+    }
+});
+
 test('panel authorization applies to action routes', function (): void {
     ($this->bootPanelActionsApp)();
 

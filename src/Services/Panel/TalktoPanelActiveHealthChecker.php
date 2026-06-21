@@ -10,6 +10,9 @@ use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelConnection;
 use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
 use Throwable;
 
+/**
+ * @internal Optional panel implementation detail.
+ */
 class TalktoPanelActiveHealthChecker
 {
     public function __construct(

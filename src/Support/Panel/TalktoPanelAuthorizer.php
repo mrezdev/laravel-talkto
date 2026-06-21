@@ -4,6 +4,9 @@ namespace Mrezdev\LaravelTalkto\Support\Panel;
 
 use Illuminate\Support\Facades\Gate;
 
+/**
+ * @internal Optional panel implementation detail.
+ */
 class TalktoPanelAuthorizer
 {
     public function authorize(): void

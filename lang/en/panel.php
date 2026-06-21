@@ -38,6 +38,25 @@ return [
         'message' => 'There is nothing to show yet.',
     ],
 
+    'actions' => [
+        'retry_disabled' => 'Panel retry action is disabled.',
+        'unsupported_direction' => 'Unsupported message direction.',
+        'message_wrong_service' => 'Message belongs to another service.',
+        'message_not_retryable' => 'Message is not retryable.',
+        'retry_dispatch_failed' => 'Retry job could not be dispatched.',
+        'retry_dispatched' => 'Retry job dispatched.',
+        'reprocess_disabled' => 'Panel dead-letter reprocess action is disabled.',
+        'dead_letter_not_reprocessable' => 'Dead letter is not eligible for reprocess.',
+        'original_message_not_found' => 'Original message was not found.',
+        'original_message_wrong_service' => 'Original message belongs to another service.',
+        'original_message_succeeded' => 'Original message already succeeded.',
+        'original_message_unsupported_direction' => 'Original message direction is unsupported.',
+        'dead_letter_claim_failed' => 'Dead letter could not be claimed for reprocess.',
+        'dispatch_failed' => 'Dispatch failed.',
+        'dead_letter_reprocess_dispatch_failed' => 'Dead letter reprocess job could not be dispatched.',
+        'dead_letter_reprocess_dispatched' => 'Dead letter reprocess job dispatched.',
+    ],
+
     'dashboard' => [
         'title' => 'Panel Dashboard',
         'description' => 'Latest local Talkto messages and passive connection health.',

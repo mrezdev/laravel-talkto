@@ -17,6 +17,9 @@ use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
 use Mrezdev\LaravelTalkto\Support\TalktoTraceSnapshot;
 use Throwable;
 
+/**
+ * @internal Optional panel implementation detail.
+ */
 class TalktoPanelActionExecutor
 {
     public function __construct(
@@ -29,17 +32,17 @@ class TalktoPanelActionExecutor
     public function retryMessage(TalktoMessage $message): TalktoPanelActionResult
     {
         if (! (bool) config('talkto.panel.actions.retry_enabled', true)) {
-            return TalktoPanelActionResult::failure('Panel retry action is disabled.');
+            return TalktoPanelActionResult::failure($this->actionText('retry_disabled'));
         }
 
         if (! in_array($message->direction, ['incoming', 'outgoing'], true)) {
-            return TalktoPanelActionResult::failure('Unsupported message direction.', [
+            return TalktoPanelActionResult::failure($this->actionText('unsupported_direction'), [
                 'direction' => $message->direction,
             ]);
         }
 
         if (! $this->currentServiceGuard->allowsProcessing($message)) {
-            return TalktoPanelActionResult::failure('Message belongs to another service.', [
+            return TalktoPanelActionResult::failure($this->actionText('message_wrong_service'), [
                 'message_id' => $message->message_id,
                 'current_service' => $this->currentServiceGuard->currentService(),
             ]);
@@ -48,7 +51,7 @@ class TalktoPanelActionExecutor
         if (! $this->retryPolicy->canRetry($message)) {
             $decision = $this->retryPolicy->decisionFor($message);
 
-            return TalktoPanelActionResult::failure('Message is not retryable.', [
+            return TalktoPanelActionResult::failure($this->actionText('message_not_retryable'), [
                 'reason' => $decision->reason,
                 'direction' => $message->direction,
                 'retry_count' => (int) ($message->retry_count ?? 0),
@@ -70,7 +73,7 @@ class TalktoPanelActionExecutor
                 'panel_action' => true,
             ]);
 
-            return TalktoPanelActionResult::failure('Retry job could not be dispatched.', [
+            return TalktoPanelActionResult::failure($this->actionText('retry_dispatch_failed'), [
                 'message_id' => $message->message_id,
                 'direction' => $message->direction,
                 'exception_class' => $throwable::class,
@@ -87,7 +90,7 @@ class TalktoPanelActionExecutor
             'previous_next_retry_at' => $previousNextRetryAt,
         ]);
 
-        return TalktoPanelActionResult::success('Retry job dispatched.', [
+        return TalktoPanelActionResult::success($this->actionText('retry_dispatched'), [
             'message_id' => $message->message_id,
             'direction' => $message->direction,
         ]);
@@ -96,11 +99,11 @@ class TalktoPanelActionExecutor
     public function reprocessDeadLetter(TalktoDeadLetter $deadLetter, bool $force = false): TalktoPanelActionResult
     {
         if (! (bool) config('talkto.panel.actions.dead_letter_reprocess_enabled', true)) {
-            return TalktoPanelActionResult::failure('Panel dead-letter reprocess action is disabled.');
+            return TalktoPanelActionResult::failure($this->actionText('reprocess_disabled'));
         }
 
         if (! $this->deadLetterQueue->canReprocess($deadLetter, $force)) {
-            return TalktoPanelActionResult::failure('Dead letter is not eligible for reprocess.', [
+            return TalktoPanelActionResult::failure($this->actionText('dead_letter_not_reprocessable'), [
                 'dead_letter_id' => $deadLetter->id,
                 'status' => $deadLetter->status,
             ]);
@@ -111,14 +114,14 @@ class TalktoPanelActionExecutor
         if (! $message) {
             $this->recordMissingOriginalEvent($deadLetter);
 
-            return TalktoPanelActionResult::failure('Original message was not found.', [
+            return TalktoPanelActionResult::failure($this->actionText('original_message_not_found'), [
                 'dead_letter_id' => $deadLetter->id,
                 'message_id' => $deadLetter->message_id,
             ]);
         }
 
         if (! $this->currentServiceGuard->allowsProcessing($message)) {
-            return TalktoPanelActionResult::failure('Original message belongs to another service.', [
+            return TalktoPanelActionResult::failure($this->actionText('original_message_wrong_service'), [
                 'dead_letter_id' => $deadLetter->id,
                 'message_id' => $deadLetter->message_id,
                 'current_service' => $this->currentServiceGuard->currentService(),
@@ -132,7 +135,7 @@ class TalktoPanelActionExecutor
                 'panel_action' => true,
             ]);
 
-            return TalktoPanelActionResult::failure('Original message already succeeded.');
+            return TalktoPanelActionResult::failure($this->actionText('original_message_succeeded'));
         }
 
         if (! in_array($message->direction, ['incoming', 'outgoing'], true)) {
@@ -143,7 +146,7 @@ class TalktoPanelActionExecutor
                 'panel_action' => true,
             ]);
 
-            return TalktoPanelActionResult::failure('Original message direction is unsupported.', [
+            return TalktoPanelActionResult::failure($this->actionText('original_message_unsupported_direction'), [
                 'direction' => $message->direction,
             ]);
         }
@@ -151,7 +154,7 @@ class TalktoPanelActionExecutor
         $claimed = $this->deadLetterQueue->claimForReprocess($deadLetter, $force);
 
         if (! $claimed) {
-            return TalktoPanelActionResult::failure('Dead letter could not be claimed for reprocess.');
+            return TalktoPanelActionResult::failure($this->actionText('dead_letter_claim_failed'));
         }
 
         $this->prepareOriginalMessageForReprocess($message);
@@ -159,7 +162,7 @@ class TalktoPanelActionExecutor
         try {
             $this->dispatchMessageJob($message);
         } catch (Throwable $throwable) {
-            $this->deadLetterQueue->markFailedReprocess($claimed, 'Dispatch failed.', $throwable);
+            $this->deadLetterQueue->markFailedReprocess($claimed, $this->actionText('dispatch_failed'), $throwable);
             $this->recordEventSafely($message, 'panel_dead_letter_reprocess_dispatch_failed', [
                 'dead_letter_id' => $claimed->id,
                 'direction' => $message->direction,
@@ -168,7 +171,7 @@ class TalktoPanelActionExecutor
                 'panel_action' => true,
             ]);
 
-            return TalktoPanelActionResult::failure('Dead letter reprocess job could not be dispatched.', [
+            return TalktoPanelActionResult::failure($this->actionText('dead_letter_reprocess_dispatch_failed'), [
                 'dead_letter_id' => $claimed->id,
                 'message_id' => $message->message_id,
                 'direction' => $message->direction,
@@ -183,7 +186,7 @@ class TalktoPanelActionExecutor
             'panel_action' => true,
         ]);
 
-        return TalktoPanelActionResult::success('Dead letter reprocess job dispatched.', [
+        return TalktoPanelActionResult::success($this->actionText('dead_letter_reprocess_dispatched'), [
             'dead_letter_id' => $claimed->id,
             'message_id' => $message->message_id,
             'direction' => $message->direction,
@@ -323,14 +326,20 @@ class TalktoPanelActionExecutor
 
     private function safeExceptionMessage(Throwable $throwable): string
     {
-        $message = app(TalktoSecurityRedactor::class)->redactText($throwable->getMessage()) ?? 'Dispatch failed.';
+        $defaultMessage = $this->actionText('dispatch_failed');
+        $message = app(TalktoSecurityRedactor::class)->redactText($throwable->getMessage()) ?? $defaultMessage;
         $message = trim($message);
 
         if ($message === '') {
-            return 'Dispatch failed.';
+            return $defaultMessage;
         }
 
         return mb_substr($message, 0, 300);
+    }
+
+    private function actionText(string $key): string
+    {
+        return (string) __("talkto::panel.actions.{$key}");
     }
 
     private function messageModelClass(): string

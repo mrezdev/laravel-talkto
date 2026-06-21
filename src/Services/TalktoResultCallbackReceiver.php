@@ -113,12 +113,33 @@ class TalktoResultCallbackReceiver implements ResultCallbackReceiverContract
             return $this->accepted('duplicate', $callback, true);
         }
 
-        DB::transaction(function () use ($message, $callback, $destinationStatus, $overallStatus): void {
+        if ($this->shouldIgnoreStaleCallback($message, $destinationStatus, $overallStatus)) {
+            $this->recordStaleCallbackIgnored($message, $callback, $destinationStatus, $overallStatus);
+
+            return $this->accepted('stale_ignored', $callback, false);
+        }
+
+        $applyResult = DB::transaction(function () use ($message, $callback, $destinationStatus, $overallStatus): array {
             $messageClass = $this->messageModelClass();
             $message = $messageClass::query()->whereKey($message->id)->lockForUpdate()->first();
 
             if (! $message) {
-                return;
+                return ['status' => 'applied', 'duplicate' => false];
+            }
+
+            if ($message->destination_action_status === $destinationStatus && $message->overall_status === $overallStatus) {
+                $this->recordEvent($message, 'result_callback_duplicate', $message->overall_status, $message->overall_status, [
+                    'callback_message_id' => $callback->callbackMessageId,
+                    'status' => $callback->status,
+                ]);
+
+                return ['status' => 'duplicate', 'duplicate' => true];
+            }
+
+            if ($this->shouldIgnoreStaleCallback($message, $destinationStatus, $overallStatus)) {
+                $this->recordStaleCallbackIgnored($message, $callback, $destinationStatus, $overallStatus);
+
+                return ['status' => 'stale_ignored', 'duplicate' => false];
             }
 
             $oldStatus = $message->overall_status;
@@ -142,9 +163,11 @@ class TalktoResultCallbackReceiver implements ResultCallbackReceiverContract
                 'result' => $callback->resultData->result,
                 'result_meta' => $callback->resultData->meta,
             ]);
+
+            return ['status' => 'applied', 'duplicate' => false];
         });
 
-        return $this->accepted('applied', $callback, false);
+        return $this->accepted((string) $applyResult['status'], $callback, (bool) $applyResult['duplicate']);
     }
 
     private function validateEnvelope(array $envelope): ?array
@@ -204,6 +227,48 @@ class TalktoResultCallbackReceiver implements ResultCallbackReceiverContract
         }
 
         return $attributes;
+    }
+
+    private function shouldIgnoreStaleCallback(TalktoMessage $message, string $destinationStatus, string $overallStatus): bool
+    {
+        $currentDestinationStatus = (string) ($message->destination_action_status ?? '');
+        $currentOverallStatus = (string) ($message->overall_status ?? '');
+
+        $callbackIsSuccess = $destinationStatus === 'succeeded' && $overallStatus === 'completed';
+
+        if ($callbackIsSuccess) {
+            return false;
+        }
+
+        $currentIsSuccessful = in_array($currentOverallStatus, ['completed', 'succeeded'], true)
+            || $currentDestinationStatus === 'succeeded';
+        $callbackWouldWeakenSuccess = in_array($destinationStatus, ['failed_retryable', 'failed_final', 'skipped'], true)
+            || in_array($overallStatus, ['failed_retryable', 'failed_final'], true);
+
+        if ($currentIsSuccessful && $callbackWouldWeakenSuccess) {
+            return true;
+        }
+
+        return ($currentOverallStatus === 'failed_final' || $currentDestinationStatus === 'failed_final')
+            && ($overallStatus === 'failed_retryable' || $destinationStatus === 'failed_retryable');
+    }
+
+    private function recordStaleCallbackIgnored(
+        TalktoMessage $message,
+        TalktoResultCallbackData $callback,
+        string $destinationStatus,
+        string $overallStatus
+    ): void {
+        $this->recordEvent($message, 'result_callback_stale_ignored', $message->overall_status, $message->overall_status, [
+            'callback_message_id' => $callback->callbackMessageId,
+            'status' => $callback->status,
+            'current_destination_action_status' => $message->destination_action_status,
+            'current_overall_status' => $message->overall_status,
+            'ignored_destination_action_status' => $destinationStatus,
+            'ignored_overall_status' => $overallStatus,
+            'source' => $callback->source,
+            'command' => $callback->command,
+        ]);
     }
 
     private function accepted(string $status, TalktoResultCallbackData $callback, bool $duplicate): array

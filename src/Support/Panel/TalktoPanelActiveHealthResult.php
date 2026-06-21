@@ -2,6 +2,9 @@
 
 namespace Mrezdev\LaravelTalkto\Support\Panel;
 
+/**
+ * @internal Optional panel implementation detail.
+ */
 final class TalktoPanelActiveHealthResult
 {
     public function __construct(

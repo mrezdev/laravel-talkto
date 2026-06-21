@@ -2,6 +2,9 @@
 
 namespace Mrezdev\LaravelTalkto\Support\Panel;
 
+/**
+ * @internal Optional panel implementation detail.
+ */
 enum TalktoPanelHealthStatus: string
 {
     case Healthy = 'healthy';

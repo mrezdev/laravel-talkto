@@ -12,6 +12,9 @@ use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoCurrentServiceGuard;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelMessageFilters;
 
+/**
+ * @internal Optional panel implementation detail.
+ */
 class TalktoPanelMessageQuery
 {
     public function paginate(TalktoPanelMessageFilters $filters, int $perPage = 25): LaravelLengthAwarePaginator

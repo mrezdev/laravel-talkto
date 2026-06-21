@@ -59,6 +59,10 @@ test('documentation indexes and local markdown links resolve to existing files',
     foreach ($matches[1] as $href) {
         expect(releasePolishLinkExists('docs/README.md', $href))->toBeTrue();
     }
+
+    expect($docsIndex)->toContain('Internal maintainer notes are kept in the repository only')
+        ->and($docsIndex)->not->toContain('(internal/README.md)')
+        ->and($docsIndex)->not->toContain('docs/internal');
 });
 
 test('readme covers final package operations and callback runtime', function (): void {
@@ -105,6 +109,18 @@ test('docs avoid stale fake public api examples and forbidden host terms', funct
     foreach ($forbidden as $term) {
         expect(strtolower($contents))->not->toContain($term);
     }
+
+    $publicReleaseText = releasePolishContents([
+        'README.md',
+        'docs/README.md',
+        'docs/versioning.md',
+        'CHANGELOG.md',
+    ]);
+
+    expect($publicReleaseText)->not->toContain('final private release polish')
+        ->and($publicReleaseText)->not->toContain('P.49A2')
+        ->and($publicReleaseText)->not->toContain('package-only seed')
+        ->and($publicReleaseText)->not->toContain('once private tags begin');
 });
 
 test('public api docs list final release surfaces', function (): void {

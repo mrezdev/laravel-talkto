@@ -5,6 +5,9 @@ namespace Mrezdev\LaravelTalkto\Services\Panel;
 use Illuminate\Support\Collection;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelConnection;
 
+/**
+ * @internal Optional panel implementation detail.
+ */
 class TalktoPanelConnectionRegistry
 {
     public function outgoing(): Collection

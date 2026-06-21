@@ -4,6 +4,9 @@ namespace Mrezdev\LaravelTalkto\Support\Panel;
 
 use Carbon\CarbonInterface;
 
+/**
+ * @internal Optional panel implementation detail.
+ */
 class TalktoPanelConnectionHealth
 {
     public function __construct(

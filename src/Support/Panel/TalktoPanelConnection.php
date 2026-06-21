@@ -2,6 +2,9 @@
 
 namespace Mrezdev\LaravelTalkto\Support\Panel;
 
+/**
+ * @internal Optional panel implementation detail.
+ */
 class TalktoPanelConnection
 {
     public function __construct(

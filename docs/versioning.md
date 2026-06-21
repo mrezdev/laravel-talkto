@@ -1,6 +1,6 @@
 # Versioning Policy
 
-Laravel Talkto follows semantic versioning once private tags begin.
+Laravel Talkto follows semantic versioning for public package tags.
 
 ## Patch Releases
 

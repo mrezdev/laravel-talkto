@@ -6,6 +6,9 @@ use Illuminate\Support\Carbon;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageDirection;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
 
+/**
+ * @internal Optional panel implementation detail.
+ */
 class TalktoPanelMessageFilters
 {
     public function __construct(

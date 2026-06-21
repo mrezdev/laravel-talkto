@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Final Cleanup And Callback State Safety
+
+- Normalized release hygiene by keeping generated phase ZIP/manifest artifacts ignored and cleaning public maintainer-note wording.
+- Added callback stale/out-of-order safety so fresh but delayed result callbacks cannot downgrade completed/succeeded or final-failure states.
+- Moved remaining panel action result messages into publishable English translations and marked optional panel support/services as internal implementation details.
+- Added focused tests for callback stale handling, panel action translations, internal annotations, and repository metadata hygiene.
+
 ### Panel Localization And Filters
 
 - Added English panel translation lines under the `talkto::panel` namespace, with publish tags `laravel-talkto-translations` and `talkto-translations`.
@@ -66,7 +73,7 @@
 - Added the generic signed result callback sender/receiver runtime while preserving host override contracts.
 - Added read-only trace reporting, retry/DLQ hardening, dead-letter lifecycle helpers, and focused retry policy diagnostics.
 - Added centralized redaction, text redaction hardening, and the read-only `talkto:security-audit` command.
-- Added final private release polish for CI, package metadata, release docs, security/support guidance, and repository audit tests.
+- Added final release polish for CI, package metadata, release docs, security/support guidance, and repository audit tests.
 
 - Corrected the incoming command result contract to use non-conflicting instance accessors and aligned host stubs/docs with the real result API.
 - Hardened incoming idempotency around `message_id` using the existing message ledger.
@@ -78,8 +85,7 @@
 - Added versioned signatures. Defaults now use v2-only signing, with v1 available only as explicit legacy/manual opt-in.
 - Added read-only observability metrics, health summaries, and `talkto:report`.
 - Hardened release docs, publish tags, CI validation, public API inventory, and compatibility tests.
-- Added actual package extraction docs, first repository commit and tag plans, and the host VCS migration next-step plan.
-- Documented that P.49A2 creates a package-only seed with no production behavior change.
+- Added package extraction and release preparation notes for maintainers without changing production behavior.
 - Removed the static package `version` field so future package versions can come from Git tags.
 - Added focused standalone tests for config defaults and security services.
 - Added package install-experience documentation, production readiness notes, troubleshooting notes, and upgrading guidance.

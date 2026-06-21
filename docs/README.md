@@ -59,4 +59,4 @@ This is the public documentation map for Laravel Talkto. The root [README](../RE
 
 ## Maintainer Notes
 
-Internal maintainer release and extraction notes live under [docs/internal](internal/README.md). They are not part of the normal user documentation path.
+Internal maintainer notes are kept in the repository only and are not part of the published package archive.

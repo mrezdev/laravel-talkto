@@ -40,3 +40,15 @@ test('panel partials resolve package translation keys', function (): void {
         ->and($html)->toContain('There is nothing to show yet.')
         ->and($html)->not->toContain('talkto::panel.');
 });
+
+test('panel action translations include executor result messages', function (): void {
+    $translations = require __DIR__.'/../../lang/en/panel.php';
+
+    expect($translations['actions']['retry_disabled'])->toBe('Panel retry action is disabled.')
+        ->and($translations['actions']['unsupported_direction'])->toBe('Unsupported message direction.')
+        ->and($translations['actions']['message_not_retryable'])->toBe('Message is not retryable.')
+        ->and($translations['actions']['retry_dispatched'])->toBe('Retry job dispatched.')
+        ->and($translations['actions']['dead_letter_reprocess_dispatched'])->toBe('Dead letter reprocess job dispatched.')
+        ->and(__('talkto::panel.actions.retry_dispatched'))->toBe('Retry job dispatched.')
+        ->and(__('talkto::panel.actions.dead_letter_reprocess_dispatched'))->toBe('Dead letter reprocess job dispatched.');
+});
