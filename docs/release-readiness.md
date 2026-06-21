@@ -37,7 +37,7 @@ composer analyse
 composer format:test
 composer check:composer
 composer check:audit
-composer release:check
+composer run release:check
 ```
 
 ## CI Gate

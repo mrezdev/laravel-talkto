@@ -11,6 +11,7 @@ Use this checklist before tagging or publishing Laravel Talkto.
 - Run `vendor/bin/phpstan analyse`.
 - Run focused Pest tests for changed areas and core regressions.
 - Run the full package test suite before creating a tag.
+- Run `composer run release:check`.
 - Confirm `vendor/`, `node_modules/`, caches, and local ZIP artifacts are not included in the release.
 - Confirm `composer.json` package name, description, license, autoload, dev autoload, and Laravel provider discovery are correct.
 
@@ -26,8 +27,8 @@ Use this checklist before tagging or publishing Laravel Talkto.
 
 - Confirm queue workers are configured for send and incoming processing jobs.
 - Confirm scheduler entries for `talkto:retry-failed` and reporting are documented.
-- Run a v1 signed send/receive test.
-- Run a v2 signed send/receive test if enabling v2.
+- Run the default v2 signed send/receive test.
+- Run the legacy v1 opt-in send/receive test only when maintaining v1 compatibility.
 - Run duplicate `message_id` idempotency test.
 - Run `talkto:retry-failed --dry-run`.
 - Run `talkto:dlq-reprocess --dry-run` when DLQ is enabled.

@@ -60,6 +60,20 @@ test('panel message filters normalize empty strings and export arrays', function
         ]);
 });
 
+test('panel message filters ignore unsupported finite values and invalid dates', function (): void {
+    $filters = TalktoPanelMessageFilters::fromArray([
+        'direction' => 'sideways',
+        'status' => 'not-real',
+        'createdFrom' => 'not-a-date',
+        'createdTo' => '2026-01-02T15:30',
+    ]);
+
+    expect($filters->direction)->toBeNull()
+        ->and($filters->status)->toBeNull()
+        ->and($filters->createdFrom)->toBeNull()
+        ->and($filters->createdTo)->toBe('2026-01-02 15:30:00');
+});
+
 test('panel connection registry reads outgoing and incoming config without exposing secrets', function (): void {
     config([
         'talkto.outgoing' => [

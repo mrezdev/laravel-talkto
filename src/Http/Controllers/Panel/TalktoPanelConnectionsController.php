@@ -100,13 +100,16 @@ class TalktoPanelConnectionsController
         $service = (string) ($result['service'] ?? 'unknown');
 
         if ($status === 'healthy') {
-            return "Active health check for {$service} is healthy.";
+            return __('talkto::panel.connections.active_health_healthy', ['service' => $service]);
         }
 
         if (($result['enabled'] ?? false) === false) {
-            return 'Active health checks are disabled.';
+            return __('talkto::panel.connections.active_health_disabled');
         }
 
-        return "Active health check for {$service} returned {$status}.";
+        return __('talkto::panel.connections.active_health_status', [
+            'service' => $service,
+            'status' => $status,
+        ]);
     }
 }

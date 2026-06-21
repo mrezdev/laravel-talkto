@@ -7,4 +7,4 @@
         default => 'slate',
     };
 @endphp
-@include('talkto::panel.partials.badge', ['tone' => $tone, 'label' => $status !== '' ? $status : 'unknown'])
+@include('talkto::panel.partials.badge', ['tone' => $tone, 'label' => __('talkto::panel.messages.statuses.'.($status !== '' ? $status : 'unknown'))])

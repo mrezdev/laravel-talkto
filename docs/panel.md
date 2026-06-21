@@ -94,6 +94,17 @@ php artisan vendor:publish --tag=talkto-panel-views
 
 Publish views when the host app needs branding, spacing, copy, or layout changes.
 
+## Language Publishing
+
+The package ships English panel language lines under the `talkto::panel.*` translation namespace. Host apps may publish and override them without publishing the Blade views:
+
+```bash
+php artisan vendor:publish --tag=laravel-talkto-translations
+php artisan vendor:publish --tag=talkto-translations
+```
+
+Only English panel translations are included for now.
+
 ## Tailwind-Only UI Behavior
 
 The built-in views use Blade and Tailwind utility classes only. The panel does not require Livewire, Alpine, Vue, React, Inertia, Filament, or required frontend JavaScript.

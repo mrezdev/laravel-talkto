@@ -2,7 +2,9 @@
     $enabled = (bool) ($enabled ?? true);
     $configured = (bool) ($configured ?? false);
     $status = (string) ($status ?? 'unknown');
-    $label = ! $enabled ? 'disabled' : str_replace('_', ' ', ($status !== '' ? $status : 'unknown'));
+    $label = ! $enabled
+        ? __('talkto::panel.common.disabled')
+        : __('talkto::panel.connections.active_health_statuses.'.($status !== '' ? $status : 'unknown'));
     $tone = match ($status) {
         'healthy' => 'green',
         'failing', 'misconfigured' => 'red',

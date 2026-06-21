@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Panel Localization And Filters
+
+- Added English panel translation lines under the `talkto::panel` namespace, with publish tags `laravel-talkto-translations` and `talkto-translations`.
+- Updated package panel views to use translation keys for operator-facing labels while keeping raw technical identifiers as data.
+- Improved message filters with direction/status selects, datetime-local created range fields, safer filter normalization, and focused localization/filter-control tests.
+
+### Release Readiness
+
+- Added the final pre-tag review checkpoint covering package metadata, secure defaults, public API/docs consistency, CI/release gates, and generated artifact hygiene.
+- Ignored generated phase review ZIP/manifest artifacts and removed the stale uppercase smoke-test doc in favor of `docs/smoke-tests.md`.
+- Confirmed no runtime behavior or security defaults changed during the final review.
+
 ### Testing
 
 - Added a local two-service E2E smoke test covering v2 signing, nonce replay protection, idempotency, payload tamper rejection, and signed result callback replay safety without external servers.
@@ -47,7 +59,7 @@
 - Hardened panel JSON responses so payloads and responses are hidden by default and sensitive values are redacted when display is explicitly enabled.
 - Made panel route loading route-cache friendly.
 
-### Private Release Readiness Summary
+### Release Readiness Summary
 
 - Aligned public contracts, README examples, host stubs, and docs with the real incoming result and outgoing factory APIs.
 - Added immutable data objects for envelopes, incoming command results, and result callback envelopes.
@@ -66,7 +78,7 @@
 - Added versioned signatures. Defaults now use v2-only signing, with v1 available only as explicit legacy/manual opt-in.
 - Added read-only observability metrics, health summaries, and `talkto:report`.
 - Hardened release docs, publish tags, CI validation, public API inventory, and compatibility tests.
-- Added actual private package extraction docs, first private repository commit and tag plans, and the host VCS migration next-step plan.
+- Added actual package extraction docs, first repository commit and tag plans, and the host VCS migration next-step plan.
 - Documented that P.49A2 creates a package-only seed with no production behavior change.
 - Removed the static package `version` field so future package versions can come from Git tags.
 - Added focused standalone tests for config defaults and security services.
@@ -74,7 +86,7 @@
 - Added `phpunit.xml.dist` for fresh package checkouts.
 - Added a generic install-experience test for provider loading, safe defaults, and host-class independence.
 - Added neutral package metadata and contributor/license placeholders.
-- Added private repository metadata, CI workflow template, release docs, and repository metadata tests.
+- Added repository metadata, CI workflow template, release docs, and repository metadata tests.
 - Added production release hardening docs, upgrade guidance, release checklist, publish tag aliases, and package release smoke tests.
 
 ## 0.1.0-alpha

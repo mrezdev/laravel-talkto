@@ -92,6 +92,7 @@ class LaravelTalktoServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'talkto');
+        $this->loadTranslationsFrom(__DIR__.'/../lang', 'talkto');
 
         if ($this->app->runningInConsole()) {
             $this->commands([
@@ -126,6 +127,13 @@ class LaravelTalktoServiceProvider extends ServiceProvider
         $this->publishes([
             __DIR__.'/../resources/views/panel' => resource_path('views/vendor/talkto/panel'),
         ], 'talkto-panel-views');
+
+        $this->publishes([
+            __DIR__.'/../lang' => $this->app->langPath('vendor/talkto'),
+        ], 'laravel-talkto-translations');
+        $this->publishes([
+            __DIR__.'/../lang' => $this->app->langPath('vendor/talkto'),
+        ], 'talkto-translations');
 
         if (config('talkto.migrations.enabled', false)) {
             $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
