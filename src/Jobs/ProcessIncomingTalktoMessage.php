@@ -12,6 +12,7 @@ use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Pipelines\ProcessIncomingTalktoMessagePipeline;
 use Mrezdev\LaravelTalkto\Services\TalktoCurrentServiceGuard;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
+use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 
 /**
  * @internal Queue job used by the package receive pipeline.
@@ -40,11 +41,7 @@ class ProcessIncomingTalktoMessage implements ShouldQueue
 
     private function findMessage(): ?TalktoMessage
     {
-        $class = config('talkto.models.message', TalktoMessage::class);
-        $class = is_string($class) && is_a($class, TalktoMessage::class, true)
-            ? $class
-            : TalktoMessage::class;
-
+        $class = app(TalktoModelResolver::class)->message();
         $model = new $class;
 
         if (! $model->getConnection()->getSchemaBuilder()->hasTable($model->getTable())) {

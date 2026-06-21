@@ -2,6 +2,8 @@
 
 namespace Mrezdev\LaravelTalkto\Services;
 
+use Mrezdev\LaravelTalkto\Enums\TalktoMessageDirection;
+use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Support\TalktoRetryDecision;
 
@@ -18,8 +20,8 @@ class TalktoRetryPolicy
             'backoff_seconds' => $this->backoffSequence(config('talkto.retry.backoff_seconds', [10, 30, 60, 120, 300])),
             'outgoing_enabled' => (bool) config('talkto.retry.outgoing_enabled', true),
             'incoming_enabled' => (bool) config('talkto.retry.incoming_enabled', false),
-            'retryable_statuses' => $this->stringList(config('talkto.retry.retryable_statuses', ['failed_retryable']), ['failed_retryable']),
-            'final_failure_status' => $this->stringOrDefault(config('talkto.retry.final_failure_status', 'failed_final'), 'failed_final'),
+            'retryable_statuses' => $this->stringList(config('talkto.retry.retryable_statuses', [TalktoMessageStatus::FailedRetryable->value]), [TalktoMessageStatus::FailedRetryable->value]),
+            'final_failure_status' => $this->stringOrDefault(config('talkto.retry.final_failure_status', TalktoMessageStatus::FailedFinal->value), TalktoMessageStatus::FailedFinal->value),
             'retryable_http_statuses' => $this->intList(config('talkto.retry.retryable_http_statuses', [408, 425, 429]), [408, 425, 429]),
             'retry_server_errors' => (bool) config('talkto.retry.retry_server_errors', true),
             'jitter_seconds' => max(0, (int) config('talkto.retry.jitter_seconds', 0)),
@@ -100,14 +102,14 @@ class TalktoRetryPolicy
 
     public function retryableStatuses(): array
     {
-        return $this->stringList(config('talkto.retry.retryable_statuses', ['failed_retryable']), ['failed_retryable']);
+        return $this->stringList(config('talkto.retry.retryable_statuses', [TalktoMessageStatus::FailedRetryable->value]), [TalktoMessageStatus::FailedRetryable->value]);
     }
 
     public function finalFailureStatus(?TalktoMessage $message = null): string
     {
         return $message
             ? $this->settingsFor($message)['final_failure_status']
-            : $this->stringOrDefault(config('talkto.retry.final_failure_status', 'failed_final'), 'failed_final');
+            : $this->stringOrDefault(config('talkto.retry.final_failure_status', TalktoMessageStatus::FailedFinal->value), TalktoMessageStatus::FailedFinal->value);
     }
 
     public function isRetryableHttpStatus(?int $status, ?TalktoMessage $message = null): bool
@@ -147,11 +149,11 @@ class TalktoRetryPolicy
             return false;
         }
 
-        if ($message->direction === 'outgoing') {
+        if ($message->direction === TalktoMessageDirection::Outgoing->value) {
             return (bool) ($settings['outgoing_enabled'] ?? true);
         }
 
-        if ($message->direction === 'incoming') {
+        if ($message->direction === TalktoMessageDirection::Incoming->value) {
             return (bool) ($settings['incoming_enabled'] ?? false);
         }
 
@@ -191,8 +193,8 @@ class TalktoRetryPolicy
         $nextRetryAt = now()->addSeconds($backoffSeconds);
 
         $attributes = [
-            $statusColumn => 'failed',
-            'overall_status' => 'failed_retryable',
+            $statusColumn => TalktoMessageStatus::Failed->value,
+            'overall_status' => TalktoMessageStatus::FailedRetryable->value,
             'retry_count' => $currentRetryCount + 1,
             'next_retry_at' => $nextRetryAt,
             'next_attempt_at' => $nextRetryAt,
@@ -287,7 +289,7 @@ class TalktoRetryPolicy
         $settings = $directions[$direction];
 
         if (array_key_exists('enabled', $settings)) {
-            $settings[$direction === 'incoming' ? 'incoming_enabled' : 'outgoing_enabled'] = (bool) $settings['enabled'];
+            $settings[$direction === TalktoMessageDirection::Incoming->value ? 'incoming_enabled' : 'outgoing_enabled'] = (bool) $settings['enabled'];
         }
 
         return $settings;
@@ -296,7 +298,7 @@ class TalktoRetryPolicy
     private function peerSettings(TalktoMessage $message): array
     {
         $targets = config('talkto.retry.targets', []);
-        $peer = $message->direction === 'incoming'
+        $peer = $message->direction === TalktoMessageDirection::Incoming->value
             ? (string) ($message->source_service ?? '')
             : (string) ($message->target_service ?? '');
 
@@ -338,8 +340,8 @@ class TalktoRetryPolicy
     {
         $settings['max_attempts'] = $this->positiveInt($settings['max_attempts'] ?? null, 5);
         $settings['backoff_seconds'] = $this->backoffSequence($settings['backoff_seconds'] ?? null);
-        $settings['retryable_statuses'] = $this->stringList($settings['retryable_statuses'] ?? null, ['failed_retryable']);
-        $settings['final_failure_status'] = $this->stringOrDefault($settings['final_failure_status'] ?? null, 'failed_final');
+        $settings['retryable_statuses'] = $this->stringList($settings['retryable_statuses'] ?? null, [TalktoMessageStatus::FailedRetryable->value]);
+        $settings['final_failure_status'] = $this->stringOrDefault($settings['final_failure_status'] ?? null, TalktoMessageStatus::FailedFinal->value);
         $settings['retryable_http_statuses'] = $this->intList($settings['retryable_http_statuses'] ?? null, [408, 425, 429]);
         $settings['retry_server_errors'] = (bool) ($settings['retry_server_errors'] ?? true);
         $settings['enabled'] = (bool) ($settings['enabled'] ?? true);

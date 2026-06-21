@@ -9,8 +9,10 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 use JsonSerializable;
 use Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract;
-use Mrezdev\LaravelTalkto\Models\TalktoEvent;
+use Mrezdev\LaravelTalkto\Enums\TalktoMessageDirection;
+use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 use Throwable;
 
 /**
@@ -42,15 +44,15 @@ class TalktoOutgoingMessageFactory
         $idempotencyKey = $options['idempotency_key'] ?? null;
         $messageId = $options['message_id'] ?? Str::uuid()->toString();
         $correlationId = $options['correlation_id'] ?? Str::uuid()->toString();
-        $sourceActionStatus = $options['source_action_status'] ?? 'succeeded_assumed';
-        $transportStatus = array_key_exists('transport_status', $options) ? $options['transport_status'] : 'pending';
+        $sourceActionStatus = $options['source_action_status'] ?? TalktoMessageStatus::SucceededAssumed->value;
+        $transportStatus = array_key_exists('transport_status', $options) ? $options['transport_status'] : TalktoMessageStatus::Pending->value;
         $destinationReceiveStatus = array_key_exists('destination_receive_status', $options) ? $options['destination_receive_status'] : null;
         $destinationActionStatus = array_key_exists('destination_action_status', $options) ? $options['destination_action_status'] : null;
-        $overallStatus = $options['overall_status'] ?? 'waiting_to_send';
+        $overallStatus = $options['overall_status'] ?? TalktoMessageStatus::WaitingToSend->value;
         $messageClass = $this->messageModelClass();
         $eventClass = $this->eventModelClass();
         $idempotencyFingerprint = $messageClass::idempotencyFingerprint(
-            'outgoing',
+            TalktoMessageDirection::Outgoing->value,
             $sourceService,
             $resolvedTarget,
             $command,
@@ -92,7 +94,7 @@ class TalktoOutgoingMessageFactory
                     'message_id' => $messageId,
                     'correlation_id' => $correlationId,
                     'parent_message_id' => $options['parent_message_id'] ?? null,
-                    'direction' => 'outgoing',
+                    'direction' => TalktoMessageDirection::Outgoing->value,
                     'source_service' => $sourceService,
                     'target_service' => $resolvedTarget,
                     'command' => $command,
@@ -166,20 +168,12 @@ class TalktoOutgoingMessageFactory
 
     protected function messageModelClass(): string
     {
-        $class = config('talkto.models.message', TalktoMessage::class);
-
-        return is_string($class) && is_a($class, TalktoMessage::class, true)
-            ? $class
-            : TalktoMessage::class;
+        return app(TalktoModelResolver::class)->message();
     }
 
     protected function eventModelClass(): string
     {
-        $class = config('talkto.models.event', TalktoEvent::class);
-
-        return is_string($class) && is_a($class, TalktoEvent::class, true)
-            ? $class
-            : TalktoEvent::class;
+        return app(TalktoModelResolver::class)->event();
     }
 
     private function normalizePayload(mixed $payload): ?array

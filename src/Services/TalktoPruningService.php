@@ -4,11 +4,8 @@ namespace Mrezdev\LaravelTalkto\Services;
 
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
-use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
-use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
-use Mrezdev\LaravelTalkto\Models\TalktoEvent;
-use Mrezdev\LaravelTalkto\Models\TalktoMessage;
-use Mrezdev\LaravelTalkto\Models\TalktoNonce;
+use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
+use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 
 /**
  * @internal Runtime service behind the prune command.
@@ -18,13 +15,13 @@ class TalktoPruningService
     private const TYPES = ['messages', 'attempts', 'events', 'dead-letters', 'nonces'];
 
     private const TERMINAL_MESSAGE_STATUSES = [
-        'succeeded',
-        'completed',
-        'failed',
-        'failed_final',
-        'dead_lettered',
-        'cancelled',
-        'skipped',
+        TalktoMessageStatus::Succeeded->value,
+        TalktoMessageStatus::Completed->value,
+        TalktoMessageStatus::Failed->value,
+        TalktoMessageStatus::FailedFinal->value,
+        TalktoMessageStatus::DeadLettered->value,
+        TalktoMessageStatus::Cancelled->value,
+        TalktoMessageStatus::Skipped->value,
     ];
 
     public function prune(string $type, ?int $olderThanSeconds, int $limit, bool $dryRun): array
@@ -208,46 +205,26 @@ class TalktoPruningService
 
     private function messageModelClass(): string
     {
-        $class = config('talkto.models.message', TalktoMessage::class);
-
-        return is_string($class) && is_a($class, TalktoMessage::class, true)
-            ? $class
-            : TalktoMessage::class;
+        return app(TalktoModelResolver::class)->message();
     }
 
     private function attemptModelClass(): string
     {
-        $class = config('talkto.models.attempt', TalktoAttempt::class);
-
-        return is_string($class) && is_a($class, TalktoAttempt::class, true)
-            ? $class
-            : TalktoAttempt::class;
+        return app(TalktoModelResolver::class)->attempt();
     }
 
     private function eventModelClass(): string
     {
-        $class = config('talkto.models.event', TalktoEvent::class);
-
-        return is_string($class) && is_a($class, TalktoEvent::class, true)
-            ? $class
-            : TalktoEvent::class;
+        return app(TalktoModelResolver::class)->event();
     }
 
     private function deadLetterModelClass(): string
     {
-        $class = config('talkto.models.dead_letter', TalktoDeadLetter::class);
-
-        return is_string($class) && is_a($class, TalktoDeadLetter::class, true)
-            ? $class
-            : TalktoDeadLetter::class;
+        return app(TalktoModelResolver::class)->deadLetter();
     }
 
     private function nonceModelClass(): string
     {
-        $class = config('talkto.models.nonce', TalktoNonce::class);
-
-        return is_string($class) && is_a($class, TalktoNonce::class, true)
-            ? $class
-            : TalktoNonce::class;
+        return app(TalktoModelResolver::class)->nonce();
     }
 }

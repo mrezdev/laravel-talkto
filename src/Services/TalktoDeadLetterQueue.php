@@ -4,9 +4,10 @@ namespace Mrezdev\LaravelTalkto\Services;
 
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Mrezdev\LaravelTalkto\Enums\TalktoDeadLetterStatus;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
-use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 use Throwable;
 
 /**
@@ -82,7 +83,7 @@ class TalktoDeadLetterQueue
             return false;
         }
 
-        if (! in_array($deadLetter->status, [self::STATUS_OPEN, self::STATUS_FAILED_REPROCESS], true)) {
+        if (! in_array($deadLetter->status, [TalktoDeadLetterStatus::Open->value, TalktoDeadLetterStatus::FailedReprocess->value], true)) {
             return false;
         }
 
@@ -104,7 +105,7 @@ class TalktoDeadLetterQueue
             }
 
             $locked->forceFill([
-                'status' => self::STATUS_REPROCESSING,
+                'status' => TalktoDeadLetterStatus::Reprocessing->value,
                 'reprocess_count' => ((int) $locked->reprocess_count) + 1,
                 'reprocessed_at' => now(),
             ])->save();
@@ -116,7 +117,7 @@ class TalktoDeadLetterQueue
     public function markReprocessing(TalktoDeadLetter $deadLetter): TalktoDeadLetter
     {
         $deadLetter->forceFill([
-            'status' => self::STATUS_REPROCESSING,
+            'status' => TalktoDeadLetterStatus::Reprocessing->value,
             'reprocess_count' => ((int) $deadLetter->reprocess_count) + 1,
             'reprocessed_at' => now(),
         ])->save();
@@ -127,7 +128,7 @@ class TalktoDeadLetterQueue
     public function markReprocessed(TalktoDeadLetter $deadLetter): TalktoDeadLetter
     {
         $deadLetter->forceFill([
-            'status' => self::STATUS_REPROCESSED,
+            'status' => TalktoDeadLetterStatus::Reprocessed->value,
             'reprocessed_at' => now(),
         ])->save();
 
@@ -139,7 +140,7 @@ class TalktoDeadLetterQueue
         $deadLetterClass = $this->deadLetterModelClass();
         $messageKey = $message->getKey();
         $deadLetter = $deadLetterClass::query()
-            ->where('status', self::STATUS_REPROCESSING)
+            ->where('status', TalktoDeadLetterStatus::Reprocessing->value)
             ->where(function ($query) use ($message, $messageKey): void {
                 $query->where('message_id', $message->message_id);
 
@@ -165,7 +166,7 @@ class TalktoDeadLetterQueue
     public function markFailedReprocess(TalktoDeadLetter $deadLetter, ?string $reason = null, ?Throwable $exception = null): TalktoDeadLetter
     {
         $deadLetter->forceFill([
-            'status' => self::STATUS_FAILED_REPROCESS,
+            'status' => TalktoDeadLetterStatus::FailedReprocess->value,
             'failure_reason' => $this->excerpt($reason ?: $deadLetter->failure_reason),
             'exception_class' => $exception ? $exception::class : $deadLetter->exception_class,
             'exception_message' => $exception ? $this->excerpt($exception->getMessage()) : $deadLetter->exception_message,
@@ -178,7 +179,7 @@ class TalktoDeadLetterQueue
     public function markIgnored(TalktoDeadLetter $deadLetter, ?string $reason = null): TalktoDeadLetter
     {
         $deadLetter->forceFill([
-            'status' => self::STATUS_IGNORED,
+            'status' => TalktoDeadLetterStatus::Ignored->value,
             'failure_reason' => $this->excerpt($reason ?: $deadLetter->failure_reason),
         ])->save();
 
@@ -231,12 +232,12 @@ class TalktoDeadLetterQueue
         ?string $failureReason = null,
         ?Throwable $exception = null
     ): TalktoDeadLetter {
-        if ($deadLetter->status !== self::STATUS_REPROCESSING) {
+        if ($deadLetter->status !== TalktoDeadLetterStatus::Reprocessing->value) {
             return $deadLetter;
         }
 
         $deadLetter->forceFill([
-            'status' => self::STATUS_FAILED_REPROCESS,
+            'status' => TalktoDeadLetterStatus::FailedReprocess->value,
             'failure_reason' => $this->excerpt($failureReason ?: $message->last_error),
             'exception_class' => $exception ? $exception::class : null,
             'exception_message' => $this->excerpt($exception?->getMessage()),
@@ -267,7 +268,7 @@ class TalktoDeadLetterQueue
             'exception_message' => $this->excerpt($exception?->getMessage()),
             'failed_status' => $message->overall_status,
             'original_retry_count' => (int) ($message->retry_count ?? 0),
-            'status' => self::STATUS_OPEN,
+            'status' => TalktoDeadLetterStatus::Open->value,
         ];
     }
 
@@ -295,20 +296,12 @@ class TalktoDeadLetterQueue
 
     private function deadLetterModelClass(): string
     {
-        $class = config('talkto.models.dead_letter', TalktoDeadLetter::class);
-
-        return is_string($class) && is_a($class, TalktoDeadLetter::class, true)
-            ? $class
-            : TalktoDeadLetter::class;
+        return app(TalktoModelResolver::class)->deadLetter();
     }
 
     private function eventModelClass(): string
     {
-        $class = config('talkto.models.event', TalktoEvent::class);
-
-        return is_string($class) && is_a($class, TalktoEvent::class, true)
-            ? $class
-            : TalktoEvent::class;
+        return app(TalktoModelResolver::class)->event();
     }
 
     private function excerpt(?string $value, int $limit = 2000): ?string

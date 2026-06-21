@@ -4,7 +4,10 @@ namespace Mrezdev\LaravelTalkto\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Mrezdev\LaravelTalkto\Enums\TalktoMessageDirection;
+use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
 use Mrezdev\LaravelTalkto\Models\Concerns\UsesTalktoDatabase;
+use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 
 class TalktoMessage extends Model
 {
@@ -110,39 +113,31 @@ class TalktoMessage extends Model
 
     public function isIncoming(): bool
     {
-        return $this->direction === 'incoming';
+        return $this->direction === TalktoMessageDirection::Incoming->value;
     }
 
     public function isOutgoing(): bool
     {
-        return $this->direction === 'outgoing';
+        return $this->direction === TalktoMessageDirection::Outgoing->value;
     }
 
     public function isCompleted(): bool
     {
-        return $this->overall_status === 'completed';
+        return $this->overall_status === TalktoMessageStatus::Completed->value;
     }
 
     public function isRetryable(): bool
     {
-        return $this->attempts < $this->max_attempts && $this->overall_status !== 'completed';
+        return $this->attempts < $this->max_attempts && $this->overall_status !== TalktoMessageStatus::Completed->value;
     }
 
     protected function attemptModelClass(): string
     {
-        $class = config('talkto.models.attempt', TalktoAttempt::class);
-
-        return is_string($class) && is_a($class, TalktoAttempt::class, true)
-            ? $class
-            : TalktoAttempt::class;
+        return app(TalktoModelResolver::class)->attempt();
     }
 
     protected function eventModelClass(): string
     {
-        $class = config('talkto.models.event', TalktoEvent::class);
-
-        return is_string($class) && is_a($class, TalktoEvent::class, true)
-            ? $class
-            : TalktoEvent::class;
+        return app(TalktoModelResolver::class)->event();
     }
 }

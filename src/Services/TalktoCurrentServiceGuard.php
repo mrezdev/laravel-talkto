@@ -2,6 +2,7 @@
 
 namespace Mrezdev\LaravelTalkto\Services;
 
+use Mrezdev\LaravelTalkto\Enums\TalktoMessageDirection;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 
 /**
@@ -30,13 +31,13 @@ class TalktoCurrentServiceGuard
 
     public function ownsOutgoing(TalktoMessage $message): bool
     {
-        return $message->direction === 'outgoing'
+        return $message->direction === TalktoMessageDirection::Outgoing->value
             && (string) $message->source_service === $this->currentService();
     }
 
     public function ownsIncoming(TalktoMessage $message): bool
     {
-        return $message->direction === 'incoming'
+        return $message->direction === TalktoMessageDirection::Incoming->value
             && (string) $message->target_service === $this->currentService();
     }
 

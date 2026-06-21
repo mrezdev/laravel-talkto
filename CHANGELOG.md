@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Internal Refactor
+
+- Added internal backed enums for Talkto lifecycle statuses and directions, plus a shared internal model resolver, while keeping persisted database values and public APIs unchanged.
+- Added focused status compatibility and model resolver tests covering default/custom model resolution and touched send, receive, process, retry, and dead-letter flows.
+
 ### Public API Boundary
 
 - Defined the documented public API boundary for contracts, DTOs, commands, config, publish tags, extension points, exceptions, and internal implementation categories.

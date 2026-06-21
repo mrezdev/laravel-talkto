@@ -3,7 +3,7 @@
 namespace Mrezdev\LaravelTalkto\Services;
 
 use Illuminate\Database\QueryException;
-use Mrezdev\LaravelTalkto\Models\TalktoNonce;
+use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 
 /**
  * @internal Replay-protection ledger behind v2 nonce enforcement.
@@ -81,10 +81,6 @@ class TalktoNonceLedger
 
     private function nonceModelClass(): string
     {
-        $class = config('talkto.models.nonce', TalktoNonce::class);
-
-        return is_string($class) && is_a($class, TalktoNonce::class, true)
-            ? $class
-            : TalktoNonce::class;
+        return app(TalktoModelResolver::class)->nonce();
     }
 }

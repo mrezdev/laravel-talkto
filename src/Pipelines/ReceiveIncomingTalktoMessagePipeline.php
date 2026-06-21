@@ -7,11 +7,13 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Mrezdev\LaravelTalkto\Enums\TalktoMessageDirection;
+use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
 use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
-use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoNonceLedger;
 use Mrezdev\LaravelTalkto\Services\TalktoSignatureVerifier;
+use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 use Throwable;
 
 /**
@@ -100,7 +102,7 @@ class ReceiveIncomingTalktoMessagePipeline
                     'message_id' => $envelope['message_id'],
                     'correlation_id' => $envelope['correlation_id'] ?? null,
                     'parent_message_id' => $envelope['parent_message_id'] ?? null,
-                    'direction' => 'incoming',
+                    'direction' => TalktoMessageDirection::Incoming->value,
                     'source_service' => $envelope['source'],
                     'target_service' => $envelope['target'],
                     'command' => $envelope['command'],
@@ -112,9 +114,9 @@ class ReceiveIncomingTalktoMessagePipeline
                     'schema_version' => $envelope['schema_version'] ?? 1,
                     'source_action_status' => null,
                     'transport_status' => null,
-                    'destination_receive_status' => 'received',
-                    'destination_action_status' => 'queued',
-                    'overall_status' => 'queued',
+                    'destination_receive_status' => TalktoMessageStatus::Received->value,
+                    'destination_action_status' => TalktoMessageStatus::Queued->value,
+                    'overall_status' => TalktoMessageStatus::Queued->value,
                     'received_at' => now(),
                 ]);
 
@@ -124,7 +126,7 @@ class ReceiveIncomingTalktoMessagePipeline
                     'service_name' => config('talkto.service', 'app'),
                     'event_type' => 'message_received',
                     'old_status' => null,
-                    'new_status' => 'queued',
+                    'new_status' => TalktoMessageStatus::Queued->value,
                     'meta' => array_filter([
                         'source' => $envelope['source'],
                         'target' => $envelope['target'],
@@ -177,7 +179,7 @@ class ReceiveIncomingTalktoMessagePipeline
 
         return new JsonResponse([
             'received' => true,
-            'status' => 'queued',
+            'status' => TalktoMessageStatus::Queued->value,
             'message_id' => $message->message_id,
         ], 202);
     }
@@ -220,20 +222,20 @@ class ReceiveIncomingTalktoMessagePipeline
     private function idempotencyProtectedStatuses(): array
     {
         return [
-            'queued',
-            'processing',
-            'waiting_to_send',
-            'failed_retryable',
-            'completed',
-            'succeeded',
+            TalktoMessageStatus::Queued->value,
+            TalktoMessageStatus::Processing->value,
+            TalktoMessageStatus::WaitingToSend->value,
+            TalktoMessageStatus::FailedRetryable->value,
+            TalktoMessageStatus::Completed->value,
+            TalktoMessageStatus::Succeeded->value,
         ];
     }
 
     private function idempotencyDuplicateStatus(string $overallStatus): string
     {
         return match ($overallStatus) {
-            'completed', 'succeeded' => 'already_processed',
-            'queued', 'processing', 'waiting_to_send', 'failed_retryable' => 'already_accepted',
+            TalktoMessageStatus::Completed->value, TalktoMessageStatus::Succeeded->value => 'already_processed',
+            TalktoMessageStatus::Queued->value, TalktoMessageStatus::Processing->value, TalktoMessageStatus::WaitingToSend->value, TalktoMessageStatus::FailedRetryable->value => 'already_accepted',
             default => 'already_received',
         };
     }
@@ -241,7 +243,7 @@ class ReceiveIncomingTalktoMessagePipeline
     private function idempotencyFingerprint(array $envelope): ?string
     {
         return TalktoMessage::idempotencyFingerprint(
-            'incoming',
+            TalktoMessageDirection::Incoming->value,
             (string) $envelope['source'],
             (string) $envelope['target'],
             (string) $envelope['command'],
@@ -283,20 +285,12 @@ class ReceiveIncomingTalktoMessagePipeline
 
     private function messageModelClass(): string
     {
-        $class = config('talkto.models.message', TalktoMessage::class);
-
-        return is_string($class) && is_a($class, TalktoMessage::class, true)
-            ? $class
-            : TalktoMessage::class;
+        return app(TalktoModelResolver::class)->message();
     }
 
     private function eventModelClass(): string
     {
-        $class = config('talkto.models.event', TalktoEvent::class);
-
-        return is_string($class) && is_a($class, TalktoEvent::class, true)
-            ? $class
-            : TalktoEvent::class;
+        return app(TalktoModelResolver::class)->event();
     }
 
     private function processIncomingJobClass(): string

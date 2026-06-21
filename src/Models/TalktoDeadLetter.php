@@ -5,6 +5,7 @@ namespace Mrezdev\LaravelTalkto\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Mrezdev\LaravelTalkto\Models\Concerns\UsesTalktoDatabase;
+use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 
 class TalktoDeadLetter extends Model
 {
@@ -47,10 +48,6 @@ class TalktoDeadLetter extends Model
 
     protected function messageModelClass(): string
     {
-        $class = config('talkto.models.message', TalktoMessage::class);
-
-        return is_string($class) && is_a($class, TalktoMessage::class, true)
-            ? $class
-            : TalktoMessage::class;
+        return app(TalktoModelResolver::class)->message();
     }
 }

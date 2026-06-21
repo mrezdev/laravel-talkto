@@ -4,12 +4,16 @@ namespace Mrezdev\LaravelTalkto\Pipelines;
 
 use Illuminate\Support\Facades\DB;
 use Mrezdev\LaravelTalkto\Contracts\TalktoHttpClient;
+use Mrezdev\LaravelTalkto\Enums\TalktoAttemptStatus;
+use Mrezdev\LaravelTalkto\Enums\TalktoMessageDirection;
+use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
 use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
 use Mrezdev\LaravelTalkto\Services\TalktoOutgoingEnvelopeBuilder;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
+use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 use Throwable;
 
 /**
@@ -32,7 +36,7 @@ class SendOutgoingTalktoMessagePipeline
             return;
         }
 
-        if ($message->direction !== 'outgoing') {
+        if ($message->direction !== TalktoMessageDirection::Outgoing->value) {
             $this->createSkippedAttempt(
                 $message,
                 'invalid_direction',
@@ -82,12 +86,19 @@ class SendOutgoingTalktoMessagePipeline
 
     private function isSendable(TalktoMessage $message, TalktoRetryPolicy $retryPolicy): bool
     {
-        if (in_array($message->overall_status, ['sending', 'sent', 'destination_received', 'succeeded', 'completed', 'failed_final'], true)) {
+        if (in_array($message->overall_status, [
+            TalktoMessageStatus::Sending->value,
+            TalktoMessageStatus::Sent->value,
+            TalktoMessageStatus::DestinationReceived->value,
+            TalktoMessageStatus::Succeeded->value,
+            TalktoMessageStatus::Completed->value,
+            TalktoMessageStatus::FailedFinal->value,
+        ], true)) {
             return false;
         }
 
-        return in_array($message->overall_status, ['waiting_to_send'], true)
-            || in_array($message->transport_status, ['pending'], true)
+        return in_array($message->overall_status, [TalktoMessageStatus::WaitingToSend->value], true)
+            || in_array($message->transport_status, [TalktoMessageStatus::Pending->value], true)
             || ($retryPolicy->canRetry($message) && $retryPolicy->isDue($message));
     }
 
@@ -113,7 +124,7 @@ class SendOutgoingTalktoMessagePipeline
             'message_id' => $message->message_id,
             'stage' => 'transport',
             'attempt_no' => ((int) $message->getAttribute('attempts')) + 1,
-            'status' => 'skipped',
+            'status' => TalktoAttemptStatus::Skipped->value,
             'error_class' => $errorClass,
             'error_message' => $errorMessage,
         ]);
@@ -135,7 +146,7 @@ class SendOutgoingTalktoMessagePipeline
                 return null;
             }
 
-            if ($message->direction !== 'outgoing') {
+            if ($message->direction !== TalktoMessageDirection::Outgoing->value) {
                 $this->createSkippedAttempt(
                     $message,
                     'invalid_direction',
@@ -165,8 +176,8 @@ class SendOutgoingTalktoMessagePipeline
 
             $message->forceFill([
                 'attempts' => $attemptNo,
-                'transport_status' => 'sending',
-                'overall_status' => 'sending',
+                'transport_status' => TalktoMessageStatus::Sending->value,
+                'overall_status' => TalktoMessageStatus::Sending->value,
                 'last_attempted_at' => now(),
                 'next_retry_at' => null,
                 'next_attempt_at' => null,
@@ -179,7 +190,7 @@ class SendOutgoingTalktoMessagePipeline
                 'message_id' => $message->message_id,
                 'stage' => 'transport',
                 'attempt_no' => $attemptNo,
-                'status' => 'sending',
+                'status' => TalktoAttemptStatus::Sending->value,
                 'meta' => [
                     'source' => $sourceService,
                     'target' => $targetService,
@@ -195,7 +206,7 @@ class SendOutgoingTalktoMessagePipeline
                 'service_name' => config('talkto.service', 'app'),
                 'event_type' => 'message_sending_started',
                 'old_status' => $previousStatus,
-                'new_status' => 'sending',
+                'new_status' => TalktoMessageStatus::Sending->value,
                 'meta' => [
                     'target' => $targetService,
                     'command' => $command,
@@ -212,7 +223,7 @@ class SendOutgoingTalktoMessagePipeline
         $json = $this->safeJsonResponse($response);
         $received = $json['received'] ?? null;
         $destinationStatus = $json['status'] ?? null;
-        $overallStatus = $received === true ? 'destination_received' : 'sent';
+        $overallStatus = $received === true ? TalktoMessageStatus::DestinationReceived->value : TalktoMessageStatus::Sent->value;
         $responseExcerpt = $this->excerpt($response->body());
         $messageClass = $this->messageModelClass();
         $eventClass = $this->eventModelClass();
@@ -225,11 +236,11 @@ class SendOutgoingTalktoMessagePipeline
             }
 
             $message->forceFill([
-                'transport_status' => 'sent',
+                'transport_status' => TalktoMessageStatus::Sent->value,
                 'sent_at' => now(),
                 'last_http_status' => $response->status(),
                 'last_response' => $responseExcerpt,
-                'destination_receive_status' => $received === true ? 'received' : 'unknown',
+                'destination_receive_status' => $received === true ? TalktoMessageStatus::Received->value : TalktoMessageStatus::Unknown->value,
                 'destination_action_status' => $received === true && $destinationStatus !== null ? (string) $destinationStatus : $message->destination_action_status,
                 'overall_status' => $overallStatus,
                 'locked_at' => null,
@@ -237,7 +248,7 @@ class SendOutgoingTalktoMessagePipeline
             ])->save();
 
             $attempt->forceFill([
-                'status' => 'sent',
+                'status' => TalktoAttemptStatus::Sent->value,
                 'http_status' => $response->status(),
                 'response_excerpt' => $responseExcerpt,
                 'meta' => array_filter([
@@ -251,7 +262,7 @@ class SendOutgoingTalktoMessagePipeline
                 'message_id' => $message->message_id,
                 'service_name' => config('talkto.service', 'app'),
                 'event_type' => 'message_sent',
-                'old_status' => 'sending',
+                'old_status' => TalktoMessageStatus::Sending->value,
                 'new_status' => $overallStatus,
                 'meta' => array_filter([
                     'http_status' => $response->status(),
@@ -306,7 +317,7 @@ class SendOutgoingTalktoMessagePipeline
                 'message_id' => $message->message_id,
                 'service_name' => config('talkto.service', 'app'),
                 'event_type' => 'message_send_failed',
-                'old_status' => 'sending',
+                'old_status' => TalktoMessageStatus::Sending->value,
                 'new_status' => $message->overall_status,
                 'meta' => [
                     'http_status' => $response->status(),
@@ -356,7 +367,7 @@ class SendOutgoingTalktoMessagePipeline
                 'message_id' => $message->message_id,
                 'service_name' => config('talkto.service', 'app'),
                 'event_type' => 'message_send_failed',
-                'old_status' => 'sending',
+                'old_status' => TalktoMessageStatus::Sending->value,
                 'new_status' => $message->overall_status,
                 'meta' => [
                     'error_class' => $throwable::class,
@@ -386,7 +397,7 @@ class SendOutgoingTalktoMessagePipeline
             'message_id' => $message->message_id,
             'service_name' => config('talkto.service', 'app'),
             'event_type' => $eventType,
-            'old_status' => 'sending',
+            'old_status' => TalktoMessageStatus::Sending->value,
             'new_status' => $message->overall_status,
             'meta' => $this->retryEventMeta($message, $eventType),
         ]);
@@ -431,11 +442,7 @@ class SendOutgoingTalktoMessagePipeline
      */
     protected function messageModelClass(): string
     {
-        $class = config('talkto.models.message', TalktoMessage::class);
-
-        return is_string($class) && is_a($class, TalktoMessage::class, true)
-            ? $class
-            : TalktoMessage::class;
+        return app(TalktoModelResolver::class)->message();
     }
 
     /**
@@ -443,11 +450,7 @@ class SendOutgoingTalktoMessagePipeline
      */
     protected function attemptModelClass(): string
     {
-        $class = config('talkto.models.attempt', TalktoAttempt::class);
-
-        return is_string($class) && is_a($class, TalktoAttempt::class, true)
-            ? $class
-            : TalktoAttempt::class;
+        return app(TalktoModelResolver::class)->attempt();
     }
 
     /**
@@ -455,11 +458,7 @@ class SendOutgoingTalktoMessagePipeline
      */
     protected function eventModelClass(): string
     {
-        $class = config('talkto.models.event', TalktoEvent::class);
-
-        return is_string($class) && is_a($class, TalktoEvent::class, true)
-            ? $class
-            : TalktoEvent::class;
+        return app(TalktoModelResolver::class)->event();
     }
 
     private function excerpt(mixed $value, int $limit = 2000): ?string

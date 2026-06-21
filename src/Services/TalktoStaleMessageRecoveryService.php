@@ -3,10 +3,12 @@
 namespace Mrezdev\LaravelTalkto\Services;
 
 use Illuminate\Support\Facades\DB;
+use Mrezdev\LaravelTalkto\Enums\TalktoMessageDirection;
+use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
 use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
 use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
-use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 
 /**
  * @internal Runtime service behind stale message recovery.
@@ -72,13 +74,13 @@ class TalktoStaleMessageRecoveryService
             ->when($direction !== null, fn ($query) => $query->where('direction', $direction))
             ->where(function ($query): void {
                 $query->where(function ($query): void {
-                    $query->where('direction', 'outgoing')
-                        ->where('overall_status', 'sending')
-                        ->where('transport_status', 'sending');
+                    $query->where('direction', TalktoMessageDirection::Outgoing->value)
+                        ->where('overall_status', TalktoMessageStatus::Sending->value)
+                        ->where('transport_status', TalktoMessageStatus::Sending->value);
                 })->orWhere(function ($query): void {
-                    $query->where('direction', 'incoming')
-                        ->where('overall_status', 'processing')
-                        ->where('destination_action_status', 'processing');
+                    $query->where('direction', TalktoMessageDirection::Incoming->value)
+                        ->where('overall_status', TalktoMessageStatus::Processing->value)
+                        ->where('destination_action_status', TalktoMessageStatus::Processing->value);
                 });
             })
             ->orderBy('locked_at')
@@ -104,7 +106,7 @@ class TalktoStaleMessageRecoveryService
             $oldLockedBy = $locked->locked_by;
 
             if (! $this->hasAttemptRemaining($locked)) {
-                $statusColumn = $locked->direction === 'outgoing'
+                $statusColumn = $locked->direction === TalktoMessageDirection::Outgoing->value
                     ? 'transport_status'
                     : 'destination_action_status';
 
@@ -138,12 +140,12 @@ class TalktoStaleMessageRecoveryService
                 'locked_by' => null,
             ];
 
-            if ($locked->direction === 'outgoing') {
-                $attributes['transport_status'] = 'pending';
-                $attributes['overall_status'] = 'waiting_to_send';
+            if ($locked->direction === TalktoMessageDirection::Outgoing->value) {
+                $attributes['transport_status'] = TalktoMessageStatus::Pending->value;
+                $attributes['overall_status'] = TalktoMessageStatus::WaitingToSend->value;
             } else {
-                $attributes['destination_action_status'] = 'queued';
-                $attributes['overall_status'] = 'queued';
+                $attributes['destination_action_status'] = TalktoMessageStatus::Queued->value;
+                $attributes['overall_status'] = TalktoMessageStatus::Queued->value;
             }
 
             $locked->forceFill($attributes)->save();
@@ -168,12 +170,12 @@ class TalktoStaleMessageRecoveryService
             return false;
         }
 
-        if ($message->direction === 'outgoing') {
-            return $message->overall_status === 'sending' && $message->transport_status === 'sending';
+        if ($message->direction === TalktoMessageDirection::Outgoing->value) {
+            return $message->overall_status === TalktoMessageStatus::Sending->value && $message->transport_status === TalktoMessageStatus::Sending->value;
         }
 
-        if ($message->direction === 'incoming') {
-            return $message->overall_status === 'processing' && $message->destination_action_status === 'processing';
+        if ($message->direction === TalktoMessageDirection::Incoming->value) {
+            return $message->overall_status === TalktoMessageStatus::Processing->value && $message->destination_action_status === TalktoMessageStatus::Processing->value;
         }
 
         return false;
@@ -186,14 +188,14 @@ class TalktoStaleMessageRecoveryService
 
     private function dispatchMessageJob(int $messageId, string $direction): void
     {
-        if ($direction === 'outgoing') {
+        if ($direction === TalktoMessageDirection::Outgoing->value) {
             $jobClass = $this->sendJobClass();
             $jobClass::dispatch($messageId);
 
             return;
         }
 
-        if ($direction === 'incoming') {
+        if ($direction === TalktoMessageDirection::Incoming->value) {
             $jobClass = $this->processIncomingJobClass();
             $jobClass::dispatch($messageId);
         }
@@ -229,20 +231,12 @@ class TalktoStaleMessageRecoveryService
 
     private function messageModelClass(): string
     {
-        $class = config('talkto.models.message', TalktoMessage::class);
-
-        return is_string($class) && is_a($class, TalktoMessage::class, true)
-            ? $class
-            : TalktoMessage::class;
+        return app(TalktoModelResolver::class)->message();
     }
 
     private function eventModelClass(): string
     {
-        $class = config('talkto.models.event', TalktoEvent::class);
-
-        return is_string($class) && is_a($class, TalktoEvent::class, true)
-            ? $class
-            : TalktoEvent::class;
+        return app(TalktoModelResolver::class)->event();
     }
 
     private function sendJobClass(): string

@@ -4,12 +4,15 @@ namespace Mrezdev\LaravelTalkto\Pipelines;
 
 use Illuminate\Support\Facades\DB;
 use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
+use Mrezdev\LaravelTalkto\Enums\TalktoAttemptStatus;
+use Mrezdev\LaravelTalkto\Enums\TalktoMessageDirection;
+use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
 use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
-use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
 use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResolver;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
+use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 use Throwable;
 
 /**
@@ -17,15 +20,18 @@ use Throwable;
  */
 class ProcessIncomingTalktoMessagePipeline
 {
-    private const PROCESSABLE_STATUSES = ['queued', 'pending'];
+    private const PROCESSABLE_STATUSES = [
+        TalktoMessageStatus::Queued->value,
+        TalktoMessageStatus::Pending->value,
+    ];
 
     private const NON_PROCESSABLE_STATUSES = [
-        'processing',
-        'succeeded',
-        'completed',
-        'failed_final',
-        'cancelled',
-        'skipped',
+        TalktoMessageStatus::Processing->value,
+        TalktoMessageStatus::Succeeded->value,
+        TalktoMessageStatus::Completed->value,
+        TalktoMessageStatus::FailedFinal->value,
+        TalktoMessageStatus::Cancelled->value,
+        TalktoMessageStatus::Skipped->value,
     ];
 
     private int $talktoMessageId;
@@ -43,7 +49,7 @@ class ProcessIncomingTalktoMessagePipeline
             return;
         }
 
-        if ($message->direction !== 'incoming') {
+        if ($message->direction !== TalktoMessageDirection::Incoming->value) {
             $this->createSkippedAttempt(
                 $message,
                 'invalid_direction',
@@ -106,7 +112,7 @@ class ProcessIncomingTalktoMessagePipeline
             'message_id' => $message->message_id,
             'stage' => 'destination_processor',
             'attempt_no' => ((int) $message->getAttribute('attempts')) + 1,
-            'status' => 'skipped',
+            'status' => TalktoAttemptStatus::Skipped->value,
             'error_class' => $errorClass,
             'error_message' => $errorMessage,
         ]);
@@ -128,7 +134,7 @@ class ProcessIncomingTalktoMessagePipeline
                 return null;
             }
 
-            if ($message->direction !== 'incoming') {
+            if ($message->direction !== TalktoMessageDirection::Incoming->value) {
                 $this->createSkippedAttempt(
                     $message,
                     'invalid_direction',
@@ -147,8 +153,8 @@ class ProcessIncomingTalktoMessagePipeline
 
             $message->forceFill([
                 'attempts' => $attemptNo,
-                'destination_action_status' => 'processing',
-                'overall_status' => 'processing',
+                'destination_action_status' => TalktoMessageStatus::Processing->value,
+                'overall_status' => TalktoMessageStatus::Processing->value,
                 'processing_started_at' => $message->processing_started_at ?: now(),
                 'last_attempted_at' => now(),
                 'next_retry_at' => null,
@@ -162,7 +168,7 @@ class ProcessIncomingTalktoMessagePipeline
                 'message_id' => $message->message_id,
                 'stage' => 'destination_processor',
                 'attempt_no' => $attemptNo,
-                'status' => 'processing',
+                'status' => TalktoAttemptStatus::Processing->value,
                 'meta' => [
                     'command' => $message->command,
                     'business_key' => $message->business_key,
@@ -176,7 +182,7 @@ class ProcessIncomingTalktoMessagePipeline
                 'service_name' => config('talkto.service', 'app'),
                 'event_type' => 'destination_processing_started',
                 'old_status' => $previousStatus,
-                'new_status' => 'processing',
+                'new_status' => TalktoMessageStatus::Processing->value,
                 'meta' => $this->eventMeta($message),
             ]);
 
@@ -215,8 +221,8 @@ class ProcessIncomingTalktoMessagePipeline
             }
 
             $message->forceFill([
-                'destination_action_status' => 'skipped',
-                'overall_status' => 'skipped',
+                'destination_action_status' => TalktoMessageStatus::Skipped->value,
+                'overall_status' => TalktoMessageStatus::Skipped->value,
                 'completed_at' => now(),
                 'failed_at' => null,
                 'last_error' => null,
@@ -225,7 +231,7 @@ class ProcessIncomingTalktoMessagePipeline
             ])->save();
 
             $attempt->forceFill([
-                'status' => 'skipped',
+                'status' => TalktoAttemptStatus::Skipped->value,
                 'meta' => $this->mergeAttemptMeta($attempt, [
                     'result_meta' => $meta,
                 ]),
@@ -236,8 +242,8 @@ class ProcessIncomingTalktoMessagePipeline
                 'message_id' => $message->message_id,
                 'service_name' => config('talkto.service', 'app'),
                 'event_type' => 'incoming_command_skipped',
-                'old_status' => 'processing',
-                'new_status' => 'skipped',
+                'old_status' => TalktoMessageStatus::Processing->value,
+                'new_status' => TalktoMessageStatus::Skipped->value,
                 'meta' => $this->eventMeta($message, $meta),
             ]);
 
@@ -260,8 +266,8 @@ class ProcessIncomingTalktoMessagePipeline
             }
 
             $message->forceFill([
-                'destination_action_status' => 'succeeded',
-                'overall_status' => 'succeeded',
+                'destination_action_status' => TalktoMessageStatus::Succeeded->value,
+                'overall_status' => TalktoMessageStatus::Succeeded->value,
                 'completed_at' => now(),
                 'failed_at' => null,
                 'last_error' => null,
@@ -270,7 +276,7 @@ class ProcessIncomingTalktoMessagePipeline
             ])->save();
 
             $attempt->forceFill([
-                'status' => 'succeeded',
+                'status' => TalktoAttemptStatus::Succeeded->value,
                 'meta' => $this->mergeAttemptMeta($attempt, [
                     'result' => $resultPayload,
                     'result_meta' => $meta,
@@ -282,8 +288,8 @@ class ProcessIncomingTalktoMessagePipeline
                 'message_id' => $message->message_id,
                 'service_name' => config('talkto.service', 'app'),
                 'event_type' => 'destination_processing_succeeded',
-                'old_status' => 'processing',
-                'new_status' => 'succeeded',
+                'old_status' => TalktoMessageStatus::Processing->value,
+                'new_status' => TalktoMessageStatus::Succeeded->value,
                 'meta' => $this->eventMeta($message, [
                     'result' => $resultPayload,
                     'result_meta' => $meta,
@@ -296,7 +302,7 @@ class ProcessIncomingTalktoMessagePipeline
 
     private function applyFailedResult(TalktoMessage $message, TalktoAttempt $attempt, IncomingCommandResultContract $result, TalktoRetryPolicy $retryPolicy): void
     {
-        $newStatus = $result->isRetryable() ? 'failed_retryable' : 'failed_final';
+        $newStatus = $result->isRetryable() ? TalktoMessageStatus::FailedRetryable->value : TalktoMessageStatus::FailedFinal->value;
 
         DB::transaction(function () use ($message, $attempt, $result, $newStatus, $retryPolicy): void {
             $messageClass = $this->messageModelClass();
@@ -353,7 +359,7 @@ class ProcessIncomingTalktoMessagePipeline
                 'message_id' => $message->message_id,
                 'service_name' => config('talkto.service', 'app'),
                 'event_type' => 'destination_processing_failed',
-                'old_status' => 'processing',
+                'old_status' => TalktoMessageStatus::Processing->value,
                 'new_status' => $newStatus,
                 'meta' => $this->eventMeta($message, [
                     'error_class' => $errorClass,
@@ -379,7 +385,7 @@ class ProcessIncomingTalktoMessagePipeline
                 return;
             }
 
-            $newStatus = 'failed_retryable';
+            $newStatus = TalktoMessageStatus::FailedRetryable->value;
             $scheduled = false;
 
             if ($retryPolicy->isDirectionEnabled($message)) {
@@ -420,7 +426,7 @@ class ProcessIncomingTalktoMessagePipeline
                 'message_id' => $message->message_id,
                 'service_name' => config('talkto.service', 'app'),
                 'event_type' => 'destination_processing_failed',
-                'old_status' => 'processing',
+                'old_status' => TalktoMessageStatus::Processing->value,
                 'new_status' => $newStatus,
                 'meta' => $this->eventMeta($message, [
                     'error_class' => $throwable::class,
@@ -452,7 +458,7 @@ class ProcessIncomingTalktoMessagePipeline
             'message_id' => $message->message_id,
             'service_name' => config('talkto.service', 'app'),
             'event_type' => $eventType,
-            'old_status' => 'processing',
+            'old_status' => TalktoMessageStatus::Processing->value,
             'new_status' => $message->overall_status,
             'meta' => $this->eventMeta($message, $this->retryEventMeta($message, $eventType)),
         ]);
@@ -505,28 +511,16 @@ class ProcessIncomingTalktoMessagePipeline
 
     private function messageModelClass(): string
     {
-        $class = config('talkto.models.message', TalktoMessage::class);
-
-        return is_string($class) && is_a($class, TalktoMessage::class, true)
-            ? $class
-            : TalktoMessage::class;
+        return app(TalktoModelResolver::class)->message();
     }
 
     private function attemptModelClass(): string
     {
-        $class = config('talkto.models.attempt', TalktoAttempt::class);
-
-        return is_string($class) && is_a($class, TalktoAttempt::class, true)
-            ? $class
-            : TalktoAttempt::class;
+        return app(TalktoModelResolver::class)->attempt();
     }
 
     private function eventModelClass(): string
     {
-        $class = config('talkto.models.event', TalktoEvent::class);
-
-        return is_string($class) && is_a($class, TalktoEvent::class, true)
-            ? $class
-            : TalktoEvent::class;
+        return app(TalktoModelResolver::class)->event();
     }
 }
