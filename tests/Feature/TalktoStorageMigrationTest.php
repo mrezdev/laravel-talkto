@@ -138,8 +138,52 @@ test('messages migration includes idempotency fingerprint and query indexes', fu
     expect($migration)->toContain("\$table->string('idempotency_fingerprint', 64)->nullable()->unique();")
         ->and($migration)->toContain("'talkto_messages_retry_lookup_idx'")
         ->and($migration)->toContain("'talkto_messages_target_status_idx'")
-        ->and($migration)->toContain("'talkto_messages_service_command_time_idx'")
-        ->and($migration)->toContain("'talkto_messages_correlation_time_idx'");
+        ->and($migration)->toContain("\$table->index(['source_service', 'target_service']);")
+        ->and($migration)->toContain("'talkto_messages_service_time_idx'")
+        ->and($migration)->toContain("'talkto_messages_command_time_idx'")
+        ->and($migration)->toContain("'talkto_messages_correlation_time_idx'")
+        ->and($migration)->not->toContain("'talkto_messages_service_command_time_idx'");
+});
+
+test('talkto composite migration indexes fit conservative mysql utf8mb4 key budget', function (): void {
+    $maxIndexBytes = 1000;
+    $migrationPaths = glob(__DIR__.'/../../database/migrations/*.php') ?: [];
+    $checkedIndexes = [];
+    $violations = [];
+
+    foreach ($migrationPaths as $migrationPath) {
+        $migration = file_get_contents($migrationPath) ?: '';
+        $columnBudgets = talktoStorageMigrationColumnByteBudgets($migration);
+
+        foreach (talktoStorageMigrationCompositeIndexes($migration) as $indexName => $columns) {
+            $bytes = 0;
+
+            foreach ($columns as $column) {
+                if (! array_key_exists($column, $columnBudgets)) {
+                    $violations[] = sprintf('%s:%s references unknown column %s', basename($migrationPath), $indexName, $column);
+
+                    continue;
+                }
+
+                $bytes += $columnBudgets[$column];
+            }
+
+            $checkedIndexes[] = sprintf('%s:%s=%d', basename($migrationPath), $indexName, $bytes);
+
+            if ($bytes > $maxIndexBytes) {
+                $violations[] = sprintf(
+                    '%s:%s uses %d bytes, exceeding the %d-byte conservative MySQL/MariaDB utf8mb4 budget',
+                    basename($migrationPath),
+                    $indexName,
+                    $bytes,
+                    $maxIndexBytes,
+                );
+            }
+        }
+    }
+
+    expect($checkedIndexes)->not->toBeEmpty()
+        ->and($violations)->toBe([]);
 });
 
 test('max attempts default is consistent between config and messages migration', function (): void {
@@ -265,4 +309,77 @@ function talktoStorageMigrationInstances(): array
 function talktoStorageDeadLetterMigration(): Migration
 {
     return include __DIR__.'/../../database/migrations/2026_06_19_000002_create_talkto_dead_letters_table.php';
+}
+
+/**
+ * @return array<string, int>
+ */
+function talktoStorageMigrationColumnByteBudgets(string $migration): array
+{
+    $budgets = [];
+
+    preg_match_all("/\\\$table->string\\('([^']+)'(?:,\\s*(\\d+))?\\)/", $migration, $stringColumns, PREG_SET_ORDER);
+
+    foreach ($stringColumns as $column) {
+        $length = isset($column[2]) && $column[2] !== '' ? (int) $column[2] : 255;
+
+        $budgets[$column[1]] = $length * 4;
+    }
+
+    preg_match_all("/\\\$table->timestamp\\('([^']+)'\\)/", $migration, $timestampColumns, PREG_SET_ORDER);
+
+    foreach ($timestampColumns as $column) {
+        $budgets[$column[1]] = 8;
+    }
+
+    if (str_contains($migration, '$table->timestamps();')) {
+        $budgets['created_at'] = 8;
+        $budgets['updated_at'] = 8;
+    }
+
+    preg_match_all("/\\\$table->(?:integer|unsignedInteger|foreignId)\\('([^']+)'\\)/", $migration, $integerColumns, PREG_SET_ORDER);
+
+    foreach ($integerColumns as $column) {
+        $budgets[$column[1]] = 8;
+    }
+
+    preg_match_all("/\\\$table->unsignedBigInteger\\('([^']+)'\\)/", $migration, $bigIntegerColumns, PREG_SET_ORDER);
+
+    foreach ($bigIntegerColumns as $column) {
+        $budgets[$column[1]] = 8;
+    }
+
+    if (str_contains($migration, '$table->id();')) {
+        $budgets['id'] = 8;
+    }
+
+    return $budgets;
+}
+
+/**
+ * @return array<string, list<string>>
+ */
+function talktoStorageMigrationCompositeIndexes(string $migration): array
+{
+    preg_match_all(
+        "/\\\$table->(?:index|unique)\\(\\s*\\[([^\\]]+)\\]\\s*(?:,\\s*'([^']+)')?\\s*\\)/s",
+        $migration,
+        $matches,
+        PREG_SET_ORDER,
+    );
+
+    $indexes = [];
+
+    foreach ($matches as $match) {
+        preg_match_all("/'([^']+)'/", $match[1], $columns);
+
+        if (count($columns[1]) < 2) {
+            continue;
+        }
+
+        $indexName = isset($match[2]) && $match[2] !== '' ? $match[2] : implode('_', $columns[1]).'_index';
+        $indexes[$indexName] = $columns[1];
+    }
+
+    return $indexes;
 }

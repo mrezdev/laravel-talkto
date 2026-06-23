@@ -49,7 +49,8 @@ return new class extends Migration
             $table->index(['source_service', 'target_service']);
             $table->index(['direction', 'overall_status', 'next_retry_at'], 'talkto_messages_retry_lookup_idx');
             $table->index(['direction', 'target_service', 'overall_status'], 'talkto_messages_target_status_idx');
-            $table->index(['source_service', 'target_service', 'command', 'created_at'], 'talkto_messages_service_command_time_idx');
+            $table->index(['source_service', 'target_service', 'created_at'], 'talkto_messages_service_time_idx');
+            $table->index(['command', 'created_at'], 'talkto_messages_command_time_idx');
             $table->index(['correlation_id', 'created_at'], 'talkto_messages_correlation_time_idx');
             $table->index('created_at');
         });
