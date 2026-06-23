@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
@@ -9,12 +10,14 @@ use Mrezdev\LaravelTalkto\Contracts\ResultCallbackReceiverContract;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
 use Mrezdev\LaravelTalkto\Data\TalktoResultCallbackData;
 use Mrezdev\LaravelTalkto\Http\Controllers\TalktoResultCallbackController;
+use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoNonce;
 use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
 use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
 use Mrezdev\LaravelTalkto\Services\TalktoResultCallbackEnvelopeBuilder;
+use Mrezdev\LaravelTalkto\Services\TalktoResultCallbackMessageFactory;
 use Mrezdev\LaravelTalkto\Services\TalktoResultCallbackReceiver;
 use Mrezdev\LaravelTalkto\Services\TalktoResultCallbackSender;
 use Mrezdev\LaravelTalkto\Services\TalktoSigner;
@@ -62,6 +65,82 @@ test('callback sender builds signed envelope and posts to configured callback en
 
     expect(TalktoEvent::query()->where('message_id', 'p04-send-ok')->where('event_type', 'result_callback_sending_started')->exists())->toBeTrue()
         ->and(TalktoEvent::query()->where('message_id', 'p04-send-ok')->where('event_type', 'result_callback_sent')->exists())->toBeTrue();
+});
+
+test('callback message factory creates outgoing durable callback message from incoming result', function (): void {
+    config(['talkto.service' => 'unexpected-config-service']);
+
+    $incoming = p04IncomingMessage('p04-durable-create');
+    $result = TalktoIncomingCommandResult::succeeded(['processed' => true], ['attempt' => 1]);
+
+    $callback = app(TalktoResultCallbackMessageFactory::class)->createForIncomingResult($incoming, $result);
+
+    expect($callback->direction)->toBe('outgoing')
+        ->and($callback->command)->toBe('talkto.result')
+        ->and($callback->source_service)->toBe('target-service')
+        ->and($callback->target_service)->toBe('source-service')
+        ->and($callback->parent_message_id)->toBe('p04-durable-create')
+        ->and($callback->correlation_id)->toBe('correlation-p04-durable-create')
+        ->and($callback->business_key)->toBe('business-key-123')
+        ->and($callback->idempotency_key)->toBe('talkto:callback:p04-durable-create:succeeded')
+        ->and($callback->source_action_status)->toBe('succeeded_assumed')
+        ->and($callback->transport_status)->toBe('pending')
+        ->and($callback->overall_status)->toBe('waiting_to_send')
+        ->and((int) $callback->attempts)->toBe(0)
+        ->and($callback->message_id)->toBe('cb-'.sha1('p04-durable-create|succeeded'))
+        ->and($callback->payload_hash)->toBe(app(TalktoPayloadHasher::class)->hash($callback->payload))
+        ->and($callback->payload)->toMatchArray([
+            'original_message_id' => 'p04-durable-create',
+            'original_command' => 'domain.command',
+            'status' => 'succeeded',
+            'succeeded' => true,
+            'retryable' => false,
+            'skipped' => false,
+            'result' => ['processed' => true],
+            'meta' => ['attempt' => 1],
+        ])
+        ->and(TalktoEvent::query()->where('message_id', $callback->message_id)->where('event_type', 'message_created')->exists())->toBeTrue();
+});
+
+test('callback message factory reuses duplicate durable callback for same original and status', function (): void {
+    $incoming = p04IncomingMessage('p04-durable-idempotent');
+    $factory = app(TalktoResultCallbackMessageFactory::class);
+
+    $first = $factory->createForIncomingResult($incoming, TalktoIncomingCommandResult::succeeded(['processed' => true]));
+    $second = $factory->createForIncomingResult($incoming, TalktoIncomingCommandResult::succeeded(['processed' => false]));
+
+    expect($second->id)->toBe($first->id)
+        ->and(TalktoMessage::query()
+            ->where('idempotency_key', 'talkto:callback:p04-durable-idempotent:succeeded')
+            ->count())->toBe(1)
+        ->and(TalktoMessage::query()
+            ->where('parent_message_id', 'p04-durable-idempotent')
+            ->where('command', 'talkto.result')
+            ->count())->toBe(1);
+});
+
+test('callback message factory rejects non incoming messages clearly', function (): void {
+    $outgoing = p04OutgoingMessage('p04-durable-reject');
+
+    expect(fn () => app(TalktoResultCallbackMessageFactory::class)->createForIncomingResult(
+        $outgoing,
+        TalktoIncomingCommandResult::succeeded()
+    ))->toThrow(InvalidArgumentException::class, 'incoming messages');
+});
+
+test('callback message factory does not send http or dispatch send job', function (): void {
+    Bus::fake();
+    Http::fake();
+
+    $incoming = p04IncomingMessage('p04-durable-no-side-effects');
+
+    app(TalktoResultCallbackMessageFactory::class)->createForIncomingResult(
+        $incoming,
+        TalktoIncomingCommandResult::failedRetryable('Temporary failure.')
+    );
+
+    Http::assertNothingSent();
+    Bus::assertNotDispatched(SendTalktoMessage::class);
 });
 
 test('default v2 callback sender builds nonce and payload hash headers', function (): void {

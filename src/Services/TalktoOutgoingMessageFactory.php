@@ -39,7 +39,10 @@ class TalktoOutgoingMessageFactory
 
         $normalizedPayload = $this->normalizePayload($payload);
         $payloadHash = $this->payloadHasher->hash($normalizedPayload);
-        $sourceService = config('talkto.service', 'app');
+        $configuredSourceService = $options['source_service'] ?? config('talkto.service', 'app');
+        $sourceService = is_string($configuredSourceService) && $configuredSourceService !== ''
+            ? $configuredSourceService
+            : config('talkto.service', 'app');
         $businessKey = $options['business_key'] ?? null;
         $idempotencyKey = $options['idempotency_key'] ?? null;
         $messageId = $options['message_id'] ?? Str::uuid()->toString();

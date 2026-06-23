@@ -44,6 +44,7 @@ use Mrezdev\LaravelTalkto\Services\TalktoIncomingHandlerRegistry;
 use Mrezdev\LaravelTalkto\Services\TalktoMetricsCollector;
 use Mrezdev\LaravelTalkto\Services\TalktoOutgoingTargetRegistry;
 use Mrezdev\LaravelTalkto\Services\TalktoPruningService;
+use Mrezdev\LaravelTalkto\Services\TalktoResultCallbackMessageFactory;
 use Mrezdev\LaravelTalkto\Services\TalktoResultCallbackReceiver;
 use Mrezdev\LaravelTalkto\Services\TalktoResultCallbackSender;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
@@ -76,6 +77,7 @@ class LaravelTalktoServiceProvider extends ServiceProvider
         $this->app->bind(TalktoPanelConnectionRegistry::class);
         $this->app->bind(TalktoPanelConnectionHealthChecker::class);
         $this->app->bind(TalktoPanelJsonPresenter::class);
+        $this->app->bind(TalktoResultCallbackMessageFactory::class);
         $this->app->bind(ResultCallbackSenderContract::class, TalktoResultCallbackSender::class);
         $this->app->bind(ResultCallbackReceiverContract::class, TalktoResultCallbackReceiver::class);
         $this->app->bind(ReceiveIncomingTalktoMessagePipeline::class);
