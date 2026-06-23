@@ -27,7 +27,7 @@
             @if (config('talkto.panel.actions.retry_enabled', true))
                 <form method="POST" action="{{ route($routePrefix.'messages.retry', ['message' => $message->message_id]) }}">
                     @csrf
-                    <button type="submit" class="rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">{{ __('talkto::panel.common.retry_now') }}</button>
+                    <button type="submit" class="rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 cursor-pointer">{{ __('talkto::panel.common.retry_now') }}</button>
                 </form>
             @endif
             <a class="inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50" href="{{ route($routePrefix.'messages.trace', ['message' => $message->message_id]) }}">{{ __('talkto::panel.common.view_trace') }}</a>

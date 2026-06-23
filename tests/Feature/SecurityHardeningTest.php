@@ -295,6 +295,127 @@ test('security auditor accepts outgoing url and endpoint aliases', function (): 
     expect(securityAuditFindingsForTarget($findings, 'phase2-peer', 'outgoing_target_missing_url'))->toBe([]);
 });
 
+test('security auditor does not warn for default secure ssl verification config', function (): void {
+    $codes = array_column(app(TalktoSecurityAuditor::class)->audit()->toArray()['findings'], 'code');
+
+    expect($codes)->not->toContain('outgoing_target_ssl_verification_disabled')
+        ->and($codes)->not->toContain('outgoing_target_ca_bundle_missing')
+        ->and($codes)->not->toContain('outgoing_target_ca_bundle_unreadable')
+        ->and($codes)->not->toContain('outgoing_target_ca_bundle_ignored');
+});
+
+test('security auditor warns when effective ssl verification is disabled', function (): void {
+    config(['talkto.http.verify_ssl' => false]);
+
+    $findings = app(TalktoSecurityAuditor::class)->audit()->toArray()['findings'];
+    $disabled = securityAuditFindingsForTarget($findings, 'source-service', 'outgoing_target_ssl_verification_disabled');
+
+    expect($disabled)->not->toBeEmpty()
+        ->and($disabled[0]['context']['target'] ?? null)->toBe('source-service')
+        ->and($disabled[0]['message'] ?? '')->toContain('SSL/TLS certificate verification disabled')
+        ->and($disabled[0]['context']['verify_ssl'] ?? null)->toBeFalse()
+        ->and($disabled[0]['context']['ca_bundle_configured'] ?? null)->toBeFalse();
+});
+
+test('security auditor honors target ssl verification override over global disabled config', function (): void {
+    config([
+        'talkto.http.verify_ssl' => false,
+        'talkto.outgoing.source-service.verify_ssl' => true,
+    ]);
+
+    $findings = app(TalktoSecurityAuditor::class)->audit()->toArray()['findings'];
+
+    expect(securityAuditFindingsForTarget($findings, 'source-service', 'outgoing_target_ssl_verification_disabled'))->toBe([]);
+});
+
+test('security auditor warns when target ssl verification is disabled', function (): void {
+    config([
+        'talkto.http.verify_ssl' => true,
+        'talkto.outgoing.source-service.verify_ssl' => false,
+    ]);
+
+    $findings = app(TalktoSecurityAuditor::class)->audit()->toArray()['findings'];
+    $disabled = securityAuditFindingsForTarget($findings, 'source-service', 'outgoing_target_ssl_verification_disabled');
+
+    expect($disabled)->not->toBeEmpty()
+        ->and($disabled[0]['context']['target'] ?? null)->toBe('source-service');
+});
+
+test('security auditor warns for missing and unreadable ca bundles while verification is enabled', function (): void {
+    $missingCaBundle = sys_get_temp_dir().DIRECTORY_SEPARATOR.'talkto-missing-ca-'.uniqid().'.pem';
+    @unlink($missingCaBundle);
+
+    config([
+        'talkto.http.verify_ssl' => true,
+        'talkto.outgoing.source-service.ca_bundle' => $missingCaBundle,
+    ]);
+
+    $findings = app(TalktoSecurityAuditor::class)->audit()->toArray()['findings'];
+    $missing = securityAuditFindingsForTarget($findings, 'source-service', 'outgoing_target_ca_bundle_missing');
+
+    expect($missing)->not->toBeEmpty()
+        ->and($missing[0]['context']['ca_bundle_label'] ?? null)->toBe(basename($missingCaBundle))
+        ->and($missing[0]['context']['ca_bundle_exists'] ?? null)->toBeFalse()
+        ->and(json_encode($missing[0], JSON_THROW_ON_ERROR))->not->toContain($missingCaBundle);
+
+    $directoryCaBundle = sys_get_temp_dir().DIRECTORY_SEPARATOR.'talkto-directory-ca-'.uniqid();
+    mkdir($directoryCaBundle);
+
+    try {
+        config(['talkto.outgoing.source-service.ca_bundle' => $directoryCaBundle]);
+
+        $findings = app(TalktoSecurityAuditor::class)->audit()->toArray()['findings'];
+        $unreadable = securityAuditFindingsForTarget($findings, 'source-service', 'outgoing_target_ca_bundle_unreadable');
+
+        expect($unreadable)->not->toBeEmpty()
+            ->and($unreadable[0]['context']['ca_bundle_label'] ?? null)->toBe(basename($directoryCaBundle))
+            ->and($unreadable[0]['context']['ca_bundle_exists'] ?? null)->toBeTrue()
+            ->and($unreadable[0]['context']['ca_bundle_readable'] ?? null)->toBeFalse();
+    } finally {
+        @rmdir($directoryCaBundle);
+    }
+});
+
+test('security auditor accepts readable ca bundle while verification is enabled', function (): void {
+    $caBundle = sys_get_temp_dir().DIRECTORY_SEPARATOR.'talkto-readable-ca-'.uniqid().'.pem';
+    file_put_contents($caBundle, 'test ca');
+
+    try {
+        config([
+            'talkto.http.verify_ssl' => true,
+            'talkto.outgoing.source-service.ca_bundle' => $caBundle,
+        ]);
+
+        $findings = app(TalktoSecurityAuditor::class)->audit()->toArray()['findings'];
+        $codes = array_column(securityAuditFindingsForTarget($findings, 'source-service'), 'code');
+
+        expect($codes)->not->toContain('outgoing_target_ca_bundle_missing')
+            ->and($codes)->not->toContain('outgoing_target_ca_bundle_unreadable')
+            ->and($codes)->not->toContain('outgoing_target_ca_bundle_ignored')
+            ->and($codes)->not->toContain('outgoing_target_ssl_verification_disabled');
+    } finally {
+        @unlink($caBundle);
+    }
+});
+
+test('security auditor warns when ca bundle is ignored because ssl verification is disabled', function (): void {
+    $ignoredCaBundle = sys_get_temp_dir().DIRECTORY_SEPARATOR.'talkto-ignored-ca-'.uniqid().'.pem';
+
+    config([
+        'talkto.http.verify_ssl' => false,
+        'talkto.outgoing.source-service.ca_bundle' => $ignoredCaBundle,
+    ]);
+
+    $findings = app(TalktoSecurityAuditor::class)->audit()->toArray()['findings'];
+    $ignored = securityAuditFindingsForTarget($findings, 'source-service', 'outgoing_target_ca_bundle_ignored');
+    $codes = array_column(securityAuditFindingsForTarget($findings, 'source-service'), 'code');
+
+    expect($codes)->toContain('outgoing_target_ssl_verification_disabled')
+        ->and($ignored)->not->toBeEmpty()
+        ->and($ignored[0]['context']['ca_bundle_label'] ?? null)->toBe(basename($ignoredCaBundle))
+        ->and(json_encode($ignored[0], JSON_THROW_ON_ERROR))->not->toContain($ignoredCaBundle);
+});
+
 test('security auditor reports missing receive url for unknown url keys', function (): void {
     config(['talkto.outgoing' => [
         'phase2-peer' => [

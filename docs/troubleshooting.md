@@ -50,6 +50,14 @@ Likely cause: The target is missing a normalized URL/secret value, has an invali
 
 Safe fix: Prefer `base_url` with `receive_endpoint` and `callback_endpoint`, or explicit `receive_url` and `callback_url`. `signing_secret` is accepted as a secret alias.
 
+## Outgoing TLS Or CA Bundle Warning
+
+Symptom: sends fail with certificate errors, or `talkto:security-audit`/the panel reports disabled SSL verification, a missing CA bundle, an unreadable CA bundle, or an ignored CA bundle.
+
+Likely cause: `verify_ssl=false`, a private CA is missing from the host trust store, `ca_bundle` points to the wrong file, or verification is disabled while a CA bundle is still configured.
+
+Safe fix: Keep `TALKTO_HTTP_VERIFY_SSL=true` for production. If the peer uses a private CA, set `TALKTO_HTTP_CA_BUNDLE` or the target `ca_bundle` to a readable CA bundle file. Clear Laravel config cache after changing env values. Use `verify_ssl=false` only for documented local/staging/internal testing, and remove unused CA bundle values when verification is disabled.
+
 ## Signature Verification Failed
 
 Symptom: Incoming request is rejected with a signature error.

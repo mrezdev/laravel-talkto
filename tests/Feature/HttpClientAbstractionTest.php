@@ -5,6 +5,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\Response as LaravelHttpResponse;
 use Illuminate\Support\Facades\Http;
 use Mrezdev\LaravelTalkto\Contracts\TalktoHttpClient;
+use Mrezdev\LaravelTalkto\Contracts\TalktoHttpClientWithOptions;
 use Mrezdev\LaravelTalkto\Data\TalktoHttpResponse;
 use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoOutgoingTarget;
 use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
@@ -42,10 +43,11 @@ beforeEach(function (): void {
 });
 
 test('service provider binds talkto http client to the default laravel implementation', function (): void {
-    expect(app(TalktoHttpClient::class))->toBeInstanceOf(LaravelTalktoHttpClient::class);
+    expect(app(TalktoHttpClient::class))->toBeInstanceOf(LaravelTalktoHttpClient::class)
+        ->and(app(TalktoHttpClient::class))->toBeInstanceOf(TalktoHttpClientWithOptions::class);
 });
 
-test('default laravel implementation sends url headers body and timeout', function (): void {
+test('default laravel implementation sends url headers body timeout and options', function (): void {
     $pending = Mockery::mock();
 
     Http::shouldReceive('withHeaders')
@@ -58,6 +60,11 @@ test('default laravel implementation sends url headers body and timeout', functi
         ->with(17)
         ->andReturnSelf();
 
+    $pending->shouldReceive('withOptions')
+        ->once()
+        ->with(['verify' => '/tmp/default-client-ca.pem'])
+        ->andReturnSelf();
+
     $pending->shouldReceive('post')
         ->once()
         ->with('https://peer.test/api/talkto/receive', ['hello' => 'world'])
@@ -67,11 +74,12 @@ test('default laravel implementation sends url headers body and timeout', functi
             '{"accepted":true}'
         )));
 
-    $response = app(LaravelTalktoHttpClient::class)->post(
+    $response = app(LaravelTalktoHttpClient::class)->postWithOptions(
         'https://peer.test/api/talkto/receive',
         ['X-Test' => 'yes'],
         ['hello' => 'world'],
-        17
+        17,
+        ['verify' => '/tmp/default-client-ca.pem']
     );
 
     expect($response)->toBeInstanceOf(TalktoHttpResponse::class)
@@ -80,6 +88,41 @@ test('default laravel implementation sends url headers body and timeout', functi
         ->and($response->body())->toBe('{"accepted":true}')
         ->and($response->headers())->toHaveKey('X-Reply')
         ->and($response->json('accepted'))->toBeTrue();
+});
+
+test('default laravel implementation keeps four argument post backward compatible', function (): void {
+    $pending = Mockery::mock();
+
+    Http::shouldReceive('withHeaders')
+        ->once()
+        ->with(['X-Test' => 'yes'])
+        ->andReturn($pending);
+
+    $pending->shouldReceive('timeout')
+        ->once()
+        ->with(17)
+        ->andReturnSelf();
+
+    $pending->shouldReceive('withOptions')->never();
+
+    $pending->shouldReceive('post')
+        ->once()
+        ->with('https://peer.test/api/talkto/receive', ['hello' => 'world'])
+        ->andReturn(new LaravelHttpResponse(new PsrResponse(
+            200,
+            [],
+            '{"received":true}'
+        )));
+
+    $response = app(LaravelTalktoHttpClient::class)->post(
+        'https://peer.test/api/talkto/receive',
+        ['X-Test' => 'yes'],
+        ['hello' => 'world'],
+        17
+    );
+
+    expect($response->successful())->toBeTrue()
+        ->and($response->json('received'))->toBeTrue();
 });
 
 test('existing outgoing send succeeds using the default implementation', function (): void {
@@ -140,6 +183,8 @@ test('custom http client binding is used by the outgoing send pipeline', functio
         ->and($client->requests[0]['headers'])->toHaveKey('X-Talkto-Signature')
         ->and($client->requests[0]['envelope']['message_id'])->toBe('http-custom-success')
         ->and($client->requests[0]['timeout'])->toBe(13)
+        ->and($client->requests[0]['method'])->toBe('post_with_options')
+        ->and($client->requests[0]['options']['verify'])->toBeTrue()
         ->and($message->fresh()->overall_status)->toBe('destination_received')
         ->and($message->fresh()->destination_action_status)->toBe('queued');
 });
@@ -165,6 +210,44 @@ test('custom client failed response triggers existing retry behavior', function 
         ->and($message->last_http_status)->toBe(503)
         ->and($message->last_response)->toBe('custom temporary failure')
         ->and($message->next_retry_at)->not->toBeNull();
+});
+
+test('legacy four argument custom http client still works for normal outgoing send', function (): void {
+    $client = new LegacyRecordingTalktoHttpClient(httpClientReceiveResponse());
+    app()->instance(TalktoHttpClient::class, $client);
+
+    $message = httpClientOutgoingMessage('http-legacy-normal-success');
+
+    (new SendTalktoMessage($message->id))->handle(app(TalktoOutgoingEnvelopeBuilder::class), app(TalktoRetryPolicy::class));
+
+    $message->refresh();
+
+    expect($client->requests)->toHaveCount(1)
+        ->and($client->requests[0]['url'])->toBe('https://peer.test/api/talkto/receive')
+        ->and($client->requests[0]['timeout'])->toBe(13)
+        ->and($client->requests[0])->not->toHaveKey('options')
+        ->and($message->overall_status)->toBe('destination_received')
+        ->and($message->transport_status)->toBe('sent');
+});
+
+test('legacy four argument custom http client still works for durable callback send', function (): void {
+    $incoming = httpClientIncomingMessage('http-legacy-callback-incoming');
+    $callback = app(TalktoResultCallbackMessageFactory::class)->createForIncomingResult(
+        $incoming,
+        TalktoIncomingCommandResult::succeeded(['processed' => true])
+    );
+    $client = new LegacyRecordingTalktoHttpClient(httpClientAcceptedCallbackResponse($callback, $incoming));
+    app()->instance(TalktoHttpClient::class, $client);
+
+    (new SendTalktoMessage($callback->id))->handle(app(TalktoOutgoingEnvelopeBuilder::class), app(TalktoRetryPolicy::class));
+
+    $callback->refresh();
+
+    expect($client->requests)->toHaveCount(1)
+        ->and($client->requests[0]['url'])->toBe('https://peer.test/callbacks/talkto')
+        ->and($client->requests[0])->not->toHaveKey('options')
+        ->and($callback->overall_status)->toBe('completed')
+        ->and($callback->destination_action_status)->toBe('applied');
 });
 
 test('durable callback send uses callback endpoint and completes accepted response', function (): void {
@@ -195,6 +278,7 @@ test('durable callback send uses callback endpoint and completes accepted respon
         ->and($client->requests[0]['envelope']['command'])->toBe('talkto.result')
         ->and($client->requests[0]['envelope']['payload']['original_message_id'])->toBe('http-callback-applied')
         ->and($client->requests[0]['timeout'])->toBe(13)
+        ->and($client->requests[0]['options']['verify'])->toBeTrue()
         ->and($callback->transport_status)->toBe('sent')
         ->and($callback->destination_receive_status)->toBe('received')
         ->and($callback->destination_action_status)->toBe('applied')
@@ -204,6 +288,145 @@ test('durable callback send uses callback endpoint and completes accepted respon
         ->and($callback->failed_at)->toBeNull()
         ->and($callback->last_error)->toBeNull()
         ->and(TalktoEvent::query()->where('message_id', $callback->message_id)->where('event_type', 'message_sent')->where('meta->result_callback_delivery', true)->exists())->toBeTrue();
+});
+
+test('default ssl verification is enabled for normal outgoing sends', function (): void {
+    $request = httpClientRecordedNormalSend('http-ssl-default');
+
+    expect($request['method'])->toBe('post_with_options')
+        ->and($request['options']['verify'])->toBeTrue();
+});
+
+test('global verify ssl false disables verification for normal outgoing sends', function (): void {
+    config(['talkto.http.verify_ssl' => false]);
+
+    $request = httpClientRecordedNormalSend('http-ssl-global-disabled');
+
+    expect($request['options']['verify'])->toBeFalse();
+});
+
+test('target verify ssl false overrides global true', function (): void {
+    config([
+        'talkto.http.verify_ssl' => true,
+        'talkto.outgoing.peer.verify_ssl' => false,
+    ]);
+
+    $request = httpClientRecordedNormalSend('http-ssl-target-disabled');
+
+    expect($request['options']['verify'])->toBeFalse();
+});
+
+test('target verify ssl true overrides global false', function (): void {
+    config([
+        'talkto.http.verify_ssl' => false,
+        'talkto.outgoing.peer.verify_ssl' => true,
+    ]);
+
+    $request = httpClientRecordedNormalSend('http-ssl-target-enabled');
+
+    expect($request['options']['verify'])->toBeTrue();
+});
+
+test('global ca bundle applies when ssl verification is enabled', function (): void {
+    config([
+        'talkto.http.verify_ssl' => true,
+        'talkto.http.ca_bundle' => '/tmp/global-ca.pem',
+    ]);
+
+    $request = httpClientRecordedNormalSend('http-ssl-global-ca');
+
+    expect($request['options']['verify'])->toBe('/tmp/global-ca.pem');
+});
+
+test('target ca bundle overrides global ca bundle', function (): void {
+    config([
+        'talkto.http.verify_ssl' => true,
+        'talkto.http.ca_bundle' => '/tmp/global-ca.pem',
+        'talkto.outgoing.peer.ca_bundle' => '/tmp/target-ca.pem',
+    ]);
+
+    $request = httpClientRecordedNormalSend('http-ssl-target-ca');
+
+    expect($request['options']['verify'])->toBe('/tmp/target-ca.pem');
+});
+
+test('ca bundle is ignored when ssl verification is disabled', function (): void {
+    config([
+        'talkto.http.verify_ssl' => false,
+        'talkto.http.ca_bundle' => '/tmp/global-ca.pem',
+        'talkto.outgoing.peer.ca_bundle' => '/tmp/target-ca.pem',
+    ]);
+
+    $request = httpClientRecordedNormalSend('http-ssl-disabled-ignores-ca');
+
+    expect($request['options']['verify'])->toBeFalse();
+});
+
+test('durable callback send uses same ssl options as normal outgoing sends', function (): void {
+    config(['talkto.outgoing.peer.verify_ssl' => false]);
+
+    $incoming = httpClientIncomingMessage('http-ssl-callback-target');
+    $callback = app(TalktoResultCallbackMessageFactory::class)->createForIncomingResult(
+        $incoming,
+        TalktoIncomingCommandResult::succeeded(['processed' => true])
+    );
+    $client = new RecordingTalktoHttpClient(httpClientAcceptedCallbackResponse($callback, $incoming));
+    app()->instance(TalktoHttpClient::class, $client);
+
+    (new SendTalktoMessage($callback->id))->handle(app(TalktoOutgoingEnvelopeBuilder::class), app(TalktoRetryPolicy::class));
+
+    expect($client->requests)->toHaveCount(1)
+        ->and($client->requests[0]['url'])->toBe('https://peer.test/callbacks/talkto')
+        ->and($client->requests[0]['method'])->toBe('post_with_options')
+        ->and($client->requests[0]['options']['verify'])->toBeFalse();
+});
+
+test('normal outgoing and durable callback sends both support target ca bundle', function (): void {
+    config(['talkto.outgoing.peer.ca_bundle' => '/tmp/both-paths-ca.pem']);
+
+    $normalRequest = httpClientRecordedNormalSend('http-ssl-normal-ca');
+
+    $incoming = httpClientIncomingMessage('http-ssl-callback-ca');
+    $callback = app(TalktoResultCallbackMessageFactory::class)->createForIncomingResult(
+        $incoming,
+        TalktoIncomingCommandResult::succeeded(['processed' => true])
+    );
+    $callbackClient = new RecordingTalktoHttpClient(httpClientAcceptedCallbackResponse($callback, $incoming));
+    app()->instance(TalktoHttpClient::class, $callbackClient);
+
+    (new SendTalktoMessage($callback->id))->handle(app(TalktoOutgoingEnvelopeBuilder::class), app(TalktoRetryPolicy::class));
+
+    expect($normalRequest['url'])->toBe('https://peer.test/api/talkto/receive')
+        ->and($normalRequest['options']['verify'])->toBe('/tmp/both-paths-ca.pem')
+        ->and($callbackClient->requests[0]['url'])->toBe('https://peer.test/callbacks/talkto')
+        ->and($callbackClient->requests[0]['options']['verify'])->toBe('/tmp/both-paths-ca.pem');
+});
+
+test('target verify ssl boolean config values are parsed robustly', function (): void {
+    config([
+        'talkto.http.verify_ssl' => true,
+        'talkto.outgoing.peer.verify_ssl' => 'false',
+    ]);
+
+    $falseRequest = httpClientRecordedNormalSend('http-ssl-string-false');
+
+    config([
+        'talkto.http.verify_ssl' => false,
+        'talkto.outgoing.peer.verify_ssl' => 'true',
+    ]);
+
+    $trueRequest = httpClientRecordedNormalSend('http-ssl-string-true');
+
+    config([
+        'talkto.http.verify_ssl' => false,
+        'talkto.outgoing.peer.verify_ssl' => null,
+    ]);
+
+    $nullRequest = httpClientRecordedNormalSend('http-ssl-null-global');
+
+    expect($falseRequest['options']['verify'])->toBeFalse()
+        ->and($trueRequest['options']['verify'])->toBeTrue()
+        ->and($nullRequest['options']['verify'])->toBeFalse();
 });
 
 test('normal outgoing uses explicit receive url', function (): void {
@@ -548,7 +771,48 @@ function httpClientAcceptedCallbackResponse(TalktoMessage $callback, TalktoMessa
     );
 }
 
-class RecordingTalktoHttpClient implements TalktoHttpClient
+function httpClientRecordedNormalSend(string $messageId): array
+{
+    $client = new RecordingTalktoHttpClient(httpClientReceiveResponse());
+    app()->instance(TalktoHttpClient::class, $client);
+    $message = httpClientOutgoingMessage($messageId);
+
+    (new SendTalktoMessage($message->id))->handle(app(TalktoOutgoingEnvelopeBuilder::class), app(TalktoRetryPolicy::class));
+
+    return $client->requests[0];
+}
+
+class RecordingTalktoHttpClient implements TalktoHttpClientWithOptions
+{
+    public array $requests = [];
+
+    public function __construct(private readonly mixed $response) {}
+
+    public function post(string $url, array $headers, array $envelope, int $timeout): TalktoHttpResponse
+    {
+        return $this->postWithOptions($url, $headers, $envelope, $timeout);
+    }
+
+    public function postWithOptions(string $url, array $headers, array $envelope, int $timeout, array $options = []): TalktoHttpResponse
+    {
+        $this->requests[] = [
+            'method' => 'post_with_options',
+            'url' => $url,
+            'headers' => $headers,
+            'envelope' => $envelope,
+            'timeout' => $timeout,
+            'options' => $options,
+        ];
+
+        if ($this->response instanceof Throwable) {
+            throw $this->response;
+        }
+
+        return $this->response;
+    }
+}
+
+class LegacyRecordingTalktoHttpClient implements TalktoHttpClient
 {
     public array $requests = [];
 
@@ -557,6 +821,7 @@ class RecordingTalktoHttpClient implements TalktoHttpClient
     public function post(string $url, array $headers, array $envelope, int $timeout): TalktoHttpResponse
     {
         $this->requests[] = [
+            'method' => 'post',
             'url' => $url,
             'headers' => $headers,
             'envelope' => $envelope,

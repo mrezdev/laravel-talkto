@@ -89,6 +89,15 @@ class TalktoOutgoingEnvelopeBuilder
             ?? (int) config('talkto.http.timeout_seconds', 20);
     }
 
+    public function httpOptionsFor(Model $message): array
+    {
+        $target = $this->targets->get((string) $message->target_service);
+
+        return [
+            'verify' => $target->tlsVerifyOption(),
+        ];
+    }
+
     public function isResultCallbackMessage(Model $message): bool
     {
         if (($message->direction ?? null) !== TalktoMessageDirection::Outgoing->value) {

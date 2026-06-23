@@ -48,6 +48,22 @@ Make sure outgoing target names and incoming source names match the values signe
 
 Outgoing target diagnostics use the same normalized URL config as runtime. Prefer `base_url` with `receive_endpoint` and `callback_endpoint`, or explicit `receive_url` and `callback_url`.
 
+## Outgoing TLS Verification
+
+Keep outgoing HTTP TLS verification enabled in production:
+
+```dotenv
+TALKTO_HTTP_VERIFY_SSL=true
+```
+
+If a peer uses an internal certificate authority, prefer a readable CA bundle instead of disabling verification:
+
+```dotenv
+TALKTO_HTTP_CA_BUNDLE=/path/to/internal-ca.pem
+```
+
+Per-target `verify_ssl` and `ca_bundle` settings override the global HTTP settings. `talkto:security-audit` warns when effective verification is disabled, when a configured CA bundle is missing or unreadable, and when a CA bundle is ignored because verification is disabled. The panel connection registry shows the effective mode and a safe CA bundle filename label.
+
 ## Command Allowlist
 
 Every incoming source should explicitly allow only the commands it accepts:

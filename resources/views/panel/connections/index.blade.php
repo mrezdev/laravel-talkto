@@ -67,6 +67,31 @@
                                     <dt class="text-slate-500">{{ __('talkto::panel.connections.health_url') }}</dt>
                                     <dd class="break-words font-medium text-slate-950">{{ $connection['active_health_url'] ?? __('talkto::panel.common.none') }}</dd>
                                 </div>
+                                @if (($connection['ssl_verify_enabled'] ?? null) !== null)
+                                    <div>
+                                        <dt class="text-slate-500">{{ __('talkto::panel.connections.ssl_verify') }}</dt>
+                                        <dd class="font-medium {{ $connection['ssl_verify_enabled'] ? 'text-slate-950' : 'text-amber-700' }}">
+                                            {{ $connection['ssl_verify_enabled'] ? __('talkto::panel.connections.ssl_verify_enabled') : __('talkto::panel.connections.ssl_verify_disabled') }}
+                                            <span class="font-normal text-slate-500">({{ __('talkto::panel.connections.ssl_verify_sources.'.($connection['ssl_verify_source'] ?? 'default')) }})</span>
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-slate-500">{{ __('talkto::panel.connections.ca_bundle') }}</dt>
+                                        <dd class="font-medium text-slate-950">
+                                            @if (($connection['ca_bundle_status'] ?? null) === 'custom')
+                                                {{ $connection['ca_bundle_label'] }}
+                                                <span class="font-normal {{ ($connection['ca_bundle_readable'] ?? false) ? 'text-slate-500' : 'text-amber-700' }}">
+                                                    ({{ ($connection['ca_bundle_readable'] ?? false) ? __('talkto::panel.connections.ca_bundle_readable') : (($connection['ca_bundle_exists'] ?? false) ? __('talkto::panel.connections.ca_bundle_unreadable') : __('talkto::panel.connections.ca_bundle_missing')) }})
+                                                </span>
+                                            @elseif (($connection['ca_bundle_status'] ?? null) === 'ignored')
+                                                {{ $connection['ca_bundle_label'] }}
+                                                <span class="font-normal text-amber-700">({{ __('talkto::panel.connections.ca_bundle_ignored') }})</span>
+                                            @else
+                                                {{ __('talkto::panel.connections.ca_bundle_system_default') }}
+                                            @endif
+                                        </dd>
+                                    </div>
+                                @endif
                                 <div class="sm:col-span-2">
                                     <dt class="text-slate-500">{{ __('talkto::panel.connections.commands') }}</dt>
                                     <dd class="mt-1 text-slate-950">

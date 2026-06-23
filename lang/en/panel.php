@@ -249,6 +249,15 @@ return [
         'active_health' => 'Active health',
         'health_method' => 'Health method',
         'health_url' => 'Health URL',
+        'ssl_verify' => 'SSL verification',
+        'ssl_verify_enabled' => 'enabled',
+        'ssl_verify_disabled' => 'disabled',
+        'ca_bundle' => 'CA bundle',
+        'ca_bundle_system_default' => 'system default',
+        'ca_bundle_readable' => 'readable',
+        'ca_bundle_missing' => 'missing',
+        'ca_bundle_unreadable' => 'unreadable',
+        'ca_bundle_ignored' => 'ignored',
         'commands' => 'Commands',
         'warnings' => 'Warnings',
         'active_warnings' => 'Active warnings',
@@ -266,6 +275,12 @@ return [
         'active_health_healthy' => 'Active health check for :service is healthy.',
         'active_health_disabled' => 'Active health checks are disabled.',
         'active_health_status' => 'Active health check for :service returned :status.',
+
+        'ssl_verify_sources' => [
+            'target' => 'target',
+            'global' => 'global',
+            'default' => 'default',
+        ],
 
         'health_statuses' => [
             'healthy' => 'healthy',

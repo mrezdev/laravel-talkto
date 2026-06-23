@@ -110,6 +110,8 @@ Important supported subkeys include:
 - `talkto.callbacks.command`
 - `talkto.callbacks.endpoint`
 - `talkto.callbacks.timeout_seconds`
+- `talkto.http.verify_ssl`
+- `talkto.http.ca_bundle`
 - `talkto.database.connection`
 - `talkto.database.tables.messages`
 - `talkto.database.tables.attempts`
@@ -135,6 +137,8 @@ Important supported subkeys include:
 - `talkto.incoming.<source>.allowed_commands`
 - `talkto.incoming.<source>.allow_all_commands`
 - `talkto.incoming.<source>.secret`
+- `talkto.outgoing.<target>.verify_ssl`
+- `talkto.outgoing.<target>.ca_bundle`
 - `talkto.outgoing.<target>.*`
 
 ## Artisan commands
@@ -163,6 +167,7 @@ prefer `--json` where available.
 - `Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract`
 - `Mrezdev\LaravelTalkto\Contracts\SourceActionContract`
 - `Mrezdev\LaravelTalkto\Contracts\TalktoHttpClient`
+- `Mrezdev\LaravelTalkto\Contracts\TalktoHttpClientWithOptions`
 - `Mrezdev\LaravelTalkto\Contracts\TalktoIncomingHandlerRegistryContract`
 - `Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract`
 - `Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract`
@@ -177,6 +182,10 @@ callback HTTP delivery. Its return shape may include `sent=false`,
 `queued=true`, `message_id`, `callback_message_id`, `callback_message_db_id`,
 `original_message_id`, `target`, and `command`. Existing options such as
 `callback_message_id` remain supported.
+
+`TalktoHttpClient` remains the backward-compatible base transport contract.
+Custom clients that want package-provided HTTP options such as SSL verification
+and CA bundle settings should implement `TalktoHttpClientWithOptions`.
 
 ## Public DTOs, result objects, and data objects
 
@@ -223,6 +232,8 @@ hash, sign, and verify envelopes through documented send/receive flows.
 ## Advanced extension points
 
 - Replace outgoing HTTP transport by binding `TalktoHttpClient`.
+  Implement `TalktoHttpClientWithOptions` when the custom transport should
+  receive package-managed HTTP options such as SSL verification and CA bundles.
 - Register incoming handlers through config or `TalktoIncomingHandlerRegistryContract`.
 - Register outgoing targets through config or `TalktoOutgoingTargetRegistryContract`.
 - Implement `SourceActionContract` for transactional outgoing source work.

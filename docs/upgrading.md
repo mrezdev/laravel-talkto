@@ -27,6 +27,8 @@ Preferred outgoing target URL keys are `base_url`, `receive_endpoint`, `callback
 
 Incoming and outgoing peer shared secrets can use `secret`; `signing_secret` is also supported as a shared signing secret key where host config prefers that name.
 
+Outgoing HTTP TLS verification is enabled by default through `talkto.http.verify_ssl`. Hosts that use private certificate authorities should copy the new `ca_bundle` settings and keep verification enabled in production.
+
 ## V2 Security Defaults
 
 New installs should use v2 signatures, required v2 nonces, and replay protection:

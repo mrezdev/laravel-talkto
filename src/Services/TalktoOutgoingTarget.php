@@ -115,6 +115,39 @@ class TalktoOutgoingTarget
         return max(1, (int) $timeout);
     }
 
+    public function verifySsl(): bool
+    {
+        if (array_key_exists('verify_ssl', $this->config)) {
+            $targetVerifySsl = $this->booleanOrNull($this->config['verify_ssl']);
+
+            if ($targetVerifySsl !== null) {
+                return $targetVerifySsl;
+            }
+        }
+
+        return $this->booleanOrNull(config('talkto.http.verify_ssl', true)) ?? true;
+    }
+
+    public function caBundle(): ?string
+    {
+        $targetCaBundle = $this->nonEmptyStringOrNull($this->config['ca_bundle'] ?? null);
+
+        if ($targetCaBundle !== null) {
+            return $targetCaBundle;
+        }
+
+        return $this->nonEmptyStringOrNull(config('talkto.http.ca_bundle'));
+    }
+
+    public function tlsVerifyOption(): bool|string
+    {
+        if (! $this->verifySsl()) {
+            return false;
+        }
+
+        return $this->caBundle() ?? true;
+    }
+
     public function transport(): string
     {
         $transport = $this->config['transport'] ?? $this->config['mode'] ?? 'reliable';
@@ -137,6 +170,8 @@ class TalktoOutgoingTarget
             'headers',
             'timeout',
             'timeout_seconds',
+            'verify_ssl',
+            'ca_bundle',
             'transport',
             'mode',
         ];
@@ -190,6 +225,48 @@ class TalktoOutgoingTarget
         }
 
         return $url;
+    }
+
+    private function booleanOrNull(mixed $value): ?bool
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_int($value)) {
+            return match ($value) {
+                0 => false,
+                1 => true,
+                default => null,
+            };
+        }
+
+        if (is_string($value)) {
+            $value = strtolower(trim($value));
+
+            return match ($value) {
+                '0', 'false' => false,
+                '1', 'true' => true,
+                default => null,
+            };
+        }
+
+        return null;
+    }
+
+    private function nonEmptyStringOrNull(mixed $value): ?string
+    {
+        if (! is_scalar($value)) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        return $value !== '' ? $value : null;
     }
 
     private function deriveCallbackUrlFromReceiveUrl(string $receiveUrl, string $sourceKey): string

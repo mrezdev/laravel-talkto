@@ -228,6 +228,76 @@ class TalktoSecurityAuditor
                     ['target' => $name, 'headers' => $this->redactor->redactHeaders($headers)]
                 );
             }
+
+            $this->auditOutgoingTargetSsl($findings, $name, $target);
+        }
+    }
+
+    private function auditOutgoingTargetSsl(array &$findings, string $name, TalktoOutgoingTarget $target): void
+    {
+        $verifySsl = $target->verifySsl();
+        $caBundle = $target->caBundle();
+        $caBundleContext = $this->caBundleContext($caBundle);
+
+        if (! $verifySsl) {
+            $findings[] = $this->finding(
+                'warning',
+                'outgoing_target_ssl_verification_disabled',
+                'Outgoing target has SSL/TLS certificate verification disabled.',
+                'Keep SSL/TLS certificate verification enabled in production; disable it only for documented local, staging, or internal test peers.',
+                array_merge([
+                    'target' => $name,
+                    'verify_ssl' => false,
+                    'ca_bundle_configured' => $caBundle !== null,
+                ], $caBundleContext)
+            );
+
+            if ($caBundle !== null) {
+                $findings[] = $this->finding(
+                    'warning',
+                    'outgoing_target_ca_bundle_ignored',
+                    'Outgoing target configures a CA bundle, but TLS certificate verification is disabled.',
+                    'Enable verify_ssl for this target, or remove the CA bundle if the disabled verification mode is intentional and temporary.',
+                    array_merge([
+                        'target' => $name,
+                        'verify_ssl' => false,
+                    ], $caBundleContext)
+                );
+            }
+
+            return;
+        }
+
+        if ($caBundle === null) {
+            return;
+        }
+
+        if (! file_exists($caBundle)) {
+            $findings[] = $this->finding(
+                'warning',
+                'outgoing_target_ca_bundle_missing',
+                'Outgoing target configures a CA bundle that does not exist.',
+                'Point ca_bundle to a readable CA bundle file, or remove it to use the system default trust store.',
+                array_merge([
+                    'target' => $name,
+                    'verify_ssl' => true,
+                ], $caBundleContext)
+            );
+
+            return;
+        }
+
+        if (! is_file($caBundle) || ! is_readable($caBundle)) {
+            $findings[] = $this->finding(
+                'warning',
+                'outgoing_target_ca_bundle_unreadable',
+                'Outgoing target configures a CA bundle that is not readable.',
+                'Ensure ca_bundle points to a readable CA bundle file, or remove it to use the system default trust store.',
+                array_merge([
+                    'target' => $name,
+                    'verify_ssl' => true,
+                ], $caBundleContext)
+            );
         }
     }
 
@@ -444,6 +514,24 @@ class TalktoSecurityAuditor
         }
 
         return $peers;
+    }
+
+    private function caBundleContext(?string $caBundle): array
+    {
+        if ($caBundle === null) {
+            return [];
+        }
+
+        return [
+            'ca_bundle_label' => $this->pathLabel($caBundle),
+            'ca_bundle_exists' => file_exists($caBundle),
+            'ca_bundle_readable' => is_file($caBundle) && is_readable($caBundle),
+        ];
+    }
+
+    private function pathLabel(string $path): string
+    {
+        return basename(str_replace('\\', '/', $path));
     }
 
     private function severityCounts(array $findings): array

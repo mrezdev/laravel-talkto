@@ -90,6 +90,11 @@ return [
 
     'http' => [
         'timeout_seconds' => (int) env('TALKTO_HTTP_TIMEOUT_SECONDS', 20),
+        // TLS server certificate verification is enabled by default. Set
+        // verify_ssl=false only for local/staging/internal environments.
+        'verify_ssl' => env('TALKTO_HTTP_VERIFY_SSL', true),
+        // Optional CA bundle path used to verify remote server certificates.
+        'ca_bundle' => env('TALKTO_HTTP_CA_BUNDLE'),
     ],
 
     'callbacks' => [
@@ -324,6 +329,8 @@ return [
         //     'secret' => env('TALKTO_PEER_SERVICE_SECRET'),
         //     'headers' => [],
         //     'timeout' => 20,
+        //     'verify_ssl' => env('TALKTO_PEER_SERVICE_VERIFY_SSL', null),
+        //     'ca_bundle' => env('TALKTO_PEER_SERVICE_CA_BUNDLE'),
         //     'mode' => env('TALKTO_PEER_SERVICE_MODE', 'reliable'),
         // ],
         // Alternative full URL example:
@@ -333,6 +340,8 @@ return [
         //     'secret' => env('TALKTO_PEER_SERVICE_SECRET'),
         //     'headers' => [],
         //     'timeout' => 20,
+        //     'verify_ssl' => env('TALKTO_PEER_SERVICE_VERIFY_SSL', null),
+        //     'ca_bundle' => env('TALKTO_PEER_SERVICE_CA_BUNDLE'),
         //     'mode' => env('TALKTO_PEER_SERVICE_MODE', 'reliable'),
         // ],
     ],

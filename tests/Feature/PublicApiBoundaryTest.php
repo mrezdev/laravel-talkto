@@ -6,6 +6,7 @@ use Mrezdev\LaravelTalkto\Contracts\ResultCallbackReceiverContract;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
 use Mrezdev\LaravelTalkto\Contracts\SourceActionContract;
 use Mrezdev\LaravelTalkto\Contracts\TalktoHttpClient;
+use Mrezdev\LaravelTalkto\Contracts\TalktoHttpClientWithOptions;
 use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler;
 use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingHandlerRegistryContract;
 use Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract;
@@ -66,6 +67,8 @@ test('public api documentation is linked and names current security defaults', f
         ->and($publicApi)->toContain('talkto.security.replay_protection.require_nonce_for_v2')
         ->and($publicApi)->not->toContain('talkto.security.require_nonce_for_v2')
         ->and($publicApi)->toContain('talkto.callbacks.auto_dispatch')
+        ->and($publicApi)->toContain('talkto.http.verify_ssl')
+        ->and($publicApi)->toContain('talkto.http.ca_bundle')
         ->and($publicApi)->toContain('queued=true')
         ->and($publicApi)->toContain('callback_message_id')
         ->and($publicApi)->toContain('v1 is legacy/manual opt-in only')
@@ -83,6 +86,7 @@ test('public api documentation names representative public contracts and classes
         IncomingCommandResultContract::class,
         SourceActionContract::class,
         TalktoHttpClient::class,
+        TalktoHttpClientWithOptions::class,
         TalktoIncomingHandlerRegistryContract::class,
         TalktoOutgoingTargetRegistryContract::class,
         ResultCallbackSenderContract::class,
@@ -134,6 +138,7 @@ test('representative public api types are not marked internal', function (): voi
         IncomingCommandResultContract::class,
         SourceActionContract::class,
         TalktoHttpClient::class,
+        TalktoHttpClientWithOptions::class,
         TalktoIncomingHandlerRegistryContract::class,
         TalktoOutgoingTargetRegistryContract::class,
         ResultCallbackSenderContract::class,

@@ -21,6 +21,14 @@ class TalktoPanelConnection
         public readonly ?string $activeHealthMethod = null,
         public readonly ?string $activeHealthUrl = null,
         public readonly array $activeHealthMeta = [],
+        public readonly ?bool $sslVerifyEnabled = null,
+        public readonly ?string $sslVerifySource = null,
+        public readonly ?bool $caBundleConfigured = null,
+        public readonly ?string $caBundleStatus = null,
+        public readonly ?string $caBundleSource = null,
+        public readonly ?string $caBundleLabel = null,
+        public readonly ?bool $caBundleExists = null,
+        public readonly ?bool $caBundleReadable = null,
     ) {}
 
     public function toArray(): array
@@ -39,6 +47,14 @@ class TalktoPanelConnection
             'active_health_method' => $this->activeHealthMethod,
             'active_health_url' => $this->redactUrl($this->activeHealthUrl),
             'active_health_meta' => $this->activeHealthMeta,
+            'ssl_verify_enabled' => $this->sslVerifyEnabled,
+            'ssl_verify_source' => $this->sslVerifySource,
+            'ca_bundle_configured' => $this->caBundleConfigured,
+            'ca_bundle_status' => $this->caBundleStatus,
+            'ca_bundle_source' => $this->caBundleSource,
+            'ca_bundle_label' => $this->caBundleLabel,
+            'ca_bundle_exists' => $this->caBundleExists,
+            'ca_bundle_readable' => $this->caBundleReadable,
         ];
     }
 

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### HTTP SSL Options
+
+- Added audit and panel visibility for outgoing HTTP SSL verification options, including disabled verification, custom CA bundle status, and ignored CA bundle warnings.
+- Documented secure defaults, per-target CA bundle overrides, and custom HTTP client support for package-managed SSL options.
+
 ### Durable Result Callbacks
 
 - Documented durable queued result callback delivery, including automatic callback queueing after incoming processing, retry/DLQ-compatible callback messages, and `TALKTO_CALLBACKS_AUTO_DISPATCH`.

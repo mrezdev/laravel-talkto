@@ -68,6 +68,88 @@ test('outgoing registry detects health config and redacts sensitive query values
         ->and($array['active_health_url'])->not->toContain('outgoing-secret');
 });
 
+test('outgoing registry exposes effective ssl verification defaults', function (): void {
+    ($this->bootPanelConnectionHealthApp)();
+
+    $array = app(TalktoPanelConnectionRegistry::class)
+        ->outgoing()
+        ->firstWhere('service', 'target-alpha')
+        ->toArray();
+
+    expect($array['ssl_verify_enabled'])->toBeTrue()
+        ->and($array['ssl_verify_source'])->toBe('default')
+        ->and($array['ca_bundle_configured'])->toBeFalse()
+        ->and($array['ca_bundle_status'])->toBe('system_default')
+        ->and($array['ca_bundle_source'])->toBe('default')
+        ->and($array['ca_bundle_label'])->toBeNull()
+        ->and($array['ca_bundle_exists'])->toBeNull()
+        ->and($array['ca_bundle_readable'])->toBeNull();
+});
+
+test('outgoing registry exposes disabled ssl verification and target override source', function (): void {
+    ($this->bootPanelConnectionHealthApp)();
+
+    config(['talkto.http.verify_ssl' => false]);
+
+    $globalDisabled = app(TalktoPanelConnectionRegistry::class)
+        ->outgoing()
+        ->firstWhere('service', 'target-alpha')
+        ->toArray();
+
+    config(['talkto.outgoing.target-alpha.verify_ssl' => true]);
+
+    $targetEnabled = app(TalktoPanelConnectionRegistry::class)
+        ->outgoing()
+        ->firstWhere('service', 'target-alpha')
+        ->toArray();
+
+    expect($globalDisabled['ssl_verify_enabled'])->toBeFalse()
+        ->and($globalDisabled['ssl_verify_source'])->toBe('global')
+        ->and($globalDisabled['warnings'])->toContain('ssl_verification_disabled')
+        ->and($targetEnabled['ssl_verify_enabled'])->toBeTrue()
+        ->and($targetEnabled['ssl_verify_source'])->toBe('target')
+        ->and($targetEnabled['warnings'])->not->toContain('ssl_verification_disabled');
+});
+
+test('outgoing registry exposes safe ca bundle status without full path', function (): void {
+    ($this->bootPanelConnectionHealthApp)();
+
+    $caBundle = sys_get_temp_dir().DIRECTORY_SEPARATOR.'panel-internal-ca-'.uniqid().'.pem';
+    file_put_contents($caBundle, 'test ca');
+
+    try {
+        config(['talkto.outgoing.target-alpha.ca_bundle' => $caBundle]);
+
+        $custom = app(TalktoPanelConnectionRegistry::class)
+            ->outgoing()
+            ->firstWhere('service', 'target-alpha')
+            ->toArray();
+        $encoded = json_encode($custom, JSON_THROW_ON_ERROR);
+
+        expect($custom['ca_bundle_status'])->toBe('custom')
+            ->and($custom['ca_bundle_configured'])->toBeTrue()
+            ->and($custom['ca_bundle_source'])->toBe('target')
+            ->and($custom['ca_bundle_label'])->toBe(basename($caBundle))
+            ->and($custom['ca_bundle_exists'])->toBeTrue()
+            ->and($custom['ca_bundle_readable'])->toBeTrue()
+            ->and($encoded)->not->toContain($caBundle)
+            ->and($encoded)->not->toContain('outgoing-secret');
+
+        config(['talkto.outgoing.target-alpha.verify_ssl' => false]);
+
+        $ignored = app(TalktoPanelConnectionRegistry::class)
+            ->outgoing()
+            ->firstWhere('service', 'target-alpha')
+            ->toArray();
+
+        expect($ignored['ca_bundle_status'])->toBe('ignored')
+            ->and($ignored['ca_bundle_label'])->toBe(basename($caBundle))
+            ->and($ignored['warnings'])->toContain('ca_bundle_ignored');
+    } finally {
+        @unlink($caBundle);
+    }
+});
+
 test('outgoing registry detects health_url and health_endpoint fallback config', function (): void {
     ($this->bootPanelConnectionHealthApp)();
 
@@ -366,6 +448,31 @@ test('connections view shows active health status and gated check form', functio
         ->assertOk()
         ->assertSee('not configured')
         ->assertDontSee('Check now');
+});
+
+test('connections view shows ssl verification and safe ca bundle label', function (): void {
+    ($this->bootPanelConnectionHealthApp)();
+
+    $caBundle = sys_get_temp_dir().DIRECTORY_SEPARATOR.'panel-rendered-ca-'.uniqid().'.pem';
+    file_put_contents($caBundle, 'test ca');
+
+    try {
+        config([
+            'talkto.outgoing.target-alpha.verify_ssl' => false,
+            'talkto.outgoing.target-alpha.ca_bundle' => $caBundle,
+        ]);
+
+        $this->get('/talkto/connections')
+            ->assertOk()
+            ->assertSee('SSL verification')
+            ->assertSee('disabled')
+            ->assertSee(basename($caBundle))
+            ->assertSee('ignored')
+            ->assertDontSee($caBundle)
+            ->assertDontSee('outgoing-secret');
+    } finally {
+        @unlink($caBundle);
+    }
 });
 
 function p5PanelUseEnv(array $values = []): void

@@ -120,6 +120,8 @@ v2 requests include a timestamp, payload hash, signature, and signed nonce. The 
 
 Do not disable signatures, nonce replay protection, or command allowlists in production. See [docs/security.md](docs/security.md) and [docs/production-hardening.md](docs/production-hardening.md).
 
+Outgoing HTTP TLS certificate verification is also enabled by default. Use a CA bundle for private certificate authorities instead of disabling verification in production; `talkto:security-audit` and the panel surface risky SSL settings.
+
 ## Sending Commands
 
 Use `TalktoOutgoingMessageFactory` to create a durable outgoing message:

@@ -4,6 +4,7 @@ namespace Mrezdev\LaravelTalkto\Pipelines;
 
 use Illuminate\Support\Facades\DB;
 use Mrezdev\LaravelTalkto\Contracts\TalktoHttpClient;
+use Mrezdev\LaravelTalkto\Contracts\TalktoHttpClientWithOptions;
 use Mrezdev\LaravelTalkto\Enums\TalktoAttemptStatus;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageDirection;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
@@ -69,9 +70,13 @@ class SendOutgoingTalktoMessagePipeline
             $envelope = $builder->buildEnvelope($message);
             $headers = $builder->buildHeaders($message);
             $timeout = $builder->timeoutFor($message);
+            $httpOptions = $builder->httpOptionsFor($message);
             $isResultCallbackMessage = $builder->isResultCallbackMessage($message);
 
-            $response = $this->httpClient()->post($endpoint, $headers, $envelope, $timeout);
+            $client = $this->httpClient();
+            $response = $client instanceof TalktoHttpClientWithOptions
+                ? $client->postWithOptions($endpoint, $headers, $envelope, $timeout, $httpOptions)
+                : $client->post($endpoint, $headers, $envelope, $timeout);
 
             if ($response->successful()) {
                 $this->applySuccessfulResponse($message, $attempt, $response, $retryPolicy, $isResultCallbackMessage);

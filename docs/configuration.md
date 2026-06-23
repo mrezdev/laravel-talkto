@@ -106,6 +106,34 @@ The `url` and `endpoint` keys remain supported as aliases for `base_url` and `re
 
 Runtime delivery, `talkto:security-audit`, and panel connection diagnostics use the same normalized outgoing target resolution, so preferred keys do not produce legacy missing-URL warnings.
 
+### Outgoing TLS Verification
+
+HTTP TLS server certificate verification is enabled by default:
+
+```dotenv
+TALKTO_HTTP_VERIFY_SSL=true
+TALKTO_HTTP_CA_BUNDLE=
+```
+
+Use `TALKTO_HTTP_CA_BUNDLE` when peers use a private CA and the host cannot rely on the system trust store. A target can override the global values:
+
+```php
+'outgoing' => [
+    'inventory-service' => [
+        'base_url' => env('TALKTO_INVENTORY_URL'),
+        'receive_endpoint' => '/api/talkto/receive',
+        'callback_endpoint' => '/api/talkto/callback',
+        'secret' => env('TALKTO_TO_INVENTORY_SECRET'),
+        'verify_ssl' => env('TALKTO_INVENTORY_VERIFY_SSL', null),
+        'ca_bundle' => env('TALKTO_INVENTORY_CA_BUNDLE'),
+    ],
+],
+```
+
+`verify_ssl=false` should be limited to local, staging, or documented internal test peers. When verification is disabled, any configured CA bundle is ignored. These options apply to normal outgoing sends and durable result callback sends because callbacks use the same outgoing pipeline. The security audit warns about disabled verification, missing or unreadable CA bundle files, and ignored CA bundle settings. The panel connection view shows the effective verification mode and only displays the CA bundle filename, not the full path.
+
+Custom HTTP clients that only implement `TalktoHttpClient` remain supported with the original four-argument method. Implement `TalktoHttpClientWithOptions` when a custom client should receive package-managed SSL verification and CA bundle options.
+
 ## Incoming Sources
 
 Configure trusted source services under `talkto.incoming`:

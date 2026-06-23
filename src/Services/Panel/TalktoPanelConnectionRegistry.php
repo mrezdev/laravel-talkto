@@ -75,6 +75,16 @@ class TalktoPanelConnectionRegistry
         $endpoint = $this->filled($settings['endpoint'] ?? null) ? (string) $settings['endpoint'] : null;
         $commands = $this->commandKeys($settings['allowed_commands'] ?? $settings['commands'] ?? []);
         $activeHealth = $this->activeHealth($settings);
+        $ssl = [
+            'ssl_verify_enabled' => null,
+            'ssl_verify_source' => null,
+            'ca_bundle_configured' => null,
+            'ca_bundle_status' => null,
+            'ca_bundle_source' => null,
+            'ca_bundle_label' => null,
+            'ca_bundle_exists' => null,
+            'ca_bundle_readable' => null,
+        ];
 
         if (! $secretConfigured) {
             $warnings[] = 'missing_secret';
@@ -82,6 +92,7 @@ class TalktoPanelConnectionRegistry
 
         if ($direction === 'outgoing') {
             $target = new TalktoOutgoingTarget($service, $settings);
+            $ssl = $this->ssl($target, $settings);
             $endpoint = $target->endpoint();
             $meta['receive_endpoint'] = $endpoint;
             $meta['callback_endpoint'] = $target->callbackEndpoint();
@@ -110,6 +121,8 @@ class TalktoPanelConnectionRegistry
             if (! $urlConfigured) {
                 $warnings[] = 'missing_url';
             }
+
+            array_push($warnings, ...$this->sslWarnings($ssl));
         } else {
             $urlConfigured = false;
             $configured = $secretConfigured && $commands !== [];
@@ -139,7 +152,75 @@ class TalktoPanelConnectionRegistry
             activeHealthMethod: $activeHealth['method'],
             activeHealthUrl: $activeHealth['url'],
             activeHealthMeta: $activeHealth['meta'],
+            sslVerifyEnabled: $ssl['ssl_verify_enabled'],
+            sslVerifySource: $ssl['ssl_verify_source'],
+            caBundleConfigured: $ssl['ca_bundle_configured'],
+            caBundleStatus: $ssl['ca_bundle_status'],
+            caBundleSource: $ssl['ca_bundle_source'],
+            caBundleLabel: $ssl['ca_bundle_label'],
+            caBundleExists: $ssl['ca_bundle_exists'],
+            caBundleReadable: $ssl['ca_bundle_readable'],
         );
+    }
+
+    private function ssl(TalktoOutgoingTarget $target, array $settings): array
+    {
+        $verifyEnabled = $target->verifySsl();
+        $caBundle = $target->caBundle();
+
+        return [
+            'ssl_verify_enabled' => $verifyEnabled,
+            'ssl_verify_source' => $this->sslVerifySource($settings),
+            'ca_bundle_configured' => $caBundle !== null,
+            'ca_bundle_status' => $caBundle === null ? 'system_default' : ($verifyEnabled ? 'custom' : 'ignored'),
+            'ca_bundle_source' => $this->caBundleSource($settings),
+            'ca_bundle_label' => $caBundle === null ? null : $this->pathLabel($caBundle),
+            'ca_bundle_exists' => $caBundle === null ? null : file_exists($caBundle),
+            'ca_bundle_readable' => $caBundle === null ? null : is_file($caBundle) && is_readable($caBundle),
+        ];
+    }
+
+    private function sslWarnings(array $ssl): array
+    {
+        $warnings = [];
+
+        if (($ssl['ssl_verify_enabled'] ?? null) === false) {
+            $warnings[] = 'ssl_verification_disabled';
+        }
+
+        if (($ssl['ca_bundle_status'] ?? null) === 'ignored') {
+            $warnings[] = 'ca_bundle_ignored';
+        } elseif (($ssl['ca_bundle_status'] ?? null) === 'custom') {
+            if (($ssl['ca_bundle_exists'] ?? null) === false) {
+                $warnings[] = 'ca_bundle_missing';
+            } elseif (($ssl['ca_bundle_readable'] ?? null) === false) {
+                $warnings[] = 'ca_bundle_unreadable';
+            }
+        }
+
+        return $warnings;
+    }
+
+    private function sslVerifySource(array $settings): string
+    {
+        if (array_key_exists('verify_ssl', $settings) && $this->booleanOrNull($settings['verify_ssl']) !== null) {
+            return 'target';
+        }
+
+        return $this->booleanOrNull(config('talkto.http.verify_ssl', true)) === false ? 'global' : 'default';
+    }
+
+    private function caBundleSource(array $settings): string
+    {
+        if ($this->filled($settings['ca_bundle'] ?? null)) {
+            return 'target';
+        }
+
+        if ($this->filled(config('talkto.http.ca_bundle'))) {
+            return 'global';
+        }
+
+        return 'default';
     }
 
     private function activeHealth(array $settings): array
@@ -211,6 +292,42 @@ class TalktoPanelConnectionRegistry
     private function filled(mixed $value): bool
     {
         return is_scalar($value) && trim((string) $value) !== '';
+    }
+
+    private function booleanOrNull(mixed $value): ?bool
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_int($value)) {
+            return match ($value) {
+                0 => false,
+                1 => true,
+                default => null,
+            };
+        }
+
+        if (is_string($value)) {
+            $value = strtolower(trim($value));
+
+            return match ($value) {
+                '0', 'false' => false,
+                '1', 'true' => true,
+                default => null,
+            };
+        }
+
+        return null;
+    }
+
+    private function pathLabel(string $path): string
+    {
+        return basename(str_replace('\\', '/', $path));
     }
 
     private function baseUrl(array $settings): ?string

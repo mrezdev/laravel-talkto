@@ -78,7 +78,7 @@
             </label>
         </div>
         <div class="mt-4 flex gap-2">
-            <button class="rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800" type="submit">{{ __('talkto::panel.common.apply_filters') }}</button>
+            <button class="rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 cursor-pointer" type="submit">{{ __('talkto::panel.common.apply_filters') }}</button>
             @include('talkto::panel.partials.button-link', ['href' => route($routePrefix.'messages.index'), 'label' => __('talkto::panel.common.clear')])
         </div>
     </form>
