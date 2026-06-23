@@ -38,6 +38,7 @@ use Mrezdev\LaravelTalkto\Services\Scaffolding\TalktoScaffoldNameResolver;
 use Mrezdev\LaravelTalkto\Services\Scaffolding\TalktoScaffoldPathResolver;
 use Mrezdev\LaravelTalkto\Services\Scaffolding\TalktoScaffoldWriter;
 use Mrezdev\LaravelTalkto\Services\Scaffolding\TalktoStubRenderer;
+use Mrezdev\LaravelTalkto\Services\TalktoCallbackStatusInspector;
 use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
 use Mrezdev\LaravelTalkto\Services\TalktoHealthChecker;
 use Mrezdev\LaravelTalkto\Services\TalktoIncomingHandlerRegistry;
@@ -71,6 +72,7 @@ class LaravelTalktoServiceProvider extends ServiceProvider
         $this->app->bind(TalktoDeadLetterQueue::class);
         $this->app->bind(TalktoMetricsCollector::class);
         $this->app->bind(TalktoHealthChecker::class);
+        $this->app->bind(TalktoCallbackStatusInspector::class);
         $this->app->bind(TalktoPanelActionExecutor::class);
         $this->app->bind(TalktoPanelActiveHealthChecker::class);
         $this->app->bind(TalktoPanelMessageQuery::class);
