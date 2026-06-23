@@ -4,6 +4,7 @@ namespace Mrezdev\LaravelTalkto\Pipelines;
 
 use Illuminate\Support\Facades\DB;
 use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
+use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
 use Mrezdev\LaravelTalkto\Enums\TalktoAttemptStatus;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageDirection;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
@@ -78,7 +79,11 @@ class ProcessIncomingTalktoMessagePipeline
             $this->applyResult($message, $attempt, $result, $retryPolicy);
         } catch (Throwable $throwable) {
             $this->applyUnexpectedFailure($message, $attempt, $throwable, $retryPolicy);
+
+            return;
         }
+
+        $this->autoDispatchResultCallback($message, $result);
     }
 
     private function isQueuedForProcessing(TalktoMessage $message, TalktoRetryPolicy $retryPolicy): bool
@@ -205,6 +210,38 @@ class ProcessIncomingTalktoMessagePipeline
         }
 
         $this->applyFailedResult($message, $attempt, $result, $retryPolicy);
+    }
+
+    private function autoDispatchResultCallback(TalktoMessage $message, IncomingCommandResultContract $result): void
+    {
+        $messageClass = $this->messageModelClass();
+        $message = $messageClass::query()->find($message->id) ?? $message;
+
+        if (! config('talkto.callbacks.auto_dispatch', true)) {
+            $this->recordAutoDispatchSkippedEvent($message);
+
+            return;
+        }
+
+        app(ResultCallbackSenderContract::class)->sendResult($message, $result);
+    }
+
+    private function recordAutoDispatchSkippedEvent(TalktoMessage $message): void
+    {
+        $eventClass = $this->eventModelClass();
+
+        $eventClass::query()->create([
+            'talkto_message_id' => $message->id,
+            'message_id' => $message->message_id,
+            'service_name' => config('talkto.service', 'app'),
+            'event_type' => 'result_callback_auto_dispatch_skipped',
+            'old_status' => null,
+            'new_status' => 'skipped',
+            'meta' => $this->eventMeta($message, [
+                'reason' => 'auto_dispatch_disabled',
+                'durable' => true,
+            ]),
+        ]);
     }
 
     private function applySkippedResult(TalktoMessage $message, TalktoAttempt $attempt, IncomingCommandResultContract $result): void

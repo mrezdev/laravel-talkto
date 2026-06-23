@@ -94,6 +94,8 @@ return [
 
     'callbacks' => [
         'enabled' => env('TALKTO_CALLBACKS_ENABLED', true),
+        // Automatically queue durable result callbacks after incoming handling.
+        'auto_dispatch' => env('TALKTO_CALLBACKS_AUTO_DISPATCH', true),
         'command' => env('TALKTO_CALLBACK_COMMAND', 'talkto.result'),
         'endpoint' => env('TALKTO_CALLBACK_ENDPOINT', '/api/talkto/callback'),
         'timeout_seconds' => (int) env('TALKTO_CALLBACK_TIMEOUT_SECONDS', env('TALKTO_HTTP_TIMEOUT_SECONDS', 20)),

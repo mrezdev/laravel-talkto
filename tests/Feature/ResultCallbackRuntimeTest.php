@@ -8,8 +8,10 @@ use Illuminate\Support\Facades\Route;
 use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackReceiverContract;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
+use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler;
 use Mrezdev\LaravelTalkto\Data\TalktoResultCallbackData;
 use Mrezdev\LaravelTalkto\Http\Controllers\TalktoResultCallbackController;
+use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
 use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
@@ -33,6 +35,7 @@ beforeEach(function (): void {
         'talkto.security.accept_versions' => ['v1'],
         'talkto.service' => 'target-service',
         'talkto.callbacks.enabled' => true,
+        'talkto.callbacks.auto_dispatch' => true,
         'talkto.outgoing.source-service' => [
             'url' => 'https://source.test',
             'secret' => 'shared-callback-secret',
@@ -380,6 +383,147 @@ test('callback sender queues retryable failure result as durable callback', func
             'error_message' => 'Temporary failure.',
         ]);
 
+    Bus::assertDispatched(SendTalktoMessage::class, fn (SendTalktoMessage $job): bool => $job->talktoMessageId === $callback->id);
+    Http::assertNothingSent();
+});
+
+test('incoming processing auto-queues durable callback after handler returns result', function (
+    string $messageId,
+    TalktoIncomingCommandResult $result,
+    string $incomingStatus,
+    string $callbackStatus
+): void {
+    Bus::fake();
+    Http::fake();
+
+    $message = p04QueuedIncomingMessage($messageId);
+
+    (new ProcessIncomingTalktoMessage($message->id))->handle(new P04FixedResultResolver($result));
+
+    $message = $message->fresh();
+    $callback = p04CallbackMessageFor($messageId);
+
+    expect($message->destination_action_status)->toBe($incomingStatus)
+        ->and($message->overall_status)->toBe($incomingStatus)
+        ->and($callback->direction)->toBe('outgoing')
+        ->and($callback->command)->toBe('talkto.result')
+        ->and($callback->parent_message_id)->toBe($messageId)
+        ->and($callback->payload)->toMatchArray([
+            'original_message_id' => $messageId,
+            'original_command' => 'domain.command',
+            'status' => $callbackStatus,
+        ])
+        ->and(p04QueuedCallbackEventCount($messageId, $callback))->toBe(1);
+
+    Bus::assertDispatched(SendTalktoMessage::class, fn (SendTalktoMessage $job): bool => $job->talktoMessageId === $callback->id);
+    Http::assertNothingSent();
+})->with([
+    'succeeded' => [
+        'p04-auto-succeeded',
+        TalktoIncomingCommandResult::succeeded(['processed' => true]),
+        'succeeded',
+        'succeeded',
+    ],
+    'skipped' => [
+        'p04-auto-skipped',
+        TalktoIncomingCommandResult::skipped('Not needed.'),
+        'skipped',
+        'skipped',
+    ],
+    'failed final' => [
+        'p04-auto-failed-final',
+        TalktoIncomingCommandResult::failedFinal('Final failure.', LogicException::class),
+        'failed_final',
+        'failed_final',
+    ],
+    'failed retryable' => [
+        'p04-auto-failed-retryable',
+        TalktoIncomingCommandResult::failedRetryable('Temporary failure.', RuntimeException::class),
+        'failed_retryable',
+        'failed_retryable',
+    ],
+]);
+
+test('incoming processing skips automatic durable callback when auto dispatch is disabled', function (): void {
+    config(['talkto.callbacks.auto_dispatch' => false]);
+    Bus::fake();
+    Http::fake();
+
+    $message = p04QueuedIncomingMessage('p04-auto-dispatch-disabled');
+
+    (new ProcessIncomingTalktoMessage($message->id))->handle(new P04FixedResultResolver(
+        TalktoIncomingCommandResult::succeeded(['processed' => true])
+    ));
+
+    $message = $message->fresh();
+    $event = TalktoEvent::query()
+        ->where('message_id', 'p04-auto-dispatch-disabled')
+        ->where('event_type', 'result_callback_auto_dispatch_skipped')
+        ->sole();
+
+    expect($message->overall_status)->toBe('succeeded')
+        ->and(TalktoMessage::query()->where('parent_message_id', 'p04-auto-dispatch-disabled')->where('command', 'talkto.result')->exists())->toBeFalse()
+        ->and($event->meta)->toMatchArray([
+            'reason' => 'auto_dispatch_disabled',
+            'durable' => true,
+        ]);
+
+    Bus::assertNotDispatched(SendTalktoMessage::class);
+    Http::assertNothingSent();
+});
+
+test('incoming processing uses sender skip behavior when callbacks are disabled', function (): void {
+    config([
+        'talkto.callbacks.enabled' => false,
+        'talkto.callbacks.auto_dispatch' => true,
+    ]);
+    Bus::fake();
+    Http::fake();
+
+    $message = p04QueuedIncomingMessage('p04-auto-callbacks-disabled');
+
+    (new ProcessIncomingTalktoMessage($message->id))->handle(new P04FixedResultResolver(
+        TalktoIncomingCommandResult::succeeded(['processed' => true])
+    ));
+
+    $message = $message->fresh();
+    $event = TalktoEvent::query()
+        ->where('message_id', 'p04-auto-callbacks-disabled')
+        ->where('event_type', 'result_callback_skipped')
+        ->sole();
+
+    expect($message->overall_status)->toBe('succeeded')
+        ->and(TalktoMessage::query()->where('parent_message_id', 'p04-auto-callbacks-disabled')->where('command', 'talkto.result')->exists())->toBeFalse()
+        ->and($event->meta)->toMatchArray([
+            'error' => 'callbacks_disabled',
+        ])
+        ->and(TalktoEvent::query()->where('message_id', 'p04-auto-callbacks-disabled')->where('event_type', 'result_callback_auto_dispatch_skipped')->exists())->toBeFalse();
+
+    Bus::assertNotDispatched(SendTalktoMessage::class);
+    Http::assertNothingSent();
+});
+
+test('manual handler send result plus auto dispatch does not duplicate callback message job or event', function (): void {
+    Bus::fake();
+    Http::fake();
+
+    $message = p04QueuedIncomingMessage('p04-auto-manual-no-duplicate');
+    $result = TalktoIncomingCommandResult::succeeded(['processed' => true]);
+
+    (new ProcessIncomingTalktoMessage($message->id))->handle(new P04FixedResultResolver($result, sendManually: true));
+
+    $callback = p04CallbackMessageFor('p04-auto-manual-no-duplicate');
+
+    expect(TalktoMessage::query()
+        ->where('idempotency_key', 'talkto:callback:p04-auto-manual-no-duplicate:succeeded')
+        ->count())->toBe(1)
+        ->and(p04QueuedCallbackEventCount('p04-auto-manual-no-duplicate', $callback))->toBe(1)
+        ->and($callback->payload)->toMatchArray([
+            'original_message_id' => 'p04-auto-manual-no-duplicate',
+            'status' => 'succeeded',
+        ]);
+
+    Bus::assertDispatchedTimes(SendTalktoMessage::class, 1);
     Bus::assertDispatched(SendTalktoMessage::class, fn (SendTalktoMessage $job): bool => $job->talktoMessageId === $callback->id);
     Http::assertNothingSent();
 });
@@ -888,6 +1032,40 @@ function p04IncomingMessage(string $messageId, array $attributes = []): TalktoMe
     ], $attributes));
 }
 
+function p04QueuedIncomingMessage(string $messageId, array $attributes = []): TalktoMessage
+{
+    return p04IncomingMessage($messageId, array_merge([
+        'destination_action_status' => 'queued',
+        'overall_status' => 'queued',
+        'attempts' => 0,
+        'completed_at' => null,
+    ], $attributes));
+}
+
+function p04CallbackMessageFor(string $parentMessageId): TalktoMessage
+{
+    return TalktoMessage::query()
+        ->where('direction', 'outgoing')
+        ->where('parent_message_id', $parentMessageId)
+        ->where('command', 'talkto.result')
+        ->sole();
+}
+
+function p04QueuedCallbackEventCount(string $messageId, TalktoMessage $callback): int
+{
+    return TalktoEvent::query()
+        ->where('message_id', $messageId)
+        ->where('event_type', 'result_callback_queued')
+        ->get()
+        ->filter(function (TalktoEvent $event) use ($callback): bool {
+            $meta = $event->meta ?? [];
+
+            return ($meta['callback_message_id'] ?? null) === $callback->message_id
+                || (int) ($meta['callback_message_db_id'] ?? 0) === (int) $callback->id;
+        })
+        ->count();
+}
+
 function p04OutgoingMessage(string $messageId, array $attributes = []): TalktoMessage
 {
     $payload = ['resource_id' => $messageId];
@@ -1079,5 +1257,35 @@ class P04FailingCallbackSendJob extends SendTalktoMessage
     public static function dispatch(...$arguments): mixed
     {
         throw new RuntimeException('Dispatch failed with shared-callback-secret.');
+    }
+}
+
+class P04FixedResultResolver
+{
+    public function __construct(
+        private readonly IncomingCommandResultContract $result,
+        private readonly bool $sendManually = false
+    ) {}
+
+    public function resolve(TalktoMessage $message): TalktoIncomingCommandHandler
+    {
+        return new P04FixedResultHandler($this->result, $this->sendManually);
+    }
+}
+
+class P04FixedResultHandler implements TalktoIncomingCommandHandler
+{
+    public function __construct(
+        private readonly IncomingCommandResultContract $result,
+        private readonly bool $sendManually
+    ) {}
+
+    public function handle(TalktoMessage $message): IncomingCommandResultContract
+    {
+        if ($this->sendManually) {
+            app(ResultCallbackSenderContract::class)->sendResult($message, $this->result);
+        }
+
+        return $this->result;
     }
 }

@@ -67,6 +67,10 @@ class TalktoResultCallbackSender implements ResultCallbackSenderContract
                 return $this->duplicateSummary($message, $callbackMessage);
             }
 
+            if ($this->alreadyQueued($message, $callbackMessage)) {
+                return $this->duplicateSummary($message, $callbackMessage);
+            }
+
             $this->dispatchSendJob((int) $callbackMessage->id);
             $this->recordQueuedEvent($message, $callbackMessage);
 
@@ -189,6 +193,37 @@ class TalktoResultCallbackSender implements ResultCallbackSenderContract
             TalktoMessageStatus::DestinationReceived->value,
             TalktoMessageStatus::Sent->value,
         ], true);
+    }
+
+    private function alreadyQueued(Model $message, TalktoMessage $callbackMessage): bool
+    {
+        if ($callbackMessage->wasRecentlyCreated) {
+            return false;
+        }
+
+        if (! in_array($callbackMessage->overall_status, [
+            TalktoMessageStatus::Created->value,
+            TalktoMessageStatus::Queued->value,
+            TalktoMessageStatus::Pending->value,
+            TalktoMessageStatus::WaitingToSend->value,
+            TalktoMessageStatus::Sending->value,
+            TalktoMessageStatus::FailedRetryable->value,
+        ], true)) {
+            return false;
+        }
+
+        $eventClass = $this->eventModelClass();
+
+        return $eventClass::query()
+            ->where('message_id', (string) ($message->message_id ?? ''))
+            ->where('event_type', 'result_callback_queued')
+            ->get()
+            ->contains(function (TalktoEvent $event) use ($callbackMessage): bool {
+                $meta = $event->meta ?? [];
+
+                return ($meta['callback_message_id'] ?? null) === $callbackMessage->message_id
+                    || (int) ($meta['callback_message_db_id'] ?? 0) === (int) $callbackMessage->id;
+            });
     }
 
     private function callbackStatus(TalktoMessage $callbackMessage): ?string

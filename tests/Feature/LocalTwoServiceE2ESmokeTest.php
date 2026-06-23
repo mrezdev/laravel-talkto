@@ -68,7 +68,7 @@ function phase6RunPackageMigrations(): void
 }
 
 test('local two service source to target command flow signs verifies handles and callbacks without network', function (): void {
-    P06InventoryHandler::$sendCallback = true;
+    P06InventoryHandler::$sendCallback = false;
     $transport = new P06LocalTwoServiceHttpClient;
     app()->instance(TalktoHttpClient::class, $transport);
 
@@ -126,21 +126,16 @@ test('local two service source to target command flow signs verifies handles and
         ->where('target_service', P06_SOURCE_SERVICE)
         ->firstOrFail();
 
-    expect(P06InventoryHandler::$callbackSummaries[0])->toMatchArray([
-        'sent' => false,
-        'queued' => true,
-        'status' => 'queued',
-        'message_id' => $callbackMessage->message_id,
-        'callback_message_id' => $callbackMessage->message_id,
-        'callback_message_db_id' => $callbackMessage->id,
-        'original_message_id' => 'phase6-source-to-target',
-        'target' => P06_SOURCE_SERVICE,
-        'command' => 'talkto.result',
-    ])->and($callbackMessage->payload)->toMatchArray([
-        'original_message_id' => 'phase6-source-to-target',
-        'original_command' => P06_COMMAND,
-        'status' => 'succeeded',
-    ]);
+    expect(P06InventoryHandler::$callbackSummaries)->toBe([])
+        ->and($callbackMessage->payload)->toMatchArray([
+            'original_message_id' => 'phase6-source-to-target',
+            'original_command' => P06_COMMAND,
+            'status' => 'succeeded',
+        ])
+        ->and(TalktoEvent::query()
+            ->where('message_id', 'phase6-source-to-target')
+            ->where('event_type', 'result_callback_queued')
+            ->count())->toBe(1);
 
     Queue::assertPushed(SendTalktoMessage::class, fn (SendTalktoMessage $job): bool => $job->talktoMessageId === $callbackMessage->id);
 
@@ -319,6 +314,7 @@ function phase6UseWebsiteServiceConfig(): void
         'talkto.security.replay_protection.enabled' => true,
         'talkto.security.replay_protection.require_nonce_for_v2' => true,
         'talkto.callbacks.enabled' => true,
+        'talkto.callbacks.auto_dispatch' => true,
         'talkto.callbacks.command' => 'talkto.result',
         'talkto.outgoing.'.P06_TARGET_SERVICE => [
             'url' => 'https://inventory-service.test',
@@ -351,6 +347,7 @@ function phase6UseInventoryServiceConfig(): void
         'talkto.security.replay_protection.enabled' => true,
         'talkto.security.replay_protection.require_nonce_for_v2' => true,
         'talkto.callbacks.enabled' => true,
+        'talkto.callbacks.auto_dispatch' => true,
         'talkto.callbacks.command' => 'talkto.result',
         'talkto.incoming.'.P06_SOURCE_SERVICE => [
             'secret' => P06_SOURCE_TO_TARGET_SECRET,
