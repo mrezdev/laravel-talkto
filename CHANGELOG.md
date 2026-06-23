@@ -6,6 +6,7 @@
 
 - Documented durable queued result callback delivery, including automatic callback queueing after incoming processing, retry/DLQ-compatible callback messages, and `TALKTO_CALLBACKS_AUTO_DISPATCH`.
 - Clarified that `ResultCallbackSenderContract::sendResult()` now creates or reuses an outgoing durable callback message instead of performing immediate callback HTTP delivery.
+- Hardened durable callback queue dispatch deduplication by locking the callback message row and checking queued/queue-failed events before dispatching `SendTalktoMessage`.
 - Updated callback examples, testing guidance, troubleshooting, public API notes, and upgrade notes for the queued callback lifecycle.
 
 ### Final Cleanup And Callback State Safety

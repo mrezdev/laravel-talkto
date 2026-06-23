@@ -21,31 +21,41 @@ class TalktoOutgoingTarget
 
     public function url(): ?string
     {
-        $url = $this->config['url'] ?? $this->config['base_url'] ?? $this->config['rm_url'] ?? null;
+        if (array_key_exists('receive_url', $this->config)) {
+            return $this->configuredAbsoluteUrl('receive_url');
+        }
 
-        return is_string($url) && $url !== '' ? $url : null;
+        $url = $this->baseUrl();
+
+        return $url;
     }
 
     public function endpoint(): string
     {
-        $endpoint = $this->config['endpoint'] ?? '/api/talkto/receive';
+        foreach (['receive_endpoint', 'endpoint'] as $key) {
+            $endpoint = $this->config[$key] ?? null;
 
-        return is_string($endpoint) && $endpoint !== '' ? $endpoint : '/api/talkto/receive';
+            if (is_string($endpoint) && trim($endpoint) !== '') {
+                return trim($endpoint);
+            }
+        }
+
+        return '/api/talkto/receive';
     }
 
     public function endpointUrl(): string
     {
-        $url = $this->url();
+        if (array_key_exists('receive_url', $this->config)) {
+            return $this->configuredAbsoluteUrl('receive_url');
+        }
+
+        $url = $this->baseUrl();
 
         if ($url === null) {
             throw InvalidTalktoOutgoingTarget::forTarget($this->name, 'URL is not configured');
         }
 
-        if (isset($this->config['rm_url']) && ! isset($this->config['url']) && ! isset($this->config['base_url'])) {
-            return $url;
-        }
-
-        return rtrim($url, '/').'/'.ltrim($this->endpoint(), '/');
+        return $this->joinUrl($url, $this->endpoint());
     }
 
     public function callbackEndpoint(): string
@@ -53,18 +63,31 @@ class TalktoOutgoingTarget
         $endpoint = $this->config['callback_endpoint']
             ?? config('talkto.callbacks.endpoint', '/api/talkto/callback');
 
-        return is_string($endpoint) && $endpoint !== '' ? $endpoint : '/api/talkto/callback';
+        return is_string($endpoint) && trim($endpoint) !== '' ? trim($endpoint) : '/api/talkto/callback';
     }
 
     public function callbackEndpointUrl(): string
     {
-        $url = $this->url();
-
-        if ($url === null) {
-            throw InvalidTalktoOutgoingTarget::forTarget($this->name, 'URL is not configured');
+        if (array_key_exists('callback_url', $this->config)) {
+            return $this->configuredAbsoluteUrl('callback_url');
         }
 
-        return rtrim($url, '/').'/'.ltrim($this->callbackEndpoint(), '/');
+        $baseUrl = $this->baseUrl();
+
+        if ($baseUrl !== null) {
+            return $this->joinUrl($baseUrl, $this->callbackEndpoint());
+        }
+
+        $receiveUrl = $this->configuredReceiveUrl('receive_url');
+
+        if ($receiveUrl !== null) {
+            return $this->deriveCallbackUrlFromReceiveUrl($receiveUrl, 'receive_url');
+        }
+
+        throw InvalidTalktoOutgoingTarget::forTarget(
+            $this->name,
+            'durable callback URL is not configured; configure callback_url or base_url/url plus callback_endpoint'
+        );
     }
 
     public function secret(): ?string
@@ -104,7 +127,9 @@ class TalktoOutgoingTarget
         $reserved = [
             'url',
             'base_url',
-            'rm_url',
+            'receive_url',
+            'callback_url',
+            'receive_endpoint',
             'endpoint',
             'callback_endpoint',
             'secret',
@@ -122,5 +147,77 @@ class TalktoOutgoingTarget
     public function raw(): array
     {
         return $this->config;
+    }
+
+    private function baseUrl(): ?string
+    {
+        foreach (['base_url', 'url'] as $key) {
+            if (array_key_exists($key, $this->config)) {
+                return $this->configuredAbsoluteUrl($key);
+            }
+        }
+
+        return null;
+    }
+
+    private function configuredReceiveUrl(string $key): ?string
+    {
+        if (! array_key_exists($key, $this->config)) {
+            return null;
+        }
+
+        return $this->configuredAbsoluteUrl($key);
+    }
+
+    private function configuredAbsoluteUrl(string $key): string
+    {
+        $url = $this->config[$key] ?? null;
+
+        if (! is_string($url) || trim($url) === '') {
+            throw InvalidTalktoOutgoingTarget::forTarget($this->name, "{$key} must be a non-empty absolute HTTP URL");
+        }
+
+        $url = trim($url);
+        $parts = parse_url($url);
+
+        if (
+            ! is_array($parts)
+            || ! isset($parts['scheme'], $parts['host'])
+            || ! in_array(strtolower($parts['scheme']), ['http', 'https'], true)
+            || trim((string) $parts['host']) === ''
+        ) {
+            throw InvalidTalktoOutgoingTarget::forTarget($this->name, "{$key} must be an absolute HTTP or HTTPS URL");
+        }
+
+        return $url;
+    }
+
+    private function deriveCallbackUrlFromReceiveUrl(string $receiveUrl, string $sourceKey): string
+    {
+        $receiveEndpoint = $this->normalizeEndpointPath($this->endpoint());
+        $callbackEndpoint = $this->normalizeEndpointPath($this->callbackEndpoint());
+        $normalizedReceiveUrl = rtrim($receiveUrl, '/');
+        $normalizedReceiveSuffix = '/'.$receiveEndpoint;
+
+        if (! str_ends_with($normalizedReceiveUrl, $normalizedReceiveSuffix)) {
+            throw InvalidTalktoOutgoingTarget::forTarget(
+                $this->name,
+                "durable callback URL could not be inferred from {$sourceKey}; configure callback_url or base_url/url plus callback_endpoint"
+            );
+        }
+
+        $baseUrl = substr($normalizedReceiveUrl, 0, -strlen($normalizedReceiveSuffix));
+
+        return $this->joinUrl($baseUrl, $callbackEndpoint);
+    }
+
+    private function joinUrl(string $baseUrl, string $endpoint): string
+    {
+        return rtrim($baseUrl, '/').'/'.$this->normalizeEndpointPath($endpoint);
+    }
+
+    private function normalizeEndpointPath(string $endpoint): string
+    {
+        return trim($endpoint, '/');
     }
 }

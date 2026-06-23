@@ -46,6 +46,8 @@ TALKTO_SERVICE=website-service
 
 Make sure outgoing target names and incoming source names match the values signed into envelopes. A mismatch should fail verification.
 
+Outgoing target diagnostics use the same normalized URL config as runtime. Prefer `base_url` with `receive_endpoint` and `callback_endpoint`, or explicit `receive_url` and `callback_url`.
+
 ## Command Allowlist
 
 Every incoming source should explicitly allow only the commands it accepts:
@@ -132,6 +134,10 @@ Callback v2 nonces are consumed by the same nonce replay ledger. A replayed call
 ## Durable Callback Operations
 
 Result callbacks are queued durable outgoing messages on the destination service. A source message stuck at `destination_received` usually means callback delivery is pending or failed, not necessarily that the destination handler failed.
+
+When a destination handler throws unexpectedly, Talkto applies the normal retry/final-failure behavior first and then queues a durable failed callback. Exception callback payloads include a safe exception class/message summary, not a stack trace. Expected business errors should still be returned explicitly with `failedRetryable()` or `failedFinal()` from the handler.
+
+Duplicate callback queue attempts are suppressed where practical by reusing the deterministic callback message, locking that callback row during the queue decision, and checking queued/queue-failed events for the same callback before dispatching `SendTalktoMessage`. Failed callback delivery remains an outgoing-message retry/DLQ/reprocess concern.
 
 On the destination service, check:
 

@@ -77,10 +77,10 @@ Configure destination services under `talkto.outgoing`:
 ```php
 'outgoing' => [
     'inventory-service' => [
-        'url' => env('TALKTO_INVENTORY_URL'),
-        'endpoint' => '/api/talkto/receive',
-        'secret' => env('TALKTO_TO_INVENTORY_SECRET'),
+        'base_url' => env('TALKTO_INVENTORY_URL'),
+        'receive_endpoint' => '/api/talkto/receive',
         'callback_endpoint' => '/api/talkto/callback',
+        'secret' => env('TALKTO_TO_INVENTORY_SECRET'),
         'headers' => [],
         'timeout' => 20,
         'mode' => 'reliable',
@@ -89,6 +89,22 @@ Configure destination services under `talkto.outgoing`:
 ```
 
 Targets can also be registered programmatically through `TalktoOutgoingTargetRegistryContract`. Programmatic targets override config targets with the same name.
+
+When a peer needs full URLs instead of a shared base URL, configure both receive and callback URLs explicitly:
+
+```php
+'outgoing' => [
+    'inventory-service' => [
+        'receive_url' => env('TALKTO_INVENTORY_RECEIVE_URL'),
+        'callback_url' => env('TALKTO_INVENTORY_CALLBACK_URL'),
+        'secret' => env('TALKTO_TO_INVENTORY_SECRET'),
+    ],
+],
+```
+
+The `url` and `endpoint` keys remain supported as aliases for `base_url` and `receive_endpoint`.
+
+Runtime delivery, `talkto:security-audit`, and panel connection diagnostics use the same normalized outgoing target resolution, so preferred keys do not produce legacy missing-URL warnings.
 
 ## Incoming Sources
 
@@ -210,12 +226,15 @@ For result callbacks, every destination service that sends callbacks must config
 ```php
 'outgoing' => [
     'source-service' => [
-        'url' => env('TALKTO_SOURCE_URL'),
-        'secret' => env('TALKTO_TO_SOURCE_SECRET'),
+        'base_url' => env('TALKTO_SOURCE_URL'),
+        'receive_endpoint' => '/api/talkto/receive',
         'callback_endpoint' => '/api/talkto/callback',
+        'secret' => env('TALKTO_TO_SOURCE_SECRET'),
     ],
 ],
 ```
+
+Prefer `base_url` plus `receive_endpoint` and `callback_endpoint`, or configure explicit full `receive_url` and `callback_url` values. If a target only has a full `receive_url`, callback delivery can infer a callback URL only when that full receive URL clearly ends with the configured receive endpoint; otherwise configure `callback_url` or `base_url` plus `callback_endpoint`.
 
 Every source service that receives callbacks must configure the destination service in `talkto.incoming` and allow the callback command:
 

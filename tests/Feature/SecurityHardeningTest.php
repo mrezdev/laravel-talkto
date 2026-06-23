@@ -250,6 +250,81 @@ test('security auditor reports expected findings without exposing secrets', func
         ->and($encoded)->not->toContain('header-token');
 });
 
+test('security auditor accepts outgoing receive url and callback url config', function (): void {
+    config(['talkto.outgoing' => [
+        'phase2-peer' => [
+            'receive_url' => 'https://phase2-peer.test/api/talkto/receive',
+            'callback_url' => 'https://phase2-peer.test/api/talkto/callback',
+            'secret' => 'phase2-outgoing-shared-secret',
+        ],
+    ]]);
+
+    $findings = app(TalktoSecurityAuditor::class)->audit()->toArray()['findings'];
+
+    expect(securityAuditFindingsForTarget($findings, 'phase2-peer', 'outgoing_target_missing_url'))->toBe([])
+        ->and(securityAuditFindingsForTarget($findings, 'phase2-peer', 'outgoing_target_missing_secret'))->toBe([]);
+});
+
+test('security auditor accepts outgoing base url with receive and callback endpoints', function (): void {
+    config(['talkto.outgoing' => [
+        'phase2-peer' => [
+            'base_url' => 'https://phase2-peer.test/root',
+            'receive_endpoint' => '/talkto/receive',
+            'callback_endpoint' => '/talkto/callback',
+            'secret' => 'phase2-outgoing-shared-secret',
+        ],
+    ]]);
+
+    $findings = app(TalktoSecurityAuditor::class)->audit()->toArray()['findings'];
+
+    expect(securityAuditFindingsForTarget($findings, 'phase2-peer', 'outgoing_target_missing_url'))->toBe([])
+        ->and(securityAuditFindingsForTarget($findings, 'phase2-peer', 'outgoing_target_missing_secret'))->toBe([]);
+});
+
+test('security auditor accepts outgoing url and endpoint aliases', function (): void {
+    config(['talkto.outgoing' => [
+        'phase2-peer' => [
+            'url' => 'https://phase2-peer.test/root',
+            'endpoint' => '/talkto/receive',
+            'secret' => 'phase2-outgoing-shared-secret',
+        ],
+    ]]);
+
+    $findings = app(TalktoSecurityAuditor::class)->audit()->toArray()['findings'];
+
+    expect(securityAuditFindingsForTarget($findings, 'phase2-peer', 'outgoing_target_missing_url'))->toBe([]);
+});
+
+test('security auditor reports missing receive url for unknown url keys', function (): void {
+    config(['talkto.outgoing' => [
+        'phase2-peer' => [
+            'unsupported_url' => 'https://phase2-peer.test/api/talkto/receive',
+            'secret' => 'phase2-outgoing-shared-secret',
+        ],
+    ]]);
+
+    $findings = app(TalktoSecurityAuditor::class)->audit()->toArray()['findings'];
+    $missing = securityAuditFindingsForTarget($findings, 'phase2-peer', 'outgoing_target_missing_url');
+
+    expect($missing)->not->toBeEmpty()
+        ->and($missing[0]['recommendation'])->toContain('receive_url')
+        ->and($missing[0]['recommendation'])->toContain('base_url');
+});
+
+test('security auditor accepts outgoing signing secret alias', function (): void {
+    config(['talkto.outgoing' => [
+        'phase2-peer' => [
+            'base_url' => 'https://phase2-peer.test',
+            'receive_endpoint' => '/api/talkto/receive',
+            'signing_secret' => 'phase2-outgoing-shared-secret',
+        ],
+    ]]);
+
+    $findings = app(TalktoSecurityAuditor::class)->audit()->toArray()['findings'];
+
+    expect(securityAuditFindingsForTarget($findings, 'phase2-peer', 'outgoing_target_missing_secret'))->toBe([]);
+});
+
 test('secure v2 only config produces no critical security auditor findings', function (): void {
     config([
         'talkto.security.require_signature' => true,
@@ -446,6 +521,15 @@ function securityAuditIncomingMessage(string $messageId, array $attributes = [])
         'max_attempts' => 5,
         'received_at' => now(),
     ], $attributes));
+}
+
+function securityAuditFindingsForTarget(array $findings, string $target, ?string $code = null): array
+{
+    return array_values(array_filter(
+        $findings,
+        static fn (array $finding): bool => ($finding['context']['target'] ?? null) === $target
+            && ($code === null || ($finding['code'] ?? null) === $code)
+    ));
 }
 
 class SecurityFailingSecretCallbackSendJob extends SendTalktoMessage

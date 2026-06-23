@@ -3,6 +3,7 @@
 namespace Mrezdev\LaravelTalkto\Services;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
@@ -62,17 +63,14 @@ class TalktoResultCallbackSender implements ResultCallbackSenderContract
             }
 
             $callbackMessage = $this->callbackMessages->createForIncomingResult($message, $result, $options);
+            $decision = $this->prepareDispatchDecision($message, $callbackMessage);
+            $callbackMessage = $decision['callback_message'];
 
-            if ($this->alreadyHandled($callbackMessage)) {
-                return $this->duplicateSummary($message, $callbackMessage);
-            }
-
-            if ($this->alreadyQueued($message, $callbackMessage)) {
+            if (! $decision['dispatch']) {
                 return $this->duplicateSummary($message, $callbackMessage);
             }
 
             $this->dispatchSendJob((int) $callbackMessage->id);
-            $this->recordQueuedEvent($message, $callbackMessage);
 
             return $this->queuedSummary($message, $callbackMessage);
         } catch (Throwable $throwable) {
@@ -141,6 +139,44 @@ class TalktoResultCallbackSender implements ResultCallbackSenderContract
             : SendTalktoMessage::class;
     }
 
+    /**
+     * @return array{dispatch: bool, callback_message: TalktoMessage}
+     */
+    private function prepareDispatchDecision(TalktoMessage $message, TalktoMessage $callbackMessage): array
+    {
+        return DB::transaction(function () use ($message, $callbackMessage): array {
+            $lockedCallbackMessage = $callbackMessage->newQuery()
+                ->whereKey($callbackMessage->getKey())
+                ->lockForUpdate()
+                ->first();
+
+            if (! $lockedCallbackMessage instanceof TalktoMessage) {
+                throw new \RuntimeException('Talkto result callback message could not be locked.');
+            }
+
+            if ($this->alreadyHandled($lockedCallbackMessage)) {
+                return [
+                    'dispatch' => false,
+                    'callback_message' => $lockedCallbackMessage,
+                ];
+            }
+
+            if ($this->hasActiveQueuedEvent($message, $lockedCallbackMessage)) {
+                return [
+                    'dispatch' => false,
+                    'callback_message' => $lockedCallbackMessage,
+                ];
+            }
+
+            $this->recordQueuedEvent($message, $lockedCallbackMessage);
+
+            return [
+                'dispatch' => true,
+                'callback_message' => $lockedCallbackMessage,
+            ];
+        });
+    }
+
     private function recordQueuedEvent(Model $message, TalktoMessage $callbackMessage): void
     {
         $this->recordEvent($message, 'result_callback_queued', null, 'queued', [
@@ -191,16 +227,13 @@ class TalktoResultCallbackSender implements ResultCallbackSenderContract
             TalktoMessageStatus::Succeeded->value,
             TalktoMessageStatus::FailedFinal->value,
             TalktoMessageStatus::DestinationReceived->value,
+            TalktoMessageStatus::Sending->value,
             TalktoMessageStatus::Sent->value,
         ], true);
     }
 
-    private function alreadyQueued(Model $message, TalktoMessage $callbackMessage): bool
+    private function hasActiveQueuedEvent(Model $message, TalktoMessage $callbackMessage): bool
     {
-        if ($callbackMessage->wasRecentlyCreated) {
-            return false;
-        }
-
         if (! in_array($callbackMessage->overall_status, [
             TalktoMessageStatus::Created->value,
             TalktoMessageStatus::Queued->value,
@@ -213,17 +246,30 @@ class TalktoResultCallbackSender implements ResultCallbackSenderContract
         }
 
         $eventClass = $this->eventModelClass();
+        $queued = false;
 
-        return $eventClass::query()
+        $eventClass::query()
             ->where('message_id', (string) ($message->message_id ?? ''))
-            ->where('event_type', 'result_callback_queued')
+            ->whereIn('event_type', ['result_callback_queued', 'result_callback_queue_failed'])
+            ->orderBy('id')
             ->get()
-            ->contains(function (TalktoEvent $event) use ($callbackMessage): bool {
-                $meta = $event->meta ?? [];
+            ->each(function (TalktoEvent $event) use (&$queued, $callbackMessage): void {
+                if (! $this->eventMatchesCallback($event, $callbackMessage)) {
+                    return;
+                }
 
-                return ($meta['callback_message_id'] ?? null) === $callbackMessage->message_id
-                    || (int) ($meta['callback_message_db_id'] ?? 0) === (int) $callbackMessage->id;
+                $queued = $event->event_type === 'result_callback_queued';
             });
+
+        return $queued;
+    }
+
+    private function eventMatchesCallback(TalktoEvent $event, TalktoMessage $callbackMessage): bool
+    {
+        $meta = $event->meta ?? [];
+
+        return ($meta['callback_message_id'] ?? null) === $callbackMessage->message_id
+            || (int) ($meta['callback_message_db_id'] ?? 0) === (int) $callbackMessage->id;
     }
 
     private function callbackStatus(TalktoMessage $callbackMessage): ?string

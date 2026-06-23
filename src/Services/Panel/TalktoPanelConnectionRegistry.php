@@ -3,6 +3,8 @@
 namespace Mrezdev\LaravelTalkto\Services\Panel;
 
 use Illuminate\Support\Collection;
+use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoOutgoingTarget;
+use Mrezdev\LaravelTalkto\Services\TalktoOutgoingTarget;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelConnection;
 
 /**
@@ -69,7 +71,7 @@ class TalktoPanelConnectionRegistry
             );
         }
 
-        $secretConfigured = $this->filled($settings['secret'] ?? null);
+        $secretConfigured = $this->filled($settings['secret'] ?? $settings['signing_secret'] ?? null);
         $endpoint = $this->filled($settings['endpoint'] ?? null) ? (string) $settings['endpoint'] : null;
         $commands = $this->commandKeys($settings['allowed_commands'] ?? $settings['commands'] ?? []);
         $activeHealth = $this->activeHealth($settings);
@@ -79,15 +81,34 @@ class TalktoPanelConnectionRegistry
         }
 
         if ($direction === 'outgoing') {
-            $urlConfigured = $this->filled($settings['url'] ?? $settings['base_url'] ?? null);
+            $target = new TalktoOutgoingTarget($service, $settings);
+            $endpoint = $target->endpoint();
+            $meta['receive_endpoint'] = $endpoint;
+            $meta['callback_endpoint'] = $target->callbackEndpoint();
+            $meta['transport'] = $target->transport();
+
+            if ($target->timeout() !== null) {
+                $meta['timeout_seconds'] = $target->timeout();
+            }
+
+            try {
+                $meta['receive_url'] = $target->endpointUrl();
+                $urlConfigured = true;
+            } catch (InvalidTalktoOutgoingTarget $exception) {
+                $urlConfigured = false;
+                $meta['receive_url_error'] = $exception->getMessage();
+            }
+
+            try {
+                $meta['callback_url'] = $target->callbackEndpointUrl();
+            } catch (InvalidTalktoOutgoingTarget $exception) {
+                $meta['callback_url_error'] = $exception->getMessage();
+            }
+
             $configured = $urlConfigured && $secretConfigured;
 
             if (! $urlConfigured) {
                 $warnings[] = 'missing_url';
-            }
-
-            if ($endpoint === null) {
-                $warnings[] = 'missing_endpoint';
             }
         } else {
             $urlConfigured = false;
@@ -125,9 +146,7 @@ class TalktoPanelConnectionRegistry
     {
         $health = $settings['health'] ?? [];
         $health = is_array($health) ? $health : [];
-        $baseUrl = $this->filled($settings['url'] ?? $settings['base_url'] ?? null)
-            ? (string) ($settings['url'] ?? $settings['base_url'])
-            : null;
+        $baseUrl = $this->baseUrl($settings);
         $url = null;
         $source = null;
 
@@ -192,5 +211,39 @@ class TalktoPanelConnectionRegistry
     private function filled(mixed $value): bool
     {
         return is_scalar($value) && trim((string) $value) !== '';
+    }
+
+    private function baseUrl(array $settings): ?string
+    {
+        foreach (['base_url', 'url'] as $key) {
+            $url = $settings[$key] ?? null;
+
+            if ($this->filled($url)) {
+                return trim((string) $url);
+            }
+        }
+
+        $receiveUrl = $settings['receive_url'] ?? null;
+
+        if (! $this->filled($receiveUrl)) {
+            return null;
+        }
+
+        $receiveEndpoint = $settings['receive_endpoint'] ?? $settings['endpoint'] ?? '/api/talkto/receive';
+
+        if (! $this->filled($receiveEndpoint)) {
+            return null;
+        }
+
+        $normalizedReceiveUrl = rtrim(trim((string) $receiveUrl), '/');
+        $normalizedReceiveEndpoint = '/'.trim((string) $receiveEndpoint, '/');
+
+        if (! str_ends_with($normalizedReceiveUrl, $normalizedReceiveEndpoint)) {
+            return null;
+        }
+
+        $baseUrl = substr($normalizedReceiveUrl, 0, -strlen($normalizedReceiveEndpoint));
+
+        return $this->filled($baseUrl) ? $baseUrl : null;
     }
 }

@@ -9,8 +9,8 @@ Use this shape when `website-service` sends a command to `inventory-service` and
 
 'outgoing' => [
     'inventory-service' => [
-        'url' => env('TALKTO_INVENTORY_URL'),
-        'endpoint' => '/api/talkto/receive',
+        'base_url' => env('TALKTO_INVENTORY_URL'),
+        'receive_endpoint' => '/api/talkto/receive',
         'secret' => env('TALKTO_TO_INVENTORY_SECRET'),
         'timeout' => 20,
     ],

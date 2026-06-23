@@ -74,8 +74,8 @@ Configure the source app with an outgoing target:
 ```php
 'outgoing' => [
     'inventory-service' => [
-        'url' => env('TALKTO_INVENTORY_URL'),
-        'endpoint' => '/api/talkto/receive',
+        'base_url' => env('TALKTO_INVENTORY_URL'),
+        'receive_endpoint' => '/api/talkto/receive',
         'secret' => env('TALKTO_TO_INVENTORY_SECRET'),
         'callback_endpoint' => '/api/talkto/callback',
     ],
@@ -183,7 +183,7 @@ use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
 return TalktoIncomingCommandResult::succeeded(['reserved' => true]);
 ```
 
-Manual `ResultCallbackSenderContract::sendResult($message, $result)` is still supported for advanced flows and returns queued delivery details such as `sent=false` and `queued=true`. The source app must configure the destination as an incoming source and allow the callback command, which defaults to `talkto.result`. Package callback routes depend on `talkto.routes.enabled` and `talkto.callbacks.enabled`; host-owned routes can call the receiver contract directly when package routes stay disabled.
+Manual `ResultCallbackSenderContract::sendResult($message, $result)` is still supported for advanced flows and returns queued delivery details such as `sent=false` and `queued=true`. Duplicate calls for the same original message/status reuse the deterministic durable callback message and suppress duplicate queue dispatch where the existing callback row/events show delivery is already queued or handled. The source app must configure the destination as an incoming source and allow the callback command, which defaults to `talkto.result`. Package callback routes depend on `talkto.routes.enabled` and `talkto.callbacks.enabled`; host-owned routes can call the receiver contract directly when package routes stay disabled.
 
 ## Retry, DLQ, And Observability
 

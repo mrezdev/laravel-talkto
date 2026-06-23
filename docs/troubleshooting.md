@@ -42,6 +42,14 @@ Likely cause: Laravel config cache still contains old values.
 
 Safe fix: Run `php artisan config:clear` during troubleshooting or `php artisan config:cache` during deployment after env values are correct.
 
+## Outgoing Target Audit Or Panel Warning
+
+Symptom: `talkto:security-audit` or the panel reports an outgoing target URL or secret problem.
+
+Likely cause: The target is missing a normalized URL/secret value, has an invalid URL, or includes incomplete callback URL config.
+
+Safe fix: Prefer `base_url` with `receive_endpoint` and `callback_endpoint`, or explicit `receive_url` and `callback_url`. `signing_secret` is accepted as a secret alias.
+
 ## Signature Verification Failed
 
 Symptom: Incoming request is rejected with a signature error.
@@ -112,6 +120,10 @@ Symptom: The original outgoing message reached the destination, but it never rec
 
 Likely cause: In the durable callback design, the destination may have processed the command but the queued callback message is waiting, retrying, failed, dead-lettered, or rejected by the source callback receiver.
 
+Unexpected destination handler exceptions also queue durable failed callbacks after the destination stores the failure state. The payload is `failed_retryable` or `failed_final` according to the stored retry/DLQ decision and does not include stack traces.
+
+Duplicate manual and automatic callback queue attempts should reuse the same durable callback message. If a callback has an active `result_callback_queued` event and no later queue-failed event, duplicate queue attempts are suppressed. If dispatch failed before a job was queued, the later `result_callback_queue_failed` event allows a future `sendResult()` call to retry queue dispatch.
+
 Safe fix on the destination service:
 
 - confirm the incoming original message was processed
@@ -121,6 +133,7 @@ Safe fix on the destination service:
 - confirm its `target_service` is the original source service
 - inspect callback status, attempts, events, and DLQ rows
 - confirm a queue worker is running so `SendTalktoMessage` can deliver callbacks
+- use `talkto:retry-failed` or `talkto:dlq-reprocess` for failed callback delivery instead of repeatedly calling `sendResult()` for already queued callback messages
 
 Safe fix on the source service:
 
@@ -128,6 +141,7 @@ Safe fix on the source service:
 - confirm `TALKTO_CALLBACKS_ENABLED=true`
 - allow `talkto.result` from the destination under `talkto.incoming`
 - verify the callback secret matches the destination outgoing secret
+- prefer destination `talkto.outgoing` config with `base_url` plus `receive_endpoint` and `callback_endpoint`, or explicit `receive_url` and `callback_url`
 - verify nonce, timestamp, and signature settings match
 - confirm the original outgoing message exists and the callback original message id matches it
 

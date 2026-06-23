@@ -84,12 +84,74 @@ test('outgoing registry detects health_url and health_endpoint fallback config',
             'endpoint' => '/api/talkto/receive',
             'health_endpoint' => '/ready',
         ],
+        'talkto.outgoing.target-delta' => [
+            'receive_url' => 'https://target-delta.test/api/talkto/receive',
+            'receive_endpoint' => '/api/talkto/receive',
+            'callback_url' => 'https://target-delta.test/api/talkto/callback',
+            'secret' => 'delta-secret',
+            'health_endpoint' => '/api/talkto/health',
+        ],
     ]);
 
     $outgoing = app(TalktoPanelConnectionRegistry::class)->outgoing();
 
     expect($outgoing->firstWhere('service', 'target-beta')->activeHealthUrl)->toBe('https://status.target-beta.test/up')
-        ->and($outgoing->firstWhere('service', 'target-gamma')->activeHealthUrl)->toBe('https://target-gamma.test/ready');
+        ->and($outgoing->firstWhere('service', 'target-gamma')->activeHealthUrl)->toBe('https://target-gamma.test/ready')
+        ->and($outgoing->firstWhere('service', 'target-delta')->activeHealthUrl)->toBe('https://target-delta.test/api/talkto/health');
+});
+
+test('outgoing registry displays normalized receive url target without exposing secrets', function (): void {
+    ($this->bootPanelConnectionHealthApp)();
+
+    config(['talkto.outgoing.target-normalized-receive' => [
+        'receive_url' => 'https://target-normalized.test/api/talkto/receive',
+        'callback_url' => 'https://target-normalized.test/api/talkto/callback?api_token=callback-token&plain=yes',
+        'secret' => 'normalized-receive-shared-secret',
+    ]]);
+
+    $connection = app(TalktoPanelConnectionRegistry::class)->outgoing()->firstWhere('service', 'target-normalized-receive');
+    $array = $connection->toArray();
+    $encoded = json_encode($array, JSON_THROW_ON_ERROR);
+
+    expect($connection->configured)->toBeTrue()
+        ->and($connection->urlConfigured)->toBeTrue()
+        ->and($connection->secretConfigured)->toBeTrue()
+        ->and($connection->warnings)->not->toContain('missing_url')
+        ->and($array['meta']['receive_url'])->toBe('https://target-normalized.test/api/talkto/receive')
+        ->and($array['meta']['callback_url'])->toContain('api_token=[redacted]')
+        ->and($array['meta']['callback_url'])->toContain('plain=yes')
+        ->and($encoded)->not->toContain('callback-token')
+        ->and($encoded)->not->toContain('normalized-receive-shared-secret');
+});
+
+test('outgoing registry displays normalized base url target and redacts url metadata', function (): void {
+    ($this->bootPanelConnectionHealthApp)();
+
+    config(['talkto.outgoing.target-normalized-base' => [
+        'base_url' => 'https://target-normalized.test/root',
+        'receive_endpoint' => '/talkto/receive',
+        'callback_endpoint' => '/talkto/callback',
+        'signing_secret' => 'normalized-base-shared-secret',
+        'timeout' => 9,
+        'mode' => 'sync',
+    ]]);
+
+    $connection = app(TalktoPanelConnectionRegistry::class)->outgoing()->firstWhere('service', 'target-normalized-base');
+    $array = $connection->toArray();
+    $encoded = json_encode($array, JSON_THROW_ON_ERROR);
+
+    expect($connection->configured)->toBeTrue()
+        ->and($connection->urlConfigured)->toBeTrue()
+        ->and($connection->secretConfigured)->toBeTrue()
+        ->and($connection->warnings)->not->toContain('missing_url')
+        ->and($array['endpoint'])->toBe('/talkto/receive')
+        ->and($array['meta']['receive_endpoint'])->toBe('/talkto/receive')
+        ->and($array['meta']['callback_endpoint'])->toBe('/talkto/callback')
+        ->and($array['meta']['transport'])->toBe('sync')
+        ->and($array['meta']['timeout_seconds'])->toBe(9)
+        ->and($array['meta']['receive_url'])->toBe('https://target-normalized.test/root/talkto/receive')
+        ->and($array['meta']['callback_url'])->toBe('https://target-normalized.test/root/talkto/callback')
+        ->and($encoded)->not->toContain('normalized-base-shared-secret');
 });
 
 test('unsupported active health method creates connection warning', function (): void {

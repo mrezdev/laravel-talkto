@@ -2,6 +2,7 @@
 
 namespace Mrezdev\LaravelTalkto\Services;
 
+use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoOutgoingTarget;
 use Mrezdev\LaravelTalkto\Support\TalktoSecurityAuditSnapshot;
 use Mrezdev\LaravelTalkto\Support\TalktoSecurityFinding;
 use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
@@ -167,21 +168,38 @@ class TalktoSecurityAuditor
 
     private function auditOutgoingTargets(array &$findings): void
     {
-        foreach ($this->peerConfigs(config('talkto.outgoing', [])) as $name => $target) {
-            $url = $target['url'] ?? null;
-            $secret = $target['secret'] ?? $target['signing_secret'] ?? null;
+        foreach ($this->peerConfigs(config('talkto.outgoing', [])) as $name => $targetConfig) {
+            $target = new TalktoOutgoingTarget($name, $targetConfig);
 
-            if (! is_string($url) || $url === '') {
+            try {
+                $target->endpointUrl();
+            } catch (InvalidTalktoOutgoingTarget $exception) {
+                $missingUrl = str_contains($exception->getMessage(), 'URL is not configured');
+
                 $findings[] = $this->finding(
                     'error',
-                    'outgoing_target_missing_url',
-                    'Outgoing target is missing a URL.',
-                    'Configure a URL for each outgoing target.',
-                    ['target' => $name]
+                    $missingUrl ? 'outgoing_target_missing_url' : 'outgoing_target_invalid_url',
+                    $missingUrl ? 'Outgoing target is missing a receive URL.' : 'Outgoing target receive URL is invalid.',
+                    'Configure receive_url or base_url plus receive_endpoint for each outgoing target.',
+                    ['target' => $name, 'error' => $exception->getMessage()]
                 );
             }
 
-            if (! is_string($secret) || $secret === '') {
+            try {
+                $target->callbackEndpointUrl();
+            } catch (InvalidTalktoOutgoingTarget $exception) {
+                $findings[] = $this->finding(
+                    'warning',
+                    'outgoing_target_callback_url_unresolved',
+                    'Outgoing target callback URL could not be resolved.',
+                    'Configure callback_url or base_url plus callback_endpoint when this target must receive durable callbacks.',
+                    ['target' => $name, 'error' => $exception->getMessage()]
+                );
+            }
+
+            $secret = $target->secret();
+
+            if ($secret === null) {
                 $findings[] = $this->finding(
                     'error',
                     'outgoing_target_missing_secret',
@@ -199,7 +217,7 @@ class TalktoSecurityAuditor
                 );
             }
 
-            $headers = $target['headers'] ?? [];
+            $headers = $target->headers();
 
             if (is_array($headers) && $headers !== []) {
                 $findings[] = $this->finding(

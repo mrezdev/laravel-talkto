@@ -13,6 +13,7 @@ use Mrezdev\LaravelTalkto\Data\TalktoResultCallbackData;
 use Mrezdev\LaravelTalkto\Http\Controllers\TalktoResultCallbackController;
 use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
 use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoNonce;
@@ -359,6 +360,129 @@ test('callback sender reuses handled durable callback without dispatching duplic
     Http::assertNothingSent();
 });
 
+test('manual send result called twice only queues callback once', function (): void {
+    Bus::fake();
+    Http::fake();
+
+    $message = p04IncomingMessage('p04-manual-send-twice');
+    $result = TalktoIncomingCommandResult::succeeded(['processed' => true]);
+
+    $first = app(ResultCallbackSenderContract::class)->sendResult($message, $result);
+    $second = app(ResultCallbackSenderContract::class)->sendResult($message, $result);
+    $callback = p04CallbackMessageFor('p04-manual-send-twice');
+
+    expect($first['queued'])->toBeTrue()
+        ->and($second)->toMatchArray([
+            'sent' => false,
+            'queued' => false,
+            'message_id' => $callback->message_id,
+            'callback_message_id' => $callback->message_id,
+            'callback_message_db_id' => $callback->id,
+            'original_message_id' => 'p04-manual-send-twice',
+            'duplicate' => true,
+        ])
+        ->and(TalktoMessage::query()
+            ->where('idempotency_key', 'talkto:callback:p04-manual-send-twice:succeeded')
+            ->count())->toBe(1)
+        ->and(p04QueuedCallbackEventCount('p04-manual-send-twice', $callback))->toBe(1);
+
+    Bus::assertDispatchedTimes(SendTalktoMessage::class, 1);
+    Bus::assertDispatched(SendTalktoMessage::class, fn (SendTalktoMessage $job): bool => $job->talktoMessageId === $callback->id);
+    Http::assertNothingSent();
+});
+
+test('existing callback message without queued event can still be dispatched', function (): void {
+    Bus::fake();
+    Http::fake();
+
+    $message = p04IncomingMessage('p04-existing-callback-no-event');
+    $result = TalktoIncomingCommandResult::succeeded(['processed' => true]);
+    $callback = app(TalktoResultCallbackMessageFactory::class)->createForIncomingResult($message, $result);
+
+    $summary = app(ResultCallbackSenderContract::class)->sendResult($message, $result);
+
+    expect($summary)->toMatchArray([
+        'sent' => false,
+        'queued' => true,
+        'status' => 'queued',
+        'message_id' => $callback->message_id,
+        'callback_message_id' => $callback->message_id,
+        'callback_message_db_id' => $callback->id,
+        'original_message_id' => 'p04-existing-callback-no-event',
+    ])->and(TalktoMessage::query()
+        ->where('parent_message_id', 'p04-existing-callback-no-event')
+        ->where('command', 'talkto.result')
+        ->count())->toBe(1)
+        ->and(p04QueuedCallbackEventCount('p04-existing-callback-no-event', $callback))->toBe(1);
+
+    Bus::assertDispatchedTimes(SendTalktoMessage::class, 1);
+    Bus::assertDispatched(SendTalktoMessage::class, fn (SendTalktoMessage $job): bool => $job->talktoMessageId === $callback->id);
+    Http::assertNothingSent();
+});
+
+test('existing completed callback message is not dispatched again', function (): void {
+    Bus::fake();
+    Http::fake();
+
+    $message = p04IncomingMessage('p04-existing-callback-completed');
+    $result = TalktoIncomingCommandResult::succeeded(['processed' => true]);
+    $callback = app(TalktoResultCallbackMessageFactory::class)->createForIncomingResult($message, $result);
+    $callback->forceFill([
+        'transport_status' => 'sent',
+        'overall_status' => 'completed',
+        'completed_at' => now(),
+    ])->save();
+
+    $summary = app(ResultCallbackSenderContract::class)->sendResult($message, $result);
+
+    expect($summary)->toMatchArray([
+        'sent' => false,
+        'queued' => false,
+        'status' => 'completed',
+        'message_id' => $callback->message_id,
+        'callback_message_id' => $callback->message_id,
+        'callback_message_db_id' => $callback->id,
+        'original_message_id' => 'p04-existing-callback-completed',
+        'duplicate' => true,
+    ])->and(p04QueuedCallbackEventCount('p04-existing-callback-completed', $callback))->toBe(0);
+
+    Bus::assertNotDispatched(SendTalktoMessage::class);
+    Http::assertNothingSent();
+});
+
+test('failed retryable callback with active queued event is left to retry pipeline', function (): void {
+    Bus::fake();
+    Http::fake();
+
+    $message = p04IncomingMessage('p04-failed-retryable-callback-owned-by-retry');
+    $result = TalktoIncomingCommandResult::failedRetryable('Temporary failure.', RuntimeException::class);
+
+    $first = app(ResultCallbackSenderContract::class)->sendResult($message, $result);
+    $callback = p04CallbackMessageFor('p04-failed-retryable-callback-owned-by-retry');
+    $callback->forceFill([
+        'transport_status' => 'failed_retryable',
+        'overall_status' => 'failed_retryable',
+        'next_retry_at' => now()->addMinute(),
+        'next_attempt_at' => now()->addMinute(),
+    ])->save();
+
+    $second = app(ResultCallbackSenderContract::class)->sendResult($message, $result);
+
+    expect($first['queued'])->toBeTrue()
+        ->and($second)->toMatchArray([
+            'sent' => false,
+            'queued' => false,
+            'status' => 'failed_retryable',
+            'message_id' => $callback->message_id,
+            'original_message_id' => 'p04-failed-retryable-callback-owned-by-retry',
+            'duplicate' => true,
+        ])
+        ->and(p04QueuedCallbackEventCount('p04-failed-retryable-callback-owned-by-retry', $callback))->toBe(1);
+
+    Bus::assertDispatchedTimes(SendTalktoMessage::class, 1);
+    Http::assertNothingSent();
+});
+
 test('callback sender queues retryable failure result as durable callback', function (): void {
     Bus::fake();
     Http::fake();
@@ -383,6 +507,44 @@ test('callback sender queues retryable failure result as durable callback', func
             'error_message' => 'Temporary failure.',
         ]);
 
+    Bus::assertDispatched(SendTalktoMessage::class, fn (SendTalktoMessage $job): bool => $job->talktoMessageId === $callback->id);
+    Http::assertNothingSent();
+});
+
+test('callback sender can retry dispatch after callback queue failure event', function (): void {
+    config(['talkto.jobs.send_message' => P04FailingCallbackSendJob::class]);
+    Http::fake();
+
+    $message = p04IncomingMessage('p04-queue-failure-retryable');
+    $result = TalktoIncomingCommandResult::succeeded(['processed' => true]);
+
+    $failed = app(ResultCallbackSenderContract::class)->sendResult($message, $result);
+    $callback = p04CallbackMessageFor('p04-queue-failure-retryable');
+
+    config(['talkto.jobs.send_message' => SendTalktoMessage::class]);
+    Bus::fake();
+
+    $retried = app(ResultCallbackSenderContract::class)->sendResult($message, $result);
+
+    expect($failed)->toMatchArray([
+        'sent' => false,
+        'queued' => false,
+        'status' => 'failed',
+        'error' => 'queue_failed',
+    ])->and($retried)->toMatchArray([
+        'sent' => false,
+        'queued' => true,
+        'status' => 'queued',
+        'message_id' => $callback->message_id,
+        'original_message_id' => 'p04-queue-failure-retryable',
+    ])
+        ->and(p04QueuedCallbackEventCount('p04-queue-failure-retryable', $callback))->toBe(2)
+        ->and(TalktoEvent::query()
+            ->where('message_id', 'p04-queue-failure-retryable')
+            ->where('event_type', 'result_callback_queue_failed')
+            ->count())->toBe(1);
+
+    Bus::assertDispatchedTimes(SendTalktoMessage::class, 1);
     Bus::assertDispatched(SendTalktoMessage::class, fn (SendTalktoMessage $job): bool => $job->talktoMessageId === $callback->id);
     Http::assertNothingSent();
 });
@@ -503,6 +665,151 @@ test('incoming processing uses sender skip behavior when callbacks are disabled'
     Http::assertNothingSent();
 });
 
+test('incoming handler exception auto-queues failed retryable durable callback', function (): void {
+    Bus::fake();
+    Http::fake();
+
+    $message = p04QueuedIncomingMessage('p04-auto-exception-retryable');
+
+    (new ProcessIncomingTalktoMessage($message->id))->handle(new P04ThrowingResolver('Unexpected shared-callback-secret failure.'));
+
+    $message = $message->fresh();
+    $callback = p04CallbackMessageFor('p04-auto-exception-retryable');
+    $failureEvent = TalktoEvent::query()
+        ->where('message_id', 'p04-auto-exception-retryable')
+        ->where('event_type', 'destination_processing_failed')
+        ->sole();
+
+    expect($message->destination_action_status)->toBe('failed_retryable')
+        ->and($message->overall_status)->toBe('failed_retryable')
+        ->and($message->locked_at)->toBeNull()
+        ->and($callback->direction)->toBe('outgoing')
+        ->and($callback->command)->toBe('talkto.result')
+        ->and($callback->parent_message_id)->toBe('p04-auto-exception-retryable')
+        ->and($callback->payload)->toMatchArray([
+            'original_message_id' => 'p04-auto-exception-retryable',
+            'status' => 'failed_retryable',
+            'retryable' => true,
+            'error_class' => RuntimeException::class,
+            'meta' => [
+                'unexpected_exception' => true,
+                'exception_class' => RuntimeException::class,
+                'retryable' => true,
+                'source' => 'handler_exception',
+            ],
+        ])
+        ->and($callback->payload['error_message'])->toContain('[redacted]')
+        ->and($callback->payload['error_message'])->not->toContain('shared-callback-secret')
+        ->and(json_encode($callback->payload))->not->toContain('Stack trace')
+        ->and(json_encode($callback->payload))->not->toContain('#0')
+        ->and(p04QueuedCallbackEventCount('p04-auto-exception-retryable', $callback))->toBe(1)
+        ->and($failureEvent->meta)->toMatchArray([
+            'retryable' => true,
+        ]);
+
+    Bus::assertDispatched(SendTalktoMessage::class, fn (SendTalktoMessage $job): bool => $job->talktoMessageId === $callback->id);
+    Http::assertNothingSent();
+});
+
+test('incoming handler exception with retry exhausted auto-queues failed final durable callback', function (): void {
+    config(['talkto.retry.incoming_enabled' => true]);
+    Bus::fake();
+    Http::fake();
+
+    $message = p04QueuedIncomingMessage('p04-auto-exception-final', [
+        'retry_count' => 4,
+        'max_attempts' => 5,
+    ]);
+
+    (new ProcessIncomingTalktoMessage($message->id))->handle(new P04ThrowingResolver('Unexpected final failure.'));
+
+    $message = $message->fresh();
+    $callback = p04CallbackMessageFor('p04-auto-exception-final');
+    $failureEvent = TalktoEvent::query()
+        ->where('message_id', 'p04-auto-exception-final')
+        ->where('event_type', 'destination_processing_failed')
+        ->sole();
+
+    expect($message->destination_action_status)->toBe('failed_final')
+        ->and($message->overall_status)->toBe('failed_final')
+        ->and($message->next_retry_at)->toBeNull()
+        ->and(TalktoEvent::query()->where('message_id', 'p04-auto-exception-final')->where('event_type', 'retry_exhausted')->exists())->toBeTrue()
+        ->and($callback->payload)->toMatchArray([
+            'original_message_id' => 'p04-auto-exception-final',
+            'status' => 'failed_final',
+            'retryable' => false,
+            'error_class' => RuntimeException::class,
+            'meta' => [
+                'unexpected_exception' => true,
+                'exception_class' => RuntimeException::class,
+                'retryable' => false,
+                'source' => 'handler_exception',
+            ],
+        ])
+        ->and(TalktoDeadLetter::query()->where('message_id', 'p04-auto-exception-final')->exists())->toBeTrue()
+        ->and($failureEvent->meta)->toMatchArray([
+            'retryable' => false,
+        ])
+        ->and(p04QueuedCallbackEventCount('p04-auto-exception-final', $callback))->toBe(1);
+
+    Bus::assertDispatched(SendTalktoMessage::class, fn (SendTalktoMessage $job): bool => $job->talktoMessageId === $callback->id);
+    Http::assertNothingSent();
+});
+
+test('incoming handler exception respects disabled automatic durable callback dispatch', function (): void {
+    config(['talkto.callbacks.auto_dispatch' => false]);
+    Bus::fake();
+    Http::fake();
+
+    $message = p04QueuedIncomingMessage('p04-auto-exception-dispatch-disabled');
+
+    (new ProcessIncomingTalktoMessage($message->id))->handle(new P04ThrowingResolver('Unexpected failure.'));
+
+    $message = $message->fresh();
+    $event = TalktoEvent::query()
+        ->where('message_id', 'p04-auto-exception-dispatch-disabled')
+        ->where('event_type', 'result_callback_auto_dispatch_skipped')
+        ->sole();
+
+    expect($message->overall_status)->toBe('failed_retryable')
+        ->and(TalktoMessage::query()->where('parent_message_id', 'p04-auto-exception-dispatch-disabled')->where('command', 'talkto.result')->exists())->toBeFalse()
+        ->and($event->meta)->toMatchArray([
+            'reason' => 'auto_dispatch_disabled',
+            'durable' => true,
+        ]);
+
+    Bus::assertNotDispatched(SendTalktoMessage::class);
+    Http::assertNothingSent();
+});
+
+test('incoming handler exception respects disabled callbacks through sender skip behavior', function (): void {
+    config([
+        'talkto.callbacks.enabled' => false,
+        'talkto.callbacks.auto_dispatch' => true,
+    ]);
+    Bus::fake();
+    Http::fake();
+
+    $message = p04QueuedIncomingMessage('p04-auto-exception-callbacks-disabled');
+
+    (new ProcessIncomingTalktoMessage($message->id))->handle(new P04ThrowingResolver('Unexpected failure.'));
+
+    $message = $message->fresh();
+    $event = TalktoEvent::query()
+        ->where('message_id', 'p04-auto-exception-callbacks-disabled')
+        ->where('event_type', 'result_callback_skipped')
+        ->sole();
+
+    expect($message->overall_status)->toBe('failed_retryable')
+        ->and(TalktoMessage::query()->where('parent_message_id', 'p04-auto-exception-callbacks-disabled')->where('command', 'talkto.result')->exists())->toBeFalse()
+        ->and($event->meta)->toMatchArray([
+            'error' => 'callbacks_disabled',
+        ]);
+
+    Bus::assertNotDispatched(SendTalktoMessage::class);
+    Http::assertNothingSent();
+});
+
 test('manual handler send result plus auto dispatch does not duplicate callback message job or event', function (): void {
     Bus::fake();
     Http::fake();
@@ -528,6 +835,39 @@ test('manual handler send result plus auto dispatch does not duplicate callback 
     Http::assertNothingSent();
 });
 
+test('exception derived callback duplicate safety reuses queued callback', function (): void {
+    Bus::fake();
+    Http::fake();
+
+    $message = p04QueuedIncomingMessage('p04-exception-callback-duplicate-safe');
+
+    (new ProcessIncomingTalktoMessage($message->id))->handle(new P04ThrowingResolver('Unexpected failure.'));
+
+    $message = $message->fresh();
+    $callback = p04CallbackMessageFor('p04-exception-callback-duplicate-safe');
+    $manual = app(ResultCallbackSenderContract::class)->sendResult(
+        $message,
+        TalktoIncomingCommandResult::failedRetryable('Unexpected failure.', RuntimeException::class)
+    );
+
+    expect($manual)->toMatchArray([
+        'sent' => false,
+        'queued' => false,
+        'message_id' => $callback->message_id,
+        'callback_message_id' => $callback->message_id,
+        'callback_message_db_id' => $callback->id,
+        'original_message_id' => 'p04-exception-callback-duplicate-safe',
+        'duplicate' => true,
+    ])->and(TalktoMessage::query()
+        ->where('idempotency_key', 'talkto:callback:p04-exception-callback-duplicate-safe:failed_retryable')
+        ->count())->toBe(1)
+        ->and(p04QueuedCallbackEventCount('p04-exception-callback-duplicate-safe', $callback))->toBe(1);
+
+    Bus::assertDispatchedTimes(SendTalktoMessage::class, 1);
+    Bus::assertDispatched(SendTalktoMessage::class, fn (SendTalktoMessage $job): bool => $job->talktoMessageId === $callback->id);
+    Http::assertNothingSent();
+});
+
 test('callback receiver verifies signed callback and updates original outgoing message to completed', function (): void {
     $message = p04OutgoingMessage('p04-receive-success');
     [$envelope, $headers] = p04SignedCallback($message, TalktoIncomingCommandResult::succeeded(['processed' => true]));
@@ -543,6 +883,31 @@ test('callback receiver verifies signed callback and updates original outgoing m
         ->and($message->fresh()->overall_status)->toBe('completed')
         ->and(TalktoEvent::query()->where('message_id', 'p04-receive-success')->where('event_type', 'result_callback_received')->exists())->toBeTrue()
         ->and(TalktoEvent::query()->where('message_id', 'p04-receive-success')->where('event_type', 'result_callback_applied')->exists())->toBeTrue();
+});
+
+test('callback receiver verifies incoming signing secret alias', function (): void {
+    $message = p04OutgoingMessage('p04-receive-signing-secret');
+    [$envelope, $headers] = p04SignedCallback($message, TalktoIncomingCommandResult::succeeded(['processed' => true]));
+
+    config(['talkto.incoming.target-service' => [
+        'signing_secret' => 'shared-callback-secret',
+        'allowed_commands' => [
+            'talkto.result' => [
+                'driver' => 'none',
+            ],
+        ],
+    ]]);
+
+    $result = app(ResultCallbackReceiverContract::class)->receiveResult($envelope, $headers);
+
+    expect($result)->toMatchArray([
+        'accepted' => true,
+        'status' => 'applied',
+        'original_message_id' => 'p04-receive-signing-secret',
+        'duplicate' => false,
+    ])->and($message->fresh()->destination_action_status)->toBe('succeeded')
+        ->and($message->fresh()->overall_status)->toBe('completed')
+        ->and(TalktoEvent::query()->where('message_id', 'p04-receive-signing-secret')->where('event_type', 'result_callback_rejected')->exists())->toBeFalse();
 });
 
 test('default v2 callback receiver accepts nonce and creates one nonce ledger row without exposing raw nonce', function (): void {
@@ -1287,5 +1652,25 @@ class P04FixedResultHandler implements TalktoIncomingCommandHandler
         }
 
         return $this->result;
+    }
+}
+
+class P04ThrowingResolver
+{
+    public function __construct(private readonly string $message) {}
+
+    public function resolve(TalktoMessage $message): TalktoIncomingCommandHandler
+    {
+        return new P04ThrowingHandler($this->message);
+    }
+}
+
+class P04ThrowingHandler implements TalktoIncomingCommandHandler
+{
+    public function __construct(private readonly string $message) {}
+
+    public function handle(TalktoMessage $message): IncomingCommandResultContract
+    {
+        throw new RuntimeException($this->message);
     }
 }

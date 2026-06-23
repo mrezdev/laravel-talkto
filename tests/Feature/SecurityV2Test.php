@@ -220,6 +220,43 @@ test('v2 incoming verification accepts valid requests and rejects invalid signat
         ->and($response->getData(true)['error'])->toBe('unsupported_signature_version');
 });
 
+test('incoming verification accepts signing secret alias and still fails without a secret', function (): void {
+    Queue::fake();
+    config(['talkto.incoming.source-service' => [
+        'signing_secret' => 'fake-test-secret',
+        'allowed_commands' => [
+            'domain.command' => [
+                'driver' => 'none',
+            ],
+        ],
+    ]]);
+
+    $accepted = securityReceive(
+        securityEnvelope('security-signing-secret-alias', ['id' => 'security-signing-secret-alias']),
+        securityV1Headers('security-signing-secret-alias', ['id' => 'security-signing-secret-alias'])
+    );
+
+    config(['talkto.incoming.source-service' => [
+        'allowed_commands' => [
+            'domain.command' => [
+                'driver' => 'none',
+            ],
+        ],
+    ]]);
+
+    $missing = securityReceive(
+        securityEnvelope('security-signing-secret-missing', ['id' => 'security-signing-secret-missing']),
+        securityV1Headers('security-signing-secret-missing', ['id' => 'security-signing-secret-missing'])
+    );
+
+    expect($accepted->getStatusCode())->toBe(202)
+        ->and($accepted->getData(true)['error'] ?? null)->toBeNull()
+        ->and($missing->getStatusCode())->toBe(403)
+        ->and($missing->getData(true)['error'])->toBe('missing_source_secret');
+
+    Queue::assertPushed(ProcessIncomingTalktoMessage::class, 1);
+});
+
 test('signed requests always require timestamp', function (): void {
     $v1Headers = securityV1Headers('security-v1-missing-timestamp', ['id' => 'security-v1-missing-timestamp']);
     unset($v1Headers['X-Talkto-Timestamp']);

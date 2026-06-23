@@ -6,6 +6,7 @@ use Illuminate\Http\Client\Response as LaravelHttpResponse;
 use Illuminate\Support\Facades\Http;
 use Mrezdev\LaravelTalkto\Contracts\TalktoHttpClient;
 use Mrezdev\LaravelTalkto\Data\TalktoHttpResponse;
+use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoOutgoingTarget;
 use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
@@ -30,9 +31,9 @@ beforeEach(function (): void {
         'talkto.retry.retryable_http_statuses' => [408, 425, 429],
         'talkto.retry.retry_server_errors' => true,
         'talkto.outgoing.peer' => [
-            'url' => 'https://peer.test',
+            'base_url' => 'https://peer.test',
             'secret' => 'secret',
-            'endpoint' => '/api/talkto/receive',
+            'receive_endpoint' => '/api/talkto/receive',
             'callback_endpoint' => '/callbacks/talkto',
             'headers' => ['X-Custom' => 'custom'],
             'timeout' => 13,
@@ -205,6 +206,181 @@ test('durable callback send uses callback endpoint and completes accepted respon
         ->and(TalktoEvent::query()->where('message_id', $callback->message_id)->where('event_type', 'message_sent')->where('meta->result_callback_delivery', true)->exists())->toBeTrue();
 });
 
+test('normal outgoing uses explicit receive url', function (): void {
+    config([
+        'talkto.outgoing.peer' => [
+            'receive_url' => 'https://service.test/custom/receive',
+            'callback_url' => 'https://service.test/custom/callback',
+            'secret' => 'secret',
+        ],
+    ]);
+
+    $client = new RecordingTalktoHttpClient(httpClientReceiveResponse());
+    app()->instance(TalktoHttpClient::class, $client);
+    $normal = httpClientOutgoingMessage('http-target-receive-url-normal');
+
+    (new SendTalktoMessage($normal->id))->handle(app(TalktoOutgoingEnvelopeBuilder::class), app(TalktoRetryPolicy::class));
+
+    expect($client->requests[0]['url'])->toBe('https://service.test/custom/receive');
+});
+
+test('durable callback send uses explicit callback url', function (): void {
+    config([
+        'talkto.outgoing.peer' => [
+            'receive_url' => 'https://service.test/custom/receive',
+            'callback_url' => 'https://service.test/custom/callback',
+            'secret' => 'secret',
+        ],
+    ]);
+
+    $incoming = httpClientIncomingMessage('http-target-callback-url');
+    $callback = app(TalktoResultCallbackMessageFactory::class)->createForIncomingResult(
+        $incoming,
+        TalktoIncomingCommandResult::succeeded(['processed' => true])
+    );
+    $callbackClient = new RecordingTalktoHttpClient(httpClientAcceptedCallbackResponse($callback, $incoming));
+    app()->instance(TalktoHttpClient::class, $callbackClient);
+
+    (new SendTalktoMessage($callback->id))->handle(app(TalktoOutgoingEnvelopeBuilder::class), app(TalktoRetryPolicy::class));
+
+    expect($callbackClient->requests[0]['url'])->toBe('https://service.test/custom/callback');
+});
+
+test('base url joins receive endpoint and callback endpoint', function (): void {
+    config([
+        'talkto.outgoing.peer' => [
+            'base_url' => 'https://service.test/root',
+            'receive_endpoint' => '/talkto/receive',
+            'callback_endpoint' => '/talkto/callback',
+            'secret' => 'secret',
+        ],
+    ]);
+
+    $normalClient = new RecordingTalktoHttpClient(httpClientReceiveResponse());
+    app()->instance(TalktoHttpClient::class, $normalClient);
+    $normal = httpClientOutgoingMessage('http-target-base-url-normal');
+
+    (new SendTalktoMessage($normal->id))->handle(app(TalktoOutgoingEnvelopeBuilder::class), app(TalktoRetryPolicy::class));
+
+    $incoming = httpClientIncomingMessage('http-target-base-url-callback');
+    $callback = app(TalktoResultCallbackMessageFactory::class)->createForIncomingResult(
+        $incoming,
+        TalktoIncomingCommandResult::succeeded(['processed' => true])
+    );
+    $callbackClient = new RecordingTalktoHttpClient(httpClientAcceptedCallbackResponse($callback, $incoming));
+    app()->instance(TalktoHttpClient::class, $callbackClient);
+
+    (new SendTalktoMessage($callback->id))->handle(app(TalktoOutgoingEnvelopeBuilder::class), app(TalktoRetryPolicy::class));
+
+    expect($normalClient->requests[0]['url'])->toBe('https://service.test/root/talkto/receive')
+        ->and($callbackClient->requests[0]['url'])->toBe('https://service.test/root/talkto/callback');
+});
+
+test('base url and url aliases must be absolute http urls', function (string $key, string $value, string $expected): void {
+    config(['talkto.outgoing.peer' => [
+        $key => $value,
+        'secret' => 'secret',
+        'receive_endpoint' => '/api/talkto/receive',
+    ]]);
+
+    $message = httpClientOutgoingMessage("http-target-invalid-{$key}");
+
+    expect(fn () => app(TalktoOutgoingEnvelopeBuilder::class)->endpointFor($message))
+        ->toThrow(InvalidTalktoOutgoingTarget::class, $expected);
+})->with([
+    'relative base_url' => ['base_url', '/relative/path', 'base_url'],
+    'relative url alias' => ['url', '/relative/path', 'url'],
+    'unsupported base_url scheme' => ['base_url', 'ftp://service.test', 'HTTP or HTTPS'],
+]);
+
+test('url and endpoint aliases still work for normal outgoing', function (): void {
+    config([
+        'talkto.outgoing.peer' => [
+            'url' => 'https://service.test/root',
+            'endpoint' => 'alias/receive',
+            'secret' => 'secret',
+        ],
+    ]);
+
+    $client = new RecordingTalktoHttpClient(httpClientReceiveResponse());
+    app()->instance(TalktoHttpClient::class, $client);
+    $normal = httpClientOutgoingMessage('http-target-alias-endpoint-normal');
+
+    (new SendTalktoMessage($normal->id))->handle(app(TalktoOutgoingEnvelopeBuilder::class), app(TalktoRetryPolicy::class));
+
+    expect($client->requests[0]['url'])->toBe('https://service.test/root/alias/receive');
+});
+
+test('durable callback send safely derives callback url from receive url', function (): void {
+    config([
+        'talkto.outgoing.peer' => [
+            'receive_url' => 'https://legacy.test/api/talkto/receive',
+            'callback_endpoint' => '/api/talkto/callback',
+            'secret' => 'secret',
+        ],
+    ]);
+
+    $incoming = httpClientIncomingMessage('http-target-safe-receive-callback');
+    $callback = app(TalktoResultCallbackMessageFactory::class)->createForIncomingResult(
+        $incoming,
+        TalktoIncomingCommandResult::succeeded(['processed' => true])
+    );
+    $client = new RecordingTalktoHttpClient(httpClientAcceptedCallbackResponse($callback, $incoming));
+    app()->instance(TalktoHttpClient::class, $client);
+
+    (new SendTalktoMessage($callback->id))->handle(app(TalktoOutgoingEnvelopeBuilder::class), app(TalktoRetryPolicy::class));
+
+    expect($client->requests[0]['url'])->toBe('https://legacy.test/api/talkto/callback');
+});
+
+test('unsafe receive url cannot infer durable callback url', function (): void {
+    config(['talkto.outgoing.peer' => [
+        'receive_url' => 'https://service.test/full/path',
+        'secret' => 'secret',
+    ]]);
+
+    $incoming = httpClientIncomingMessage('http-target-unsafe-receive-callback');
+    $callback = app(TalktoResultCallbackMessageFactory::class)->createForIncomingResult(
+        $incoming,
+        TalktoIncomingCommandResult::succeeded(['processed' => true])
+    );
+
+    expect(fn () => app(TalktoOutgoingEnvelopeBuilder::class)->endpointFor($callback))
+        ->toThrow(InvalidTalktoOutgoingTarget::class, 'callback_url');
+});
+
+test('missing receive url fails when only an unknown url key is present', function (): void {
+    config(['talkto.outgoing.peer' => [
+        'unsupported_url' => 'https://service.test/custom/receive',
+        'secret' => 'secret',
+    ]]);
+
+    $normal = httpClientOutgoingMessage('http-target-unknown-url-key');
+
+    expect(fn () => app(TalktoOutgoingEnvelopeBuilder::class)->endpointFor($normal))
+        ->toThrow(InvalidTalktoOutgoingTarget::class, 'URL is not configured');
+});
+
+test('full receive and callback urls must be absolute http urls', function (string $key, string $value): void {
+    config(['talkto.outgoing.peer' => [
+        $key => $value,
+        'secret' => 'secret',
+    ]]);
+
+    $message = $key === 'callback_url'
+        ? app(TalktoResultCallbackMessageFactory::class)->createForIncomingResult(
+            httpClientIncomingMessage('http-target-invalid-full-callback-url'),
+            TalktoIncomingCommandResult::succeeded(['processed' => true])
+        )
+        : httpClientOutgoingMessage('http-target-invalid-full-receive-url');
+
+    expect(fn () => app(TalktoOutgoingEnvelopeBuilder::class)->endpointFor($message))
+        ->toThrow(InvalidTalktoOutgoingTarget::class, $key);
+})->with([
+    ['receive_url', '/relative/receive'],
+    ['callback_url', 'ftp://service.test/callback'],
+]);
+
 test('durable callback duplicate and stale responses complete delivery with callback status', function (): void {
     foreach (['duplicate', 'stale_ignored'] as $status) {
         $incoming = httpClientIncomingMessage("http-callback-{$status}");
@@ -347,6 +523,29 @@ function httpClientIncomingMessage(string $messageId, array $attributes = []): T
         'max_attempts' => 5,
         'received_at' => now(),
     ], $attributes));
+}
+
+function httpClientReceiveResponse(): TalktoHttpResponse
+{
+    return new TalktoHttpResponse(
+        statusCode: 200,
+        body: '{"received":true,"status":"queued"}',
+        headers: ['X-Test' => ['received']],
+    );
+}
+
+function httpClientAcceptedCallbackResponse(TalktoMessage $callback, TalktoMessage $incoming): TalktoHttpResponse
+{
+    return new TalktoHttpResponse(
+        statusCode: 200,
+        body: json_encode([
+            'accepted' => true,
+            'status' => 'applied',
+            'message_id' => $callback->message_id,
+            'original_message_id' => $incoming->message_id,
+            'duplicate' => false,
+        ]),
+    );
 }
 
 class RecordingTalktoHttpClient implements TalktoHttpClient

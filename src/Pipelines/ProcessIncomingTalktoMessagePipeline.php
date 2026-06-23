@@ -12,8 +12,10 @@ use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
 use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResolver;
+use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
+use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
 use Throwable;
 
 /**
@@ -78,7 +80,11 @@ class ProcessIncomingTalktoMessagePipeline
 
             $this->applyResult($message, $attempt, $result, $retryPolicy);
         } catch (Throwable $throwable) {
-            $this->applyUnexpectedFailure($message, $attempt, $throwable, $retryPolicy);
+            $result = $this->applyUnexpectedFailure($message, $attempt, $throwable, $retryPolicy);
+
+            if ($result !== null) {
+                $this->autoDispatchResultCallback($message, $result);
+            }
 
             return;
         }
@@ -410,16 +416,16 @@ class ProcessIncomingTalktoMessagePipeline
         });
     }
 
-    private function applyUnexpectedFailure(TalktoMessage $message, ?TalktoAttempt $attempt, Throwable $throwable, TalktoRetryPolicy $retryPolicy): void
+    private function applyUnexpectedFailure(TalktoMessage $message, ?TalktoAttempt $attempt, Throwable $throwable, TalktoRetryPolicy $retryPolicy): ?IncomingCommandResultContract
     {
-        DB::transaction(function () use ($message, $attempt, $throwable, $retryPolicy): void {
+        return DB::transaction(function () use ($message, $attempt, $throwable, $retryPolicy): ?IncomingCommandResultContract {
             $messageClass = $this->messageModelClass();
             $eventClass = $this->eventModelClass();
 
             $message = $messageClass::query()->whereKey($message->id)->lockForUpdate()->first();
 
             if (! $message) {
-                return;
+                return null;
             }
 
             $newStatus = TalktoMessageStatus::FailedRetryable->value;
@@ -446,7 +452,10 @@ class ProcessIncomingTalktoMessagePipeline
                 ])->save();
             }
 
-            if ($newStatus === $retryPolicy->finalFailureStatus()) {
+            $isFinalFailure = $newStatus === $retryPolicy->finalFailureStatus($message);
+            $retryableForEvent = ! $isFinalFailure;
+
+            if ($isFinalFailure) {
                 $this->storeDeadLetterIfEnabled($message, $throwable->getMessage(), $throwable);
             }
 
@@ -467,14 +476,44 @@ class ProcessIncomingTalktoMessagePipeline
                 'new_status' => $newStatus,
                 'meta' => $this->eventMeta($message, [
                     'error_class' => $throwable::class,
-                    'retryable' => true,
+                    'retryable' => $retryableForEvent,
                 ]),
             ]);
 
             if ($retryPolicy->isDirectionEnabled($message)) {
                 $this->recordRetryEvent($eventClass, $message, $scheduled ? 'retry_scheduled' : 'retry_exhausted');
             }
+
+            return $this->resultFromUnexpectedFailure($message, $throwable, $retryPolicy);
         });
+    }
+
+    private function resultFromUnexpectedFailure(TalktoMessage $message, Throwable $throwable, TalktoRetryPolicy $retryPolicy): IncomingCommandResultContract
+    {
+        $retryable = $message->overall_status !== $retryPolicy->finalFailureStatus($message);
+        $errorMessage = $this->safeExceptionMessage($throwable);
+        $meta = [
+            'unexpected_exception' => true,
+            'exception_class' => $throwable::class,
+            'retryable' => $retryable,
+            'source' => 'handler_exception',
+        ];
+
+        return $retryable
+            ? TalktoIncomingCommandResult::failedRetryable($errorMessage, $throwable::class, $meta)
+            : TalktoIncomingCommandResult::failedFinal($errorMessage, $throwable::class, $meta);
+    }
+
+    private function safeExceptionMessage(Throwable $throwable): string
+    {
+        $message = app(TalktoSecurityRedactor::class)->redactText($throwable->getMessage()) ?? '';
+        $message = trim($message);
+
+        if ($message === '') {
+            $message = 'Unexpected handler exception.';
+        }
+
+        return mb_substr($message, 0, 500);
     }
 
     private function storeDeadLetterIfEnabled(TalktoMessage $message, ?string $failureReason = null, ?Throwable $throwable = null): void

@@ -19,7 +19,7 @@ The default sender:
 
 Callback messages use the configured callback endpoint on the target, usually `/api/talkto/callback`. Because they are normal outgoing Talkto messages, they are eligible for existing attempts, retry, DLQ, report, panel, trace, and reprocess behavior.
 
-Destination apps must configure the original source service under `talkto.outgoing` with `url`, `secret`, and `callback_endpoint`.
+Destination apps must configure the original source service under `talkto.outgoing` with `base_url`, `receive_endpoint`, `callback_endpoint`, and `secret`, or with explicit full `receive_url` and `callback_url` values. The `url` and `endpoint` keys still work as aliases for `base_url` and `receive_endpoint`.
 
 ## Automatic Dispatch
 
@@ -43,6 +43,10 @@ return TalktoIncomingCommandResult::succeeded([
 Set `talkto.callbacks.auto_dispatch=false` only when the host intentionally wants to queue callbacks manually. If `talkto.callbacks.enabled=false`, callback creation and sending are disabled.
 
 Existing manual `sendResult()` calls remain supported and duplicate-safe. When a handler manually calls `sendResult()` and the pipeline also auto-dispatches the same result, the sender reuses the deterministic callback message and avoids duplicate send jobs when it can see that callback delivery was already queued.
+
+The default sender locks the durable callback message row before deciding whether to queue delivery. It checks existing `result_callback_queued` and `result_callback_queue_failed` events for the same callback, records a queued event while holding the lock, and dispatches `SendTalktoMessage` after the transaction commits. Duplicate calls return `queued=false` with a duplicate summary when the callback is already queued or handled. If dispatch itself fails and a queue-failed event is recorded, a later `sendResult()` call can queue the same callback again.
+
+If a handler throws an unexpected exception before returning a result, the pipeline first applies the normal retry/failure state and then queues a durable failed callback derived from the stored message state. Retryable failures produce `failed_retryable`; exhausted final failures produce `failed_final`. The callback includes the exception class and a redacted, excerpted message, but no stack trace. For expected business errors, handlers should still return explicit `failedRetryable()` or `failedFinal()` results.
 
 ## Normal Lifecycle
 

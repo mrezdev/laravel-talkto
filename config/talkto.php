@@ -314,14 +314,23 @@ return [
     'outgoing' => [
         // Outgoing targets can also be registered programmatically through
         // TalktoOutgoingTargetRegistryContract. Programmatic targets override
-        // config targets with the same name. Existing url/secret/endpoint keys
-        // remain supported.
-        // Example:
+        // config targets with the same name. The url and endpoint aliases
+        // remain supported for base_url and receive_endpoint.
+        // Preferred base URL example:
         // 'peer-service' => [
-        //     'url' => env('TALKTO_PEER_SERVICE_URL'),
-        //     'secret' => env('TALKTO_TO_PEER_SERVICE_SECRET'),
-        //     'endpoint' => env('TALKTO_PEER_SERVICE_ENDPOINT', '/api/talkto/receive'),
+        //     'base_url' => env('TALKTO_PEER_SERVICE_URL'),
+        //     'receive_endpoint' => env('TALKTO_PEER_SERVICE_RECEIVE_ENDPOINT', '/api/talkto/receive'),
         //     'callback_endpoint' => env('TALKTO_PEER_SERVICE_CALLBACK_ENDPOINT', '/api/talkto/callback'),
+        //     'secret' => env('TALKTO_PEER_SERVICE_SECRET'),
+        //     'headers' => [],
+        //     'timeout' => 20,
+        //     'mode' => env('TALKTO_PEER_SERVICE_MODE', 'reliable'),
+        // ],
+        // Alternative full URL example:
+        // 'peer-service' => [
+        //     'receive_url' => env('TALKTO_PEER_SERVICE_RECEIVE_URL'),
+        //     'callback_url' => env('TALKTO_PEER_SERVICE_CALLBACK_URL'),
+        //     'secret' => env('TALKTO_PEER_SERVICE_SECRET'),
         //     'headers' => [],
         //     'timeout' => 20,
         //     'mode' => env('TALKTO_PEER_SERVICE_MODE', 'reliable'),

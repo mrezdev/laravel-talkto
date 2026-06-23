@@ -34,12 +34,37 @@ class TalktoPanelConnection
             'endpoint' => $this->endpoint,
             'commands' => $this->commands,
             'warnings' => $this->warnings,
-            'meta' => $this->meta,
+            'meta' => $this->redactMeta($this->meta),
             'active_health_configured' => $this->activeHealthConfigured,
             'active_health_method' => $this->activeHealthMethod,
             'active_health_url' => $this->redactUrl($this->activeHealthUrl),
             'active_health_meta' => $this->activeHealthMeta,
         ];
+    }
+
+    private function redactMeta(array $meta): array
+    {
+        $redacted = [];
+
+        foreach ($meta as $key => $value) {
+            $key = (string) $key;
+
+            if (is_array($value)) {
+                $redacted[$key] = $this->redactMeta($value);
+
+                continue;
+            }
+
+            if (is_string($value) && $this->isUrlMetaKey($key)) {
+                $redacted[$key] = $this->redactUrl($value);
+
+                continue;
+            }
+
+            $redacted[$key] = $value;
+        }
+
+        return $redacted;
     }
 
     private function redactUrl(?string $url): ?string
@@ -85,5 +110,12 @@ class TalktoPanelConnection
         }
 
         return false;
+    }
+
+    private function isUrlMetaKey(string $key): bool
+    {
+        $normalized = strtolower(str_replace(['-', ' '], '_', $key));
+
+        return $normalized === 'url' || str_ends_with($normalized, '_url');
     }
 }

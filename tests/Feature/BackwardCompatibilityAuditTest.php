@@ -114,19 +114,13 @@ test('legacy outgoing target config shapes remain compatible', function (): void
         'signing_secret' => 'secret',
         'timeout_seconds' => 9,
     ]);
-    $legacyTarget = new TalktoOutgoingTarget('legacy-target', [
-        'rm_url' => 'https://legacy.test/full/path',
-        'secret' => 'secret',
-        'endpoint' => '/ignored',
-    ]);
 
     expect($urlTarget->endpointUrl())->toBe('https://peer.test/api/talkto/receive')
         ->and($urlTarget->headers())->toBe(['X-Custom' => 'yes'])
         ->and($urlTarget->timeout())->toBe(7)
         ->and($baseUrlTarget->endpointUrl())->toBe('https://base.test/receive')
         ->and($baseUrlTarget->secret())->toBe('secret')
-        ->and($baseUrlTarget->timeout())->toBe(9)
-        ->and($legacyTarget->endpointUrl())->toBe('https://legacy.test/full/path');
+        ->and($baseUrlTarget->timeout())->toBe(9);
 });
 
 test('aliases resolve to canonical targets and stored messages use the canonical name', function (): void {

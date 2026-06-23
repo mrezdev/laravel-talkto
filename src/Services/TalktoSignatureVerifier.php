@@ -114,7 +114,7 @@ class TalktoSignatureVerifier
         }
 
         if ($requireSignature) {
-            $secret = $sourceConfig['secret'] ?? null;
+            $secret = $sourceConfig['secret'] ?? $sourceConfig['signing_secret'] ?? null;
 
             if ($secret === null || $secret === '') {
                 return $this->failure(403, 'missing_source_secret');

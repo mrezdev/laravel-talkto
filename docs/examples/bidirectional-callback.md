@@ -11,8 +11,8 @@ Configure the outgoing target:
 
 'outgoing' => [
     'inventory-service' => [
-        'url' => env('TALKTO_INVENTORY_URL'),
-        'endpoint' => '/api/talkto/receive',
+        'base_url' => env('TALKTO_INVENTORY_URL'),
+        'receive_endpoint' => '/api/talkto/receive',
         'secret' => env('TALKTO_TO_INVENTORY_SECRET'),
         'callback_endpoint' => '/api/talkto/callback',
     ],
@@ -71,8 +71,8 @@ Configure the source and handler:
 
 'outgoing' => [
     'website-service' => [
-        'url' => env('TALKTO_WEBSITE_URL'),
-        'endpoint' => '/api/talkto/receive',
+        'base_url' => env('TALKTO_WEBSITE_URL'),
+        'receive_endpoint' => '/api/talkto/receive',
         'callback_endpoint' => '/api/talkto/callback',
         'secret' => env('TALKTO_TO_WEBSITE_SECRET'),
     ],
@@ -107,7 +107,7 @@ use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
 app(ResultCallbackSenderContract::class)->sendResult($message, $result);
 ```
 
-If manual sending and auto-dispatch both target the same original message/status, Laravel Talkto reuses the deterministic durable callback message and suppresses duplicate queueing where possible.
+If manual sending and auto-dispatch both target the same original message/status, Laravel Talkto reuses the deterministic durable callback message and suppresses duplicate queueing where possible. Callback delivery failures still use the normal retry, DLQ, and reprocess paths for outgoing messages.
 
 ## Callback Security
 
