@@ -69,11 +69,12 @@ class SendOutgoingTalktoMessagePipeline
             $envelope = $builder->buildEnvelope($message);
             $headers = $builder->buildHeaders($message);
             $timeout = $builder->timeoutFor($message);
+            $isResultCallbackMessage = $builder->isResultCallbackMessage($message);
 
             $response = $this->httpClient()->post($endpoint, $headers, $envelope, $timeout);
 
             if ($response->successful()) {
-                $this->applySuccessfulResponse($message, $attempt, $response);
+                $this->applySuccessfulResponse($message, $attempt, $response, $retryPolicy, $isResultCallbackMessage);
 
                 return;
             }
@@ -218,7 +219,23 @@ class SendOutgoingTalktoMessagePipeline
         });
     }
 
-    private function applySuccessfulResponse(TalktoMessage $message, TalktoAttempt $attempt, mixed $response): void
+    private function applySuccessfulResponse(
+        TalktoMessage $message,
+        TalktoAttempt $attempt,
+        mixed $response,
+        TalktoRetryPolicy $retryPolicy,
+        bool $isResultCallbackMessage = false
+    ): void {
+        if ($isResultCallbackMessage) {
+            $this->applySuccessfulCallbackResponse($message, $attempt, $response, $retryPolicy);
+
+            return;
+        }
+
+        $this->applySuccessfulOutgoingResponse($message, $attempt, $response);
+    }
+
+    private function applySuccessfulOutgoingResponse(TalktoMessage $message, TalktoAttempt $attempt, mixed $response): void
     {
         $json = $this->safeJsonResponse($response);
         $received = $json['received'] ?? null;
@@ -232,6 +249,34 @@ class SendOutgoingTalktoMessagePipeline
             $message = $messageClass::query()->whereKey($message->id)->lockForUpdate()->first();
 
             if (! $message) {
+                return;
+            }
+
+            if ($this->hasTerminalOrAdvancedStatus($message)) {
+                $attempt->forceFill([
+                    'status' => TalktoAttemptStatus::Sent->value,
+                    'http_status' => $response->status(),
+                    'response_excerpt' => $responseExcerpt,
+                    'meta' => [
+                        'response_ignored' => true,
+                        'reason' => 'message_already_terminal',
+                        'current_status' => $message->overall_status,
+                    ],
+                ])->save();
+
+                $eventClass::create([
+                    'talkto_message_id' => $message->id,
+                    'message_id' => $message->message_id,
+                    'service_name' => config('talkto.service', 'app'),
+                    'event_type' => 'message_send_response_ignored',
+                    'old_status' => $message->overall_status,
+                    'new_status' => $message->overall_status,
+                    'meta' => [
+                        'http_status' => $response->status(),
+                        'reason' => 'message_already_terminal',
+                    ],
+                ]);
+
                 return;
             }
 
@@ -272,6 +317,181 @@ class SendOutgoingTalktoMessagePipeline
             ]);
 
             app(TalktoDeadLetterQueue::class)->markReprocessedForMessage($message);
+        });
+    }
+
+    private function applySuccessfulCallbackResponse(TalktoMessage $message, TalktoAttempt $attempt, mixed $response, TalktoRetryPolicy $retryPolicy): void
+    {
+        $json = $this->safeJsonResponse($response);
+        $accepted = $json['accepted'] ?? null;
+
+        if ($accepted !== true) {
+            $this->applyRejectedCallbackResponse($message, $attempt, $response, $retryPolicy, $json);
+
+            return;
+        }
+
+        $callbackStatus = $this->callbackResponseStatus($json);
+        $responseExcerpt = $this->excerpt($response->body());
+        $messageClass = $this->messageModelClass();
+        $eventClass = $this->eventModelClass();
+
+        DB::transaction(function () use ($messageClass, $eventClass, $message, $attempt, $response, $callbackStatus, $responseExcerpt, $json): void {
+            $message = $messageClass::query()->whereKey($message->id)->lockForUpdate()->first();
+
+            if (! $message) {
+                return;
+            }
+
+            if ($this->hasTerminalOrAdvancedStatus($message)) {
+                $attempt->forceFill([
+                    'status' => TalktoAttemptStatus::Sent->value,
+                    'http_status' => $response->status(),
+                    'response_excerpt' => $responseExcerpt,
+                    'meta' => [
+                        'result_callback_delivery' => true,
+                        'response_ignored' => true,
+                        'reason' => 'message_already_terminal',
+                        'current_status' => $message->overall_status,
+                    ],
+                ])->save();
+
+                return;
+            }
+
+            $message->forceFill([
+                'transport_status' => TalktoMessageStatus::Sent->value,
+                'sent_at' => now(),
+                'last_http_status' => $response->status(),
+                'last_response' => $responseExcerpt,
+                'destination_receive_status' => TalktoMessageStatus::Received->value,
+                'destination_action_status' => $callbackStatus,
+                'overall_status' => TalktoMessageStatus::Completed->value,
+                'completed_at' => now(),
+                'failed_at' => null,
+                'last_error' => null,
+                'locked_at' => null,
+                'locked_by' => null,
+            ])->save();
+
+            $attempt->forceFill([
+                'status' => TalktoAttemptStatus::Sent->value,
+                'http_status' => $response->status(),
+                'response_excerpt' => $responseExcerpt,
+                'meta' => array_filter([
+                    'result_callback_delivery' => true,
+                    'accepted' => true,
+                    'callback_status' => $callbackStatus,
+                    'duplicate' => $json['duplicate'] ?? null,
+                    'original_message_id' => $json['original_message_id'] ?? null,
+                ], fn (mixed $value): bool => $value !== null),
+            ])->save();
+
+            $eventClass::create([
+                'talkto_message_id' => $message->id,
+                'message_id' => $message->message_id,
+                'service_name' => config('talkto.service', 'app'),
+                'event_type' => 'message_sent',
+                'old_status' => TalktoMessageStatus::Sending->value,
+                'new_status' => TalktoMessageStatus::Completed->value,
+                'meta' => array_filter([
+                    'http_status' => $response->status(),
+                    'result_callback_delivery' => true,
+                    'accepted' => true,
+                    'callback_status' => $callbackStatus,
+                    'duplicate' => $json['duplicate'] ?? null,
+                    'original_message_id' => $json['original_message_id'] ?? null,
+                ], fn (mixed $value): bool => $value !== null),
+            ]);
+
+            app(TalktoDeadLetterQueue::class)->markReprocessedForMessage($message);
+        });
+    }
+
+    private function applyRejectedCallbackResponse(
+        TalktoMessage $message,
+        TalktoAttempt $attempt,
+        mixed $response,
+        TalktoRetryPolicy $retryPolicy,
+        array $json
+    ): void {
+        $responseExcerpt = $this->excerpt($response->body());
+        $destinationStatus = array_key_exists('accepted', $json)
+            ? $this->callbackResponseStatus($json, 'rejected')
+            : 'rejected';
+        $errorCode = $this->callbackResponseError($json);
+        $errorMessage = "Result callback delivery rejected [{$errorCode}].";
+        $messageClass = $this->messageModelClass();
+        $eventClass = $this->eventModelClass();
+
+        DB::transaction(function () use ($messageClass, $eventClass, $message, $attempt, $response, $responseExcerpt, $destinationStatus, $errorCode, $errorMessage, $retryPolicy): void {
+            $message = $messageClass::query()->whereKey($message->id)->lockForUpdate()->first();
+
+            if (! $message) {
+                return;
+            }
+
+            if ($this->hasTerminalOrAdvancedStatus($message)) {
+                $attempt->forceFill([
+                    'status' => TalktoAttemptStatus::FailedFinal->value,
+                    'http_status' => $response->status(),
+                    'response_excerpt' => $responseExcerpt,
+                    'error_class' => 'callback_rejected',
+                    'error_message' => $errorMessage,
+                    'meta' => [
+                        'result_callback_delivery' => true,
+                        'response_ignored' => true,
+                        'reason' => 'message_already_terminal',
+                        'current_status' => $message->overall_status,
+                        'callback_error' => $errorCode,
+                    ],
+                ])->save();
+
+                return;
+            }
+
+            $retryPolicy->markFinalFailure($message, 'transport_status', $errorMessage, $response->status());
+
+            $message->forceFill([
+                'last_response' => $responseExcerpt,
+                'destination_receive_status' => TalktoMessageStatus::Received->value,
+                'destination_action_status' => $destinationStatus,
+            ])->save();
+
+            $this->storeDeadLetterIfEnabled($message, $errorMessage);
+
+            $attempt->forceFill([
+                'status' => $message->overall_status,
+                'http_status' => $response->status(),
+                'response_excerpt' => $responseExcerpt,
+                'error_class' => 'callback_rejected',
+                'error_message' => $errorMessage,
+                'meta' => [
+                    'result_callback_delivery' => true,
+                    'accepted' => false,
+                    'callback_status' => $destinationStatus,
+                    'callback_error' => $errorCode,
+                ],
+            ])->save();
+
+            $eventClass::create([
+                'talkto_message_id' => $message->id,
+                'message_id' => $message->message_id,
+                'service_name' => config('talkto.service', 'app'),
+                'event_type' => 'message_send_failed',
+                'old_status' => TalktoMessageStatus::Sending->value,
+                'new_status' => $message->overall_status,
+                'meta' => [
+                    'http_status' => $response->status(),
+                    'result_callback_delivery' => true,
+                    'accepted' => false,
+                    'callback_status' => $destinationStatus,
+                    'callback_error' => $errorCode,
+                    'retryable' => false,
+                ],
+            ]);
+
+            $this->recordRetryEvent($eventClass, $message, 'retry_not_scheduled');
         });
     }
 
@@ -435,6 +655,39 @@ class SendOutgoingTalktoMessagePipeline
         }
 
         return max(0, (int) $message->last_attempted_at->diffInSeconds($message->next_retry_at, false));
+    }
+
+    private function callbackResponseStatus(array $json, string $default = TalktoMessageStatus::Unknown->value): string
+    {
+        $status = $json['status'] ?? null;
+
+        return is_string($status) && $status !== '' ? $status : $default;
+    }
+
+    private function callbackResponseError(array $json): string
+    {
+        $error = $json['error'] ?? null;
+
+        if (is_string($error) && $error !== '') {
+            return $error;
+        }
+
+        if (! array_key_exists('accepted', $json)) {
+            return 'invalid_callback_response';
+        }
+
+        $status = $json['status'] ?? null;
+
+        return is_string($status) && $status !== '' ? $status : 'callback_rejected';
+    }
+
+    private function hasTerminalOrAdvancedStatus(TalktoMessage $message): bool
+    {
+        return in_array($message->overall_status, [
+            TalktoMessageStatus::Completed->value,
+            TalktoMessageStatus::Succeeded->value,
+            TalktoMessageStatus::FailedFinal->value,
+        ], true);
     }
 
     /**

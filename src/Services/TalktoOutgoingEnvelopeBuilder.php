@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 use Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract;
 use Mrezdev\LaravelTalkto\Data\TalktoEnvelopeData;
+use Mrezdev\LaravelTalkto\Enums\TalktoMessageDirection;
 use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoOutgoingTarget;
 use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoSignatureException;
 
@@ -68,13 +69,48 @@ class TalktoOutgoingEnvelopeBuilder
 
     public function endpointFor(Model $message): string
     {
-        return $this->targets->get((string) $message->target_service)->endpointUrl();
+        $target = $this->targets->get((string) $message->target_service);
+
+        return $this->isResultCallbackMessage($message)
+            ? $target->callbackEndpointUrl()
+            : $target->endpointUrl();
     }
 
     public function timeoutFor(Model $message): int
     {
-        return $this->targets->get((string) $message->target_service)->timeout()
+        $target = $this->targets->get((string) $message->target_service);
+
+        if ($this->isResultCallbackMessage($message)) {
+            return $target->timeout()
+                ?? (int) config('talkto.callbacks.timeout_seconds', config('talkto.http.timeout_seconds', 20));
+        }
+
+        return $target->timeout()
             ?? (int) config('talkto.http.timeout_seconds', 20);
+    }
+
+    public function isResultCallbackMessage(Model $message): bool
+    {
+        if (($message->direction ?? null) !== TalktoMessageDirection::Outgoing->value) {
+            return false;
+        }
+
+        $callbackCommand = (string) config('talkto.callbacks.command', 'talkto.result');
+
+        if ($callbackCommand === '') {
+            $callbackCommand = 'talkto.result';
+        }
+
+        if (($message->command ?? null) !== $callbackCommand) {
+            return false;
+        }
+
+        $payload = $message->payload ?? null;
+
+        return is_array($payload)
+            && $this->hasPayloadString($payload, 'original_message_id')
+            && $this->hasPayloadString($payload, 'original_command')
+            && $this->hasPayloadString($payload, 'status');
     }
 
     private function buildV2Headers(Model $message, array $customHeaders, string $timestamp, string $secret): array
@@ -115,5 +151,10 @@ class TalktoOutgoingEnvelopeBuilder
         throw new InvalidTalktoSignatureException(
             sprintf('Unsupported outgoing Talkto signature version [%s]. Supported versions: v1, v2.', $safeVersion)
         );
+    }
+
+    private function hasPayloadString(array $payload, string $key): bool
+    {
+        return isset($payload[$key]) && is_scalar($payload[$key]) && (string) $payload[$key] !== '';
     }
 }

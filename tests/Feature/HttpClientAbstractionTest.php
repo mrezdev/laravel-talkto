@@ -7,10 +7,14 @@ use Illuminate\Support\Facades\Http;
 use Mrezdev\LaravelTalkto\Contracts\TalktoHttpClient;
 use Mrezdev\LaravelTalkto\Data\TalktoHttpResponse;
 use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
+use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\LaravelTalktoHttpClient;
+use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
 use Mrezdev\LaravelTalkto\Services\TalktoOutgoingEnvelopeBuilder;
 use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
+use Mrezdev\LaravelTalkto\Services\TalktoResultCallbackMessageFactory;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 
 beforeEach(function (): void {
@@ -29,6 +33,7 @@ beforeEach(function (): void {
             'url' => 'https://peer.test',
             'secret' => 'secret',
             'endpoint' => '/api/talkto/receive',
+            'callback_endpoint' => '/callbacks/talkto',
             'headers' => ['X-Custom' => 'custom'],
             'timeout' => 13,
         ],
@@ -161,6 +166,125 @@ test('custom client failed response triggers existing retry behavior', function 
         ->and($message->next_retry_at)->not->toBeNull();
 });
 
+test('durable callback send uses callback endpoint and completes accepted response', function (): void {
+    $incoming = httpClientIncomingMessage('http-callback-applied');
+    $callback = app(TalktoResultCallbackMessageFactory::class)->createForIncomingResult(
+        $incoming,
+        TalktoIncomingCommandResult::succeeded(['processed' => true])
+    );
+    $client = new RecordingTalktoHttpClient(new TalktoHttpResponse(
+        statusCode: 200,
+        body: json_encode([
+            'accepted' => true,
+            'status' => 'applied',
+            'message_id' => $callback->message_id,
+            'original_message_id' => $incoming->message_id,
+            'duplicate' => false,
+        ]),
+    ));
+    app()->instance(TalktoHttpClient::class, $client);
+
+    (new SendTalktoMessage($callback->id))->handle(app(TalktoOutgoingEnvelopeBuilder::class), app(TalktoRetryPolicy::class));
+
+    $callback->refresh();
+
+    expect($client->requests)->toHaveCount(1)
+        ->and($client->requests[0]['url'])->toBe('https://peer.test/callbacks/talkto')
+        ->and($client->requests[0]['headers'])->toHaveKey('X-Talkto-Signature')
+        ->and($client->requests[0]['envelope']['command'])->toBe('talkto.result')
+        ->and($client->requests[0]['envelope']['payload']['original_message_id'])->toBe('http-callback-applied')
+        ->and($client->requests[0]['timeout'])->toBe(13)
+        ->and($callback->transport_status)->toBe('sent')
+        ->and($callback->destination_receive_status)->toBe('received')
+        ->and($callback->destination_action_status)->toBe('applied')
+        ->and($callback->overall_status)->toBe('completed')
+        ->and($callback->completed_at)->not->toBeNull()
+        ->and($callback->last_http_status)->toBe(200)
+        ->and($callback->failed_at)->toBeNull()
+        ->and($callback->last_error)->toBeNull()
+        ->and(TalktoEvent::query()->where('message_id', $callback->message_id)->where('event_type', 'message_sent')->where('meta->result_callback_delivery', true)->exists())->toBeTrue();
+});
+
+test('durable callback duplicate and stale responses complete delivery with callback status', function (): void {
+    foreach (['duplicate', 'stale_ignored'] as $status) {
+        $incoming = httpClientIncomingMessage("http-callback-{$status}");
+        $callback = app(TalktoResultCallbackMessageFactory::class)->createForIncomingResult(
+            $incoming,
+            TalktoIncomingCommandResult::succeeded(['processed' => true])
+        );
+        $client = new RecordingTalktoHttpClient(new TalktoHttpResponse(
+            statusCode: 200,
+            body: json_encode([
+                'accepted' => true,
+                'status' => $status,
+                'message_id' => $callback->message_id,
+                'original_message_id' => $incoming->message_id,
+                'duplicate' => $status === 'duplicate',
+            ]),
+        ));
+        app()->instance(TalktoHttpClient::class, $client);
+
+        (new SendTalktoMessage($callback->id))->handle(app(TalktoOutgoingEnvelopeBuilder::class), app(TalktoRetryPolicy::class));
+
+        $callback->refresh();
+
+        expect($callback->overall_status)->toBe('completed')
+            ->and($callback->destination_action_status)->toBe($status)
+            ->and($callback->completed_at)->not->toBeNull();
+    }
+});
+
+test('durable callback rejected response becomes final failure', function (): void {
+    $incoming = httpClientIncomingMessage('http-callback-rejected');
+    $callback = app(TalktoResultCallbackMessageFactory::class)->createForIncomingResult(
+        $incoming,
+        TalktoIncomingCommandResult::succeeded(['processed' => true])
+    );
+    $client = new RecordingTalktoHttpClient(new TalktoHttpResponse(
+        statusCode: 200,
+        body: json_encode([
+            'accepted' => false,
+            'status' => 'rejected',
+            'error' => 'original_message_not_found',
+        ]),
+    ));
+    app()->instance(TalktoHttpClient::class, $client);
+
+    (new SendTalktoMessage($callback->id))->handle(app(TalktoOutgoingEnvelopeBuilder::class), app(TalktoRetryPolicy::class));
+
+    $callback->refresh();
+
+    expect($callback->overall_status)->toBe('failed_final')
+        ->and($callback->transport_status)->toBe('failed_final')
+        ->and($callback->destination_receive_status)->toBe('received')
+        ->and($callback->destination_action_status)->toBe('rejected')
+        ->and($callback->failed_at)->not->toBeNull()
+        ->and($callback->last_error)->toContain('original_message_not_found')
+        ->and(TalktoEvent::query()->where('message_id', $callback->message_id)->where('event_type', 'message_send_failed')->where('meta->result_callback_delivery', true)->exists())->toBeTrue()
+        ->and(TalktoDeadLetter::query()->where('message_id', $callback->message_id)->exists())->toBeTrue();
+});
+
+test('durable callback success without accepted field becomes invalid callback response failure', function (): void {
+    $incoming = httpClientIncomingMessage('http-callback-invalid-response');
+    $callback = app(TalktoResultCallbackMessageFactory::class)->createForIncomingResult(
+        $incoming,
+        TalktoIncomingCommandResult::succeeded(['processed' => true])
+    );
+    $client = new RecordingTalktoHttpClient(new TalktoHttpResponse(
+        statusCode: 200,
+        body: json_encode(['received' => true, 'status' => 'queued']),
+    ));
+    app()->instance(TalktoHttpClient::class, $client);
+
+    (new SendTalktoMessage($callback->id))->handle(app(TalktoOutgoingEnvelopeBuilder::class), app(TalktoRetryPolicy::class));
+
+    $callback->refresh();
+
+    expect($callback->overall_status)->toBe('failed_final')
+        ->and($callback->destination_action_status)->toBe('rejected')
+        ->and($callback->last_error)->toContain('invalid_callback_response');
+});
+
 test('custom client exceptions are handled like transport exceptions', function (): void {
     $client = new RecordingTalktoHttpClient(new RuntimeException('custom client transport exception'));
     app()->instance(TalktoHttpClient::class, $client);
@@ -196,6 +320,32 @@ function httpClientOutgoingMessage(string $messageId, array $attributes = []): T
         'attempts' => 0,
         'retry_count' => 0,
         'max_attempts' => 5,
+    ], $attributes));
+}
+
+function httpClientIncomingMessage(string $messageId, array $attributes = []): TalktoMessage
+{
+    $payload = ['resource_id' => $messageId];
+
+    return TalktoMessage::query()->create(array_merge([
+        'message_id' => $messageId,
+        'correlation_id' => 'correlation-'.$messageId,
+        'direction' => 'incoming',
+        'source_service' => 'peer',
+        'target_service' => 'testing',
+        'command' => 'domain.command',
+        'business_key' => 'business-key-'.$messageId,
+        'idempotency_key' => 'incoming-'.$messageId,
+        'payload' => $payload,
+        'payload_hash' => app(TalktoPayloadHasher::class)->hash($payload),
+        'schema_version' => 1,
+        'destination_receive_status' => 'received',
+        'destination_action_status' => 'succeeded',
+        'overall_status' => 'succeeded',
+        'attempts' => 1,
+        'retry_count' => 0,
+        'max_attempts' => 5,
+        'received_at' => now(),
     ], $attributes));
 }
 
