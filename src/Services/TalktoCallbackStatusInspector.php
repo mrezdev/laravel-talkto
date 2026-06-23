@@ -350,10 +350,11 @@ class TalktoCallbackStatusInspector
 
     private function eventSummary(TalktoMessage $message, ?TalktoMessage $callbackMessage = null): array
     {
-        $messageIds = array_values(array_filter([
-            $message->id,
-            $callbackMessage?->id,
-        ], fn (mixed $id): bool => $id !== null));
+        $messageIds = [$message->id];
+
+        if ($callbackMessage?->id !== null) {
+            $messageIds[] = $callbackMessage->id;
+        }
 
         $eventClass = $this->models->event();
         $eventTypes = $eventClass::query()

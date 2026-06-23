@@ -219,7 +219,7 @@ class TalktoSecurityAuditor
 
             $headers = $target->headers();
 
-            if (is_array($headers) && $headers !== []) {
+            if ($headers !== []) {
                 $findings[] = $this->finding(
                     'info',
                     'outgoing_target_custom_headers',
