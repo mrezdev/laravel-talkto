@@ -18,13 +18,14 @@ class TalktoResultCallbackMessageFactory
 
     public function createForIncomingResult(
         TalktoMessage $incomingMessage,
-        IncomingCommandResultContract $result
+        IncomingCommandResultContract $result,
+        array $options = []
     ): TalktoMessage {
         if (! $incomingMessage->isIncoming()) {
             throw new InvalidArgumentException('Talkto result callback messages can only be created for incoming messages.');
         }
 
-        $callback = TalktoResultCallbackData::fromIncomingMessageResult($incomingMessage, $result);
+        $callback = TalktoResultCallbackData::fromIncomingMessageResult($incomingMessage, $result, $options);
 
         return $this->outgoingMessages->create(
             target: $callback->target,

@@ -41,30 +41,41 @@ beforeEach(function (): void {
     ]);
 });
 
-test('callback sender builds signed envelope and posts to configured callback endpoint', function (): void {
-    Http::fake(['https://source.test/callbacks/talkto' => Http::response(['accepted' => true], 200)]);
+test('callback sender queues durable callback message and dispatches send job', function (): void {
+    Bus::fake();
+    Http::fake();
 
     $message = p04IncomingMessage('p04-send-ok');
     $result = TalktoIncomingCommandResult::succeeded(['processed' => true]);
 
     $summary = app(ResultCallbackSenderContract::class)->sendResult($message, $result);
+    $callback = TalktoMessage::query()
+        ->where('parent_message_id', 'p04-send-ok')
+        ->where('command', 'talkto.result')
+        ->sole();
 
-    expect($summary['sent'])->toBeTrue()
-        ->and($summary['status'])->toBe('sent')
-        ->and($summary['original_message_id'])->toBe('p04-send-ok');
+    expect($summary)->toMatchArray([
+        'sent' => false,
+        'queued' => true,
+        'status' => 'queued',
+        'message_id' => $callback->message_id,
+        'callback_message_id' => $callback->message_id,
+        'callback_message_db_id' => $callback->id,
+        'original_message_id' => 'p04-send-ok',
+        'target' => 'source-service',
+        'command' => 'talkto.result',
+    ])->and($callback->direction)->toBe('outgoing')
+        ->and($callback->target_service)->toBe('source-service')
+        ->and($callback->parent_message_id)->toBe('p04-send-ok')
+        ->and($callback->payload)->toMatchArray([
+            'original_message_id' => 'p04-send-ok',
+            'original_command' => 'domain.command',
+            'status' => 'succeeded',
+        ])
+        ->and(TalktoEvent::query()->where('message_id', 'p04-send-ok')->where('event_type', 'result_callback_queued')->where('meta->durable', true)->exists())->toBeTrue();
 
-    Http::assertSent(function ($request): bool {
-        $payload = $request->data();
-
-        return $request->url() === 'https://source.test/callbacks/talkto'
-            && $request->hasHeader('X-Talkto-Signature')
-            && ($payload['command'] ?? null) === 'talkto.result'
-            && ($payload['payload']['original_message_id'] ?? null) === 'p04-send-ok'
-            && ($payload['payload']['status'] ?? null) === 'succeeded';
-    });
-
-    expect(TalktoEvent::query()->where('message_id', 'p04-send-ok')->where('event_type', 'result_callback_sending_started')->exists())->toBeTrue()
-        ->and(TalktoEvent::query()->where('message_id', 'p04-send-ok')->where('event_type', 'result_callback_sent')->exists())->toBeTrue();
+    Bus::assertDispatched(SendTalktoMessage::class, fn (SendTalktoMessage $job): bool => $job->talktoMessageId === $callback->id);
+    Http::assertNothingSent();
 });
 
 test('callback message factory creates outgoing durable callback message from incoming result', function (): void {
@@ -102,6 +113,60 @@ test('callback message factory creates outgoing durable callback message from in
         ->and(TalktoEvent::query()->where('message_id', $callback->message_id)->where('event_type', 'message_created')->exists())->toBeTrue();
 });
 
+test('callback sender preserves custom callback message id option', function (): void {
+    Bus::fake();
+    Http::fake();
+
+    $message = p04IncomingMessage('p04-custom-sender-callback-id');
+
+    $summary = app(ResultCallbackSenderContract::class)->sendResult(
+        $message,
+        TalktoIncomingCommandResult::succeeded(['processed' => true]),
+        ['callback_message_id' => 'custom-callback-id']
+    );
+    $callback = TalktoMessage::query()
+        ->where('idempotency_key', 'talkto:callback:p04-custom-sender-callback-id:succeeded')
+        ->sole();
+
+    expect($callback->message_id)->toBe('custom-callback-id')
+        ->and($summary)->toMatchArray([
+            'sent' => false,
+            'queued' => true,
+            'status' => 'queued',
+            'message_id' => 'custom-callback-id',
+            'callback_message_id' => 'custom-callback-id',
+            'callback_message_db_id' => $callback->id,
+            'original_message_id' => 'p04-custom-sender-callback-id',
+        ]);
+
+    Bus::assertDispatched(SendTalktoMessage::class, fn (SendTalktoMessage $job): bool => $job->talktoMessageId === $callback->id);
+    Http::assertNothingSent();
+});
+
+test('callback message factory preserves custom callback message id option without dispatching', function (): void {
+    Bus::fake();
+    Http::fake();
+
+    $incoming = p04IncomingMessage('p04-custom-factory-callback-id');
+
+    $callback = app(TalktoResultCallbackMessageFactory::class)->createForIncomingResult(
+        $incoming,
+        TalktoIncomingCommandResult::succeeded(['processed' => true]),
+        ['callback_message_id' => 'custom-factory-callback-id']
+    );
+
+    expect($callback->message_id)->toBe('custom-factory-callback-id')
+        ->and($callback->parent_message_id)->toBe('p04-custom-factory-callback-id')
+        ->and($callback->payload)->toMatchArray([
+            'original_message_id' => 'p04-custom-factory-callback-id',
+            'original_command' => 'domain.command',
+            'status' => 'succeeded',
+        ]);
+
+    Bus::assertNotDispatched(SendTalktoMessage::class);
+    Http::assertNothingSent();
+});
+
 test('callback message factory reuses duplicate durable callback for same original and status', function (): void {
     $incoming = p04IncomingMessage('p04-durable-idempotent');
     $factory = app(TalktoResultCallbackMessageFactory::class);
@@ -116,6 +181,27 @@ test('callback message factory reuses duplicate durable callback for same origin
         ->and(TalktoMessage::query()
             ->where('parent_message_id', 'p04-durable-idempotent')
             ->where('command', 'talkto.result')
+            ->count())->toBe(1);
+});
+
+test('callback message factory reuses custom callback id duplicate by deterministic idempotency key', function (): void {
+    $incoming = p04IncomingMessage('p04-custom-id-duplicate');
+    $factory = app(TalktoResultCallbackMessageFactory::class);
+
+    $first = $factory->createForIncomingResult(
+        $incoming,
+        TalktoIncomingCommandResult::succeeded(['processed' => true]),
+        ['callback_message_id' => 'custom-duplicate-callback-id']
+    );
+    $second = $factory->createForIncomingResult(
+        $incoming,
+        TalktoIncomingCommandResult::succeeded(['processed' => false])
+    );
+
+    expect($second->id)->toBe($first->id)
+        ->and($second->message_id)->toBe('custom-duplicate-callback-id')
+        ->and(TalktoMessage::query()
+            ->where('idempotency_key', 'talkto:callback:p04-custom-id-duplicate:succeeded')
             ->count())->toBe(1);
 });
 
@@ -143,28 +229,25 @@ test('callback message factory does not send http or dispatch send job', functio
     Bus::assertNotDispatched(SendTalktoMessage::class);
 });
 
-test('default v2 callback sender builds nonce and payload hash headers', function (): void {
+test('default v2 callback envelope builder still builds nonce and payload hash headers', function (): void {
     p04UseDefaultV2Security();
-    Http::fake(['https://source.test/callbacks/talkto' => Http::response(['accepted' => true], 200)]);
 
     $message = p04IncomingMessage('p04-send-v2-default');
-
-    $summary = app(ResultCallbackSenderContract::class)->sendResult(
+    $envelope = app(TalktoResultCallbackEnvelopeBuilder::class)->buildEnvelope(
         $message,
         TalktoIncomingCommandResult::succeeded(['processed' => true])
     );
+    $headers = app(TalktoResultCallbackEnvelopeBuilder::class)->buildHeaders($envelope);
 
-    expect($summary['sent'])->toBeTrue();
-
-    Http::assertSent(function ($request): bool {
-        return $request->hasHeader('X-Talkto-Signature-Version', 'v2')
-            && $request->hasHeader('X-Talkto-Nonce')
-            && $request->hasHeader('X-Talkto-Payload-Hash');
-    });
+    expect($headers)->toHaveKey('X-Talkto-Signature')
+        ->and($headers)->toHaveKey('X-Talkto-Nonce')
+        ->and($headers)->toHaveKey('X-Talkto-Payload-Hash')
+        ->and($headers['X-Talkto-Signature-Version'])->toBe('v2');
 });
 
 test('callback sender skips without sending when callbacks are disabled', function (): void {
     config(['talkto.callbacks.enabled' => false]);
+    Bus::fake();
     Http::fake();
 
     $message = p04IncomingMessage('p04-send-disabled');
@@ -175,16 +258,45 @@ test('callback sender skips without sending when callbacks are disabled', functi
 
     expect($summary)->toMatchArray([
         'sent' => false,
+        'queued' => false,
         'status' => 'skipped',
+        'message_id' => null,
         'original_message_id' => 'p04-send-disabled',
         'error' => 'callbacks_disabled',
-    ])->and(TalktoEvent::query()->where('message_id', 'p04-send-disabled')->where('event_type', 'result_callback_skipped')->exists())->toBeTrue();
+    ])->and(TalktoMessage::query()->where('parent_message_id', 'p04-send-disabled')->where('command', 'talkto.result')->exists())->toBeFalse()
+        ->and(TalktoEvent::query()->where('message_id', 'p04-send-disabled')->where('event_type', 'result_callback_skipped')->exists())->toBeTrue();
 
+    Bus::assertNotDispatched(SendTalktoMessage::class);
     Http::assertNothingSent();
 });
 
-test('callback sender records failed events without exposing secrets', function (): void {
-    Http::fake(['https://source.test/callbacks/talkto' => Http::response('temporary unavailable shared-callback-secret', 503)]);
+test('callback sender rejects non incoming messages without dispatching', function (): void {
+    Bus::fake();
+    Http::fake();
+
+    $message = p04OutgoingMessage('p04-send-invalid-direction');
+
+    $summary = app(ResultCallbackSenderContract::class)->sendResult(
+        $message,
+        TalktoIncomingCommandResult::succeeded(['processed' => true])
+    );
+
+    expect($summary)->toMatchArray([
+        'sent' => false,
+        'queued' => false,
+        'status' => 'skipped',
+        'message_id' => null,
+        'original_message_id' => 'p04-send-invalid-direction',
+        'error' => 'invalid_direction',
+    ])->and(TalktoMessage::query()->where('parent_message_id', 'p04-send-invalid-direction')->where('command', 'talkto.result')->exists())->toBeFalse();
+
+    Bus::assertNotDispatched(SendTalktoMessage::class);
+    Http::assertNothingSent();
+});
+
+test('callback sender records queue failure events without exposing secrets', function (): void {
+    config(['talkto.jobs.send_message' => P04FailingCallbackSendJob::class]);
+    Http::fake();
 
     $message = p04IncomingMessage('p04-send-failed');
     $summary = app(ResultCallbackSenderContract::class)->sendResult(
@@ -195,9 +307,81 @@ test('callback sender records failed events without exposing secrets', function 
     $events = TalktoEvent::query()->where('message_id', 'p04-send-failed')->get();
     $combinedMeta = $events->map(fn (TalktoEvent $event): string => json_encode($event->meta))->implode("\n");
 
-    expect($summary['sent'])->toBeFalse()
-        ->and(TalktoEvent::query()->where('message_id', 'p04-send-failed')->where('event_type', 'result_callback_failed')->exists())->toBeTrue()
+    expect($summary)->toMatchArray([
+        'sent' => false,
+        'queued' => false,
+        'status' => 'failed',
+        'original_message_id' => 'p04-send-failed',
+        'error' => 'queue_failed',
+    ])->and($summary['message_id'])->not->toBeNull()
+        ->and(TalktoEvent::query()->where('message_id', 'p04-send-failed')->where('event_type', 'result_callback_queue_failed')->exists())->toBeTrue()
+        ->and($combinedMeta)->toContain('[redacted]')
         ->and($combinedMeta)->not->toContain('shared-callback-secret');
+
+    Http::assertNothingSent();
+});
+
+test('callback sender reuses handled durable callback without dispatching duplicate job', function (): void {
+    Bus::fake();
+    Http::fake();
+
+    $message = p04IncomingMessage('p04-send-duplicate');
+    $result = TalktoIncomingCommandResult::succeeded(['processed' => true]);
+
+    $first = app(ResultCallbackSenderContract::class)->sendResult($message, $result);
+    $callback = TalktoMessage::query()
+        ->where('parent_message_id', 'p04-send-duplicate')
+        ->where('command', 'talkto.result')
+        ->sole();
+    $callback->forceFill([
+        'transport_status' => 'sent',
+        'overall_status' => 'completed',
+        'completed_at' => now(),
+    ])->save();
+
+    $second = app(ResultCallbackSenderContract::class)->sendResult($message, $result);
+
+    expect($first['queued'])->toBeTrue()
+        ->and($second)->toMatchArray([
+            'sent' => false,
+            'queued' => false,
+            'status' => 'completed',
+            'message_id' => $callback->message_id,
+            'original_message_id' => 'p04-send-duplicate',
+            'duplicate' => true,
+        ])
+        ->and(TalktoMessage::query()->where('parent_message_id', 'p04-send-duplicate')->where('command', 'talkto.result')->count())->toBe(1);
+
+    Bus::assertDispatchedTimes(SendTalktoMessage::class, 1);
+    Http::assertNothingSent();
+});
+
+test('callback sender queues retryable failure result as durable callback', function (): void {
+    Bus::fake();
+    Http::fake();
+
+    $message = p04IncomingMessage('p04-send-retryable-result');
+
+    $summary = app(ResultCallbackSenderContract::class)->sendResult(
+        $message,
+        TalktoIncomingCommandResult::failedRetryable('Temporary failure.', RuntimeException::class)
+    );
+    $callback = TalktoMessage::query()
+        ->where('parent_message_id', 'p04-send-retryable-result')
+        ->where('command', 'talkto.result')
+        ->sole();
+
+    expect($summary['queued'])->toBeTrue()
+        ->and($callback->payload)->toMatchArray([
+            'original_message_id' => 'p04-send-retryable-result',
+            'status' => 'failed_retryable',
+            'retryable' => true,
+            'error_class' => RuntimeException::class,
+            'error_message' => 'Temporary failure.',
+        ]);
+
+    Bus::assertDispatched(SendTalktoMessage::class, fn (SendTalktoMessage $job): bool => $job->talktoMessageId === $callback->id);
+    Http::assertNothingSent();
 });
 
 test('callback receiver verifies signed callback and updates original outgoing message to completed', function (): void {
@@ -887,5 +1071,13 @@ class P04CustomCallbackReceiver implements ResultCallbackReceiverContract
     public function receiveResult(array $envelope, array $headers = []): mixed
     {
         return ['accepted' => true];
+    }
+}
+
+class P04FailingCallbackSendJob extends SendTalktoMessage
+{
+    public static function dispatch(...$arguments): mixed
+    {
+        throw new RuntimeException('Dispatch failed with shared-callback-secret.');
     }
 }

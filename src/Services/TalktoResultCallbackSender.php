@@ -3,10 +3,12 @@
 namespace Mrezdev\LaravelTalkto\Services;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Http;
 use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
+use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
+use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
 use Throwable;
 
@@ -16,7 +18,7 @@ use Throwable;
 class TalktoResultCallbackSender implements ResultCallbackSenderContract
 {
     public function __construct(
-        private readonly TalktoResultCallbackEnvelopeBuilder $builder,
+        private readonly TalktoResultCallbackMessageFactory $callbackMessages,
         private readonly TalktoSecurityRedactor $redactor
     ) {}
 
@@ -29,6 +31,7 @@ class TalktoResultCallbackSender implements ResultCallbackSenderContract
 
             return [
                 'sent' => false,
+                'queued' => false,
                 'status' => 'skipped',
                 'message_id' => null,
                 'original_message_id' => (string) ($message->message_id ?? ''),
@@ -43,6 +46,7 @@ class TalktoResultCallbackSender implements ResultCallbackSenderContract
 
             return [
                 'sent' => false,
+                'queued' => false,
                 'status' => 'skipped',
                 'message_id' => null,
                 'original_message_id' => (string) ($message->message_id ?? ''),
@@ -50,68 +54,42 @@ class TalktoResultCallbackSender implements ResultCallbackSenderContract
             ];
         }
 
-        $envelope = $this->builder->buildEnvelope($message, $result, $options);
-        $target = (string) $envelope['target'];
-
-        $this->recordEvent($message, 'result_callback_sending_started', null, 'sending', [
-            'callback_message_id' => $envelope['message_id'],
-            'target' => $target,
-            'command' => $envelope['command'],
-        ]);
+        $callbackMessage = null;
 
         try {
-            $headers = $this->builder->buildHeaders($envelope);
-            $endpoint = $this->builder->callbackEndpointFor($target);
-            $response = Http::withHeaders($headers)
-                ->timeout($this->builder->timeoutFor($target))
-                ->post($endpoint, $envelope);
-
-            if ($response->successful()) {
-                $this->recordEvent($message, 'result_callback_sent', 'sending', 'sent', [
-                    'callback_message_id' => $envelope['message_id'],
-                    'target' => $target,
-                    'http_status' => $response->status(),
-                    'response_excerpt' => $this->excerpt($response->body()),
-                ]);
-
-                return [
-                    'sent' => true,
-                    'status' => 'sent',
-                    'message_id' => $envelope['message_id'],
-                    'original_message_id' => $envelope['payload']['original_message_id'] ?? null,
-                    'http_status' => $response->status(),
-                ];
+            if (! $message instanceof TalktoMessage) {
+                throw new \InvalidArgumentException('Talkto result callbacks require a TalktoMessage instance.');
             }
 
-            $this->recordEvent($message, 'result_callback_failed', 'sending', 'failed', [
-                'callback_message_id' => $envelope['message_id'],
-                'target' => $target,
-                'http_status' => $response->status(),
-                'response_excerpt' => $this->excerpt($response->body()),
-            ]);
+            $callbackMessage = $this->callbackMessages->createForIncomingResult($message, $result, $options);
 
-            return [
-                'sent' => false,
-                'status' => 'failed',
-                'message_id' => $envelope['message_id'],
-                'original_message_id' => $envelope['payload']['original_message_id'] ?? null,
-                'http_status' => $response->status(),
-                'error' => 'http_error',
-            ];
+            if ($this->alreadyHandled($callbackMessage)) {
+                return $this->duplicateSummary($message, $callbackMessage);
+            }
+
+            $this->dispatchSendJob((int) $callbackMessage->id);
+            $this->recordQueuedEvent($message, $callbackMessage);
+
+            return $this->queuedSummary($message, $callbackMessage);
         } catch (Throwable $throwable) {
-            $this->recordEvent($message, 'result_callback_failed', 'sending', 'failed', [
-                'callback_message_id' => $envelope['message_id'],
-                'target' => $target,
+            $this->recordEvent($message, 'result_callback_queue_failed', null, 'failed', [
+                'callback_message_id' => $callbackMessage?->message_id,
+                'callback_message_db_id' => $callbackMessage?->id,
+                'target' => $callbackMessage?->target_service,
+                'command' => $callbackMessage?->command,
                 'error_class' => $throwable::class,
                 'error_message' => $this->excerpt($throwable->getMessage(), 500),
             ]);
 
             return [
                 'sent' => false,
+                'queued' => false,
                 'status' => 'failed',
-                'message_id' => $envelope['message_id'],
-                'original_message_id' => $envelope['payload']['original_message_id'] ?? null,
-                'error' => 'send_failed',
+                'message_id' => $callbackMessage?->message_id,
+                'callback_message_id' => $callbackMessage?->message_id,
+                'callback_message_db_id' => $callbackMessage?->id,
+                'original_message_id' => (string) ($message->message_id ?? ''),
+                'error' => 'queue_failed',
             ];
         }
     }
@@ -138,6 +116,92 @@ class TalktoResultCallbackSender implements ResultCallbackSenderContract
         return is_string($class) && is_a($class, TalktoEvent::class, true)
             ? $class
             : TalktoEvent::class;
+    }
+
+    private function dispatchSendJob(int $messageId): void
+    {
+        $jobClass = $this->sendJobClass();
+        $pendingDispatch = $jobClass::dispatch($messageId);
+
+        if (is_object($pendingDispatch) && method_exists($pendingDispatch, 'afterCommit')) {
+            $pendingDispatch->afterCommit();
+        }
+    }
+
+    private function sendJobClass(): string
+    {
+        $class = config('talkto.jobs.send_message', SendTalktoMessage::class);
+
+        return is_string($class) && is_a($class, SendTalktoMessage::class, true)
+            ? $class
+            : SendTalktoMessage::class;
+    }
+
+    private function recordQueuedEvent(Model $message, TalktoMessage $callbackMessage): void
+    {
+        $this->recordEvent($message, 'result_callback_queued', null, 'queued', [
+            'callback_message_id' => $callbackMessage->message_id,
+            'callback_message_db_id' => $callbackMessage->id,
+            'target' => $callbackMessage->target_service,
+            'command' => $callbackMessage->command,
+            'callback_status' => $this->callbackStatus($callbackMessage),
+            'durable' => true,
+        ]);
+    }
+
+    private function queuedSummary(Model $message, TalktoMessage $callbackMessage): array
+    {
+        return [
+            'sent' => false,
+            'queued' => true,
+            'status' => 'queued',
+            'message_id' => $callbackMessage->message_id,
+            'callback_message_id' => $callbackMessage->message_id,
+            'callback_message_db_id' => $callbackMessage->id,
+            'original_message_id' => (string) ($message->message_id ?? ''),
+            'target' => $callbackMessage->target_service,
+            'command' => $callbackMessage->command,
+        ];
+    }
+
+    private function duplicateSummary(Model $message, TalktoMessage $callbackMessage): array
+    {
+        return [
+            'sent' => false,
+            'queued' => false,
+            'status' => $callbackMessage->overall_status,
+            'message_id' => $callbackMessage->message_id,
+            'callback_message_id' => $callbackMessage->message_id,
+            'callback_message_db_id' => $callbackMessage->id,
+            'original_message_id' => (string) ($message->message_id ?? ''),
+            'target' => $callbackMessage->target_service,
+            'command' => $callbackMessage->command,
+            'duplicate' => true,
+        ];
+    }
+
+    private function alreadyHandled(TalktoMessage $callbackMessage): bool
+    {
+        return in_array($callbackMessage->overall_status, [
+            TalktoMessageStatus::Completed->value,
+            TalktoMessageStatus::Succeeded->value,
+            TalktoMessageStatus::FailedFinal->value,
+            TalktoMessageStatus::DestinationReceived->value,
+            TalktoMessageStatus::Sent->value,
+        ], true);
+    }
+
+    private function callbackStatus(TalktoMessage $callbackMessage): ?string
+    {
+        $payload = $callbackMessage->payload;
+
+        if (! is_array($payload)) {
+            return null;
+        }
+
+        $status = $payload['status'] ?? null;
+
+        return is_scalar($status) && (string) $status !== '' ? (string) $status : null;
     }
 
     private function excerpt(mixed $value, int $limit = 2000): ?string

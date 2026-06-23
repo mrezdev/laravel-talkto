@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
+use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
@@ -161,8 +162,9 @@ test('trace reporter redacts sensitive text excerpts fully', function (): void {
         ->and($attempt['response_excerpt'])->toContain('"visible":"safe"');
 });
 
-test('callback sender events do not expose configured secrets', function (): void {
-    Http::fake(['https://source.test/callbacks/talkto' => Http::response('temporary outgoing-test-shared-secret', 503)]);
+test('callback sender queue failure events do not expose configured secrets', function (): void {
+    config(['talkto.jobs.send_message' => SecurityFailingSecretCallbackSendJob::class]);
+    Http::fake();
 
     $message = securityAuditIncomingMessage('security-callback-redaction');
 
@@ -179,10 +181,13 @@ test('callback sender events do not expose configured secrets', function (): voi
 
     expect($encodedEvents)->toContain('[redacted]')
         ->and($encodedEvents)->not->toContain('outgoing-test-shared-secret');
+
+    Http::assertNothingSent();
 });
 
-test('callback sender failed response excerpts redact json-like token values', function (): void {
-    Http::fake(['https://source.test/callbacks/talkto' => Http::response('{"token":"raw-token","visible":"safe"}', 503)]);
+test('callback sender queue failure excerpts redact json-like token values', function (): void {
+    config(['talkto.jobs.send_message' => SecurityFailingJsonCallbackSendJob::class]);
+    Http::fake();
 
     $message = securityAuditIncomingMessage('security-callback-json-redaction');
 
@@ -193,11 +198,13 @@ test('callback sender failed response excerpts redact json-like token values', f
 
     $failed = TalktoEvent::query()
         ->where('message_id', 'security-callback-json-redaction')
-        ->where('event_type', 'result_callback_failed')
+        ->where('event_type', 'result_callback_queue_failed')
         ->firstOrFail();
 
-    expect($failed->meta['response_excerpt'])->not->toContain('raw-token')
-        ->and($failed->meta['response_excerpt'])->toContain('"visible":"safe"');
+    expect($failed->meta['error_message'])->not->toContain('raw-token')
+        ->and($failed->meta['error_message'])->toContain('"visible":"safe"');
+
+    Http::assertNothingSent();
 });
 
 test('security auditor reports expected findings without exposing secrets', function (): void {
@@ -439,4 +446,20 @@ function securityAuditIncomingMessage(string $messageId, array $attributes = [])
         'max_attempts' => 5,
         'received_at' => now(),
     ], $attributes));
+}
+
+class SecurityFailingSecretCallbackSendJob extends SendTalktoMessage
+{
+    public static function dispatch(...$arguments): mixed
+    {
+        throw new RuntimeException('temporary outgoing-test-shared-secret');
+    }
+}
+
+class SecurityFailingJsonCallbackSendJob extends SendTalktoMessage
+{
+    public static function dispatch(...$arguments): mixed
+    {
+        throw new RuntimeException('{"token":"raw-token","visible":"safe"}');
+    }
 }

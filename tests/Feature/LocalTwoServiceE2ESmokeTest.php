@@ -1,9 +1,7 @@
 <?php
 
-use Illuminate\Http\Client\Request as HttpClientRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request as HttpRequest;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackReceiverContract;
@@ -73,7 +71,6 @@ test('local two service source to target command flow signs verifies handles and
     P06InventoryHandler::$sendCallback = true;
     $transport = new P06LocalTwoServiceHttpClient;
     app()->instance(TalktoHttpClient::class, $transport);
-    phase6FakeCallbackHttp();
 
     $outgoing = app(TalktoOutgoingMessageFactory::class)->create(
         target: P06_TARGET_SERVICE,
@@ -122,6 +119,34 @@ test('local two service source to target command flow signs verifies handles and
     (new ProcessIncomingTalktoMessage($incoming->id))->handle();
 
     $incoming = $incoming->fresh();
+    $callbackMessage = TalktoMessage::query()
+        ->where('direction', 'outgoing')
+        ->where('command', 'talkto.result')
+        ->where('parent_message_id', 'phase6-source-to-target')
+        ->where('target_service', P06_SOURCE_SERVICE)
+        ->firstOrFail();
+
+    expect(P06InventoryHandler::$callbackSummaries[0])->toMatchArray([
+        'sent' => false,
+        'queued' => true,
+        'status' => 'queued',
+        'message_id' => $callbackMessage->message_id,
+        'callback_message_id' => $callbackMessage->message_id,
+        'callback_message_db_id' => $callbackMessage->id,
+        'original_message_id' => 'phase6-source-to-target',
+        'target' => P06_SOURCE_SERVICE,
+        'command' => 'talkto.result',
+    ])->and($callbackMessage->payload)->toMatchArray([
+        'original_message_id' => 'phase6-source-to-target',
+        'original_command' => P06_COMMAND,
+        'status' => 'succeeded',
+    ]);
+
+    Queue::assertPushed(SendTalktoMessage::class, fn (SendTalktoMessage $job): bool => $job->talktoMessageId === $callbackMessage->id);
+
+    (new SendTalktoMessage($callbackMessage->id))->handle(app(TalktoOutgoingEnvelopeBuilder::class), app(TalktoRetryPolicy::class));
+
+    $callbackMessage = $callbackMessage->fresh();
     $targetNonceRows = TalktoNonce::query()->get()->toArray();
     $targetEvents = TalktoEvent::query()->get()->toArray();
 
@@ -144,15 +169,14 @@ test('local two service source to target command flow signs verifies handles and
         ->and(P06InventoryHandler::$payloads)->toBe([phase6ProductPayload()])
         ->and($incoming->destination_action_status)->toBe('succeeded')
         ->and($incoming->overall_status)->toBe('succeeded')
-        ->and(P06InventoryHandler::$callbackSummaries[0])->toMatchArray([
-            'sent' => true,
-            'status' => 'sent',
-            'original_message_id' => 'phase6-source-to-target',
-            'http_status' => 200,
-        ])
         ->and($callbackRequest['headers']['X-Talkto-Signature-Version'])->toBe('v2')
         ->and($callbackRequest['headers'])->toHaveKey('X-Talkto-Nonce')
         ->and($callbackRequest['headers'])->toHaveKey('X-Talkto-Payload-Hash')
+        ->and($callbackMessage->direction)->toBe('outgoing')
+        ->and($callbackMessage->transport_status)->toBe('sent')
+        ->and($callbackMessage->destination_receive_status)->toBe('received')
+        ->and($callbackMessage->destination_action_status)->toBe('applied')
+        ->and($callbackMessage->overall_status)->toBe('completed')
         ->and(phase6NonceRows(P06_TARGET_SERVICE, P06_SOURCE_SERVICE))->toHaveCount(1)
         ->and($outgoing->direction)->toBe('outgoing')
         ->and($outgoing->transport_status)->toBe('sent')
@@ -428,36 +452,6 @@ function phase6ReceiveCallback(array $envelope, array $headers): JsonResponse
     return app(TalktoResultCallbackController::class)->__invoke($request, app(ResultCallbackReceiverContract::class));
 }
 
-function phase6FakeCallbackHttp(): void
-{
-    Http::fake(function (HttpClientRequest $request) {
-        P06InventoryHandler::$callbackRequests[] = [
-            'url' => $request->url(),
-            'headers' => phase6FlattenHeaders($request->headers()),
-            'envelope' => $request->data(),
-        ];
-
-        $previousTalktoConfig = config('talkto');
-        phase6UseWebsiteServiceConfig();
-
-        try {
-            $response = phase6ReceiveCallback(
-                $request->data(),
-                phase6FlattenHeaders($request->headers())
-            );
-        } finally {
-            config(['talkto' => $previousTalktoConfig]);
-        }
-
-        P06InventoryHandler::$callbackResponses[] = [
-            'status' => $response->getStatusCode(),
-            'body' => $response->getData(true),
-        ];
-
-        return Http::response($response->getData(true), $response->getStatusCode());
-    });
-}
-
 function phase6FlattenHeaders(array $headers): array
 {
     $flattened = [];
@@ -567,21 +561,37 @@ class P06LocalTwoServiceHttpClient implements TalktoHttpClient
 
     public function post(string $url, array $headers, array $envelope, int $timeout): TalktoHttpResponse
     {
-        $this->requests[] = [
-            'url' => $url,
-            'headers' => $headers,
-            'envelope' => $envelope,
-            'timeout' => $timeout,
-        ];
+        if (str_starts_with($url, 'https://inventory-service.test/')) {
+            $this->requests[] = [
+                'url' => $url,
+                'headers' => $headers,
+                'envelope' => $envelope,
+                'timeout' => $timeout,
+            ];
 
-        $previousTalktoConfig = config('talkto');
-        phase6UseInventoryServiceConfig();
-
-        try {
-            $response = phase6Receive($envelope, $headers);
-        } finally {
-            config(['talkto' => $previousTalktoConfig]);
+            return $this->routeToInventoryReceive($envelope, $headers);
         }
+
+        if (str_starts_with($url, 'https://website-service.test/')) {
+            P06InventoryHandler::$callbackRequests[] = [
+                'url' => $url,
+                'headers' => $headers,
+                'envelope' => $envelope,
+                'timeout' => $timeout,
+            ];
+
+            return $this->routeToWebsiteCallback($envelope, $headers);
+        }
+
+        throw new RuntimeException("Unexpected local Talkto URL [{$url}].");
+    }
+
+    private function routeToInventoryReceive(array $envelope, array $headers): TalktoHttpResponse
+    {
+        $response = $this->withTalktoConfig(
+            static fn (): JsonResponse => phase6Receive($envelope, $headers),
+            static fn (): null => phase6UseInventoryServiceConfig()
+        );
 
         $body = json_encode($response->getData(true), JSON_UNESCAPED_SLASHES);
         $this->responses[] = [
@@ -589,6 +599,39 @@ class P06LocalTwoServiceHttpClient implements TalktoHttpClient
             'body' => $response->getData(true),
         ];
 
+        return $this->toHttpResponse($response, $body);
+    }
+
+    private function routeToWebsiteCallback(array $envelope, array $headers): TalktoHttpResponse
+    {
+        $response = $this->withTalktoConfig(
+            static fn (): JsonResponse => phase6ReceiveCallback($envelope, $headers),
+            static fn (): null => phase6UseWebsiteServiceConfig()
+        );
+
+        $body = json_encode($response->getData(true), JSON_UNESCAPED_SLASHES);
+        P06InventoryHandler::$callbackResponses[] = [
+            'status' => $response->getStatusCode(),
+            'body' => $response->getData(true),
+        ];
+
+        return $this->toHttpResponse($response, $body);
+    }
+
+    private function withTalktoConfig(Closure $callback, Closure $configure): JsonResponse
+    {
+        $previousTalktoConfig = config('talkto');
+        $configure();
+
+        try {
+            return $callback();
+        } finally {
+            config(['talkto' => $previousTalktoConfig]);
+        }
+    }
+
+    private function toHttpResponse(JsonResponse $response, string|false $body): TalktoHttpResponse
+    {
         return new TalktoHttpResponse(
             statusCode: $response->getStatusCode(),
             body: $body === false ? null : $body,
