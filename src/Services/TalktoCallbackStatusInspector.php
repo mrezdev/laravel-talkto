@@ -17,6 +17,7 @@ class TalktoCallbackStatusInspector
 {
     private const CALLBACK_EVENT_TYPES = [
         'result_callback_queued',
+        'result_callback_auto_dispatch_skipped',
         'result_callback_queue_failed',
         'result_callback_skipped',
         'result_callback_failed',

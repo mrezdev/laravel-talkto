@@ -137,6 +137,8 @@ Disable this only for a trusted central observer panel. Read-only pages can then
 
 Message detail pages show status, attempts, events, dead-letter information, and hidden payload/response placeholders by default.
 
+When a message has local callback context, the detail page can show a read-only Check Callback action. It opens a local callback status summary for the message, related callback message, attempts, events, and dead-letter state. The action does not resend, requeue, recreate callbacks, or call remote services.
+
 Trace pages show the local message timeline, related messages, attempts, events, and dead letters. Trace payloads are hidden unless payload display is explicitly enabled and the trace request asks for payload output.
 
 ## Retry Action

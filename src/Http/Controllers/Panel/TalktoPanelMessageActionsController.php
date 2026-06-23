@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelActionExecutor;
 use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelMessageQuery;
+use Mrezdev\LaravelTalkto\Services\TalktoCallbackStatusInspector;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelAuthorizer;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelJsonPresenter;
 
@@ -71,6 +72,33 @@ class TalktoPanelMessageActionsController
         }
 
         return $this->renderView('talkto::panel.messages.trace', $data);
+    }
+
+    public function callbackStatus(
+        string $message,
+        Request $request,
+        TalktoPanelAuthorizer $authorizer,
+        TalktoPanelMessageQuery $messages,
+        TalktoCallbackStatusInspector $callbackStatusInspector,
+    ): JsonResponse|View {
+        $authorizer->authorize();
+        $talktoMessage = $messages->findMessage($message);
+
+        abort_if($talktoMessage === null, 404);
+
+        $callbackStatus = $callbackStatusInspector->inspect($talktoMessage);
+        $data = [
+            'message' => $talktoMessage,
+            'callback_status' => $callbackStatus,
+        ];
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'callback_status' => $callbackStatus,
+            ]);
+        }
+
+        return $this->renderView('talkto::panel.messages.callback-status', $data);
     }
 
     private function renderView(string $view, array $data): View

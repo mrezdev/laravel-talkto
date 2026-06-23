@@ -31,6 +31,9 @@
                 </form>
             @endif
             <a class="inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50" href="{{ route($routePrefix.'messages.trace', ['message' => $message->message_id]) }}">{{ __('talkto::panel.common.view_trace') }}</a>
+            @if (($callback_status['applicable'] ?? false) === true)
+                <a class="inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50" href="{{ route($routePrefix.'messages.callback-status', ['message' => $message->message_id]) }}">{{ __('talkto::panel.callbacks.check') }}</a>
+            @endif
         </div>
     </section>
 

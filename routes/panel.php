@@ -11,6 +11,7 @@ Route::get('/', [TalktoPanelController::class, 'index'])->name('index');
 Route::get('/messages', [TalktoPanelMessagesController::class, 'index'])->name('messages.index');
 Route::post('/messages/{message}/retry', [TalktoPanelMessageActionsController::class, 'retry'])->name('messages.retry');
 Route::get('/messages/{message}/trace', [TalktoPanelMessageActionsController::class, 'trace'])->name('messages.trace');
+Route::get('/messages/{message}/callback-status', [TalktoPanelMessageActionsController::class, 'callbackStatus'])->name('messages.callback-status');
 Route::get('/messages/{message}', [TalktoPanelMessagesController::class, 'show'])->name('messages.show');
 Route::post('/dead-letters/{deadLetter}/reprocess', [TalktoPanelDeadLetterActionsController::class, 'reprocess'])->name('dead-letters.reprocess');
 Route::get('/connections', [TalktoPanelConnectionsController::class, 'index'])->name('connections.index');

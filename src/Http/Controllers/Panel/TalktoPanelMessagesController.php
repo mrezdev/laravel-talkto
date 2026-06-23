@@ -6,6 +6,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelMessageQuery;
+use Mrezdev\LaravelTalkto\Services\TalktoCallbackStatusInspector;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelAuthorizer;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelJsonPresenter;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelMessageFilters;
@@ -51,6 +52,7 @@ class TalktoPanelMessagesController
         TalktoPanelAuthorizer $authorizer,
         TalktoPanelMessageQuery $messages,
         TalktoPanelJsonPresenter $presenter,
+        TalktoCallbackStatusInspector $callbackStatusInspector,
     ): JsonResponse|View {
         $authorizer->authorize();
 
@@ -64,6 +66,7 @@ class TalktoPanelMessagesController
             'attempts' => $messages->attemptsFor($talktoMessage)->values(),
             'events' => $messages->eventsFor($talktoMessage)->values(),
             'dead_letter' => $messages->deadLetterFor($talktoMessage),
+            'callback_status' => $callbackStatusInspector->inspect($talktoMessage),
         ];
 
         if ($request->expectsJson()) {
@@ -72,6 +75,7 @@ class TalktoPanelMessagesController
                 'attempts' => $presenter->attempts($data['attempts']),
                 'events' => $presenter->events($data['events']),
                 'dead_letter' => $presenter->deadLetter($data['dead_letter']),
+                'callback_status' => $data['callback_status'],
             ]);
         }
 
