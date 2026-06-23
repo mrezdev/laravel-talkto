@@ -106,13 +106,32 @@ Likely cause: No queue worker, wrong queue connection, crashed worker, or stale 
 
 Safe fix: Start `php artisan queue:work`, inspect failed jobs, run `php artisan talkto:report`, and use `php artisan talkto:recover-stale --dry-run` before recovering stale locks.
 
-## Callback Not Received
+## Source Message Stuck At `destination_received`
 
-Symptom: The original outgoing message never receives destination result/status.
+Symptom: The original outgoing message reached the destination, but it never receives destination result/status.
 
-Likely cause: Callback route disabled, callbacks disabled, callback command not allowed, wrong callback endpoint, source has no incoming config for destination, or callback signature/nonce verification failed.
+Likely cause: In the durable callback design, the destination may have processed the command but the queued callback message is waiting, retrying, failed, dead-lettered, or rejected by the source callback receiver.
 
-Safe fix: Confirm `TALKTO_CALLBACKS_ENABLED=true`, package routes or host callback route are available, `talkto.result` is allowed from the destination, secrets match, and the callback endpoint points to the source app.
+Safe fix on the destination service:
+
+- confirm the incoming original message was processed
+- check whether the incoming message is `succeeded`, `skipped`, `failed_retryable`, or `failed_final`
+- find the outgoing durable callback message with command `talkto.result`
+- confirm its `parent_message_id` is the original incoming message id
+- confirm its `target_service` is the original source service
+- inspect callback status, attempts, events, and DLQ rows
+- confirm a queue worker is running so `SendTalktoMessage` can deliver callbacks
+
+Safe fix on the source service:
+
+- confirm package callback routes or the host callback route are available
+- confirm `TALKTO_CALLBACKS_ENABLED=true`
+- allow `talkto.result` from the destination under `talkto.incoming`
+- verify the callback secret matches the destination outgoing secret
+- verify nonce, timestamp, and signature settings match
+- confirm the original outgoing message exists and the callback original message id matches it
+
+If automatic queueing is expected, confirm `TALKTO_CALLBACKS_AUTO_DISPATCH=true`. If it is disabled, the destination handler or host workflow must call `ResultCallbackSenderContract::sendResult()` manually.
 
 ## DLQ Growth
 

@@ -72,24 +72,42 @@ Configure the source and handler:
 'outgoing' => [
     'website-service' => [
         'url' => env('TALKTO_WEBSITE_URL'),
-        'endpoint' => '/api/talkto/callback',
+        'endpoint' => '/api/talkto/receive',
+        'callback_endpoint' => '/api/talkto/callback',
         'secret' => env('TALKTO_TO_WEBSITE_SECRET'),
     ],
 ],
 ```
 
-Send a result callback from the handler workflow after the incoming message has a result:
+Return a result from the handler. The package applies the incoming status and then auto-queues the durable callback message.
+
+```php
+use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
+
+final class ReserveStockHandler implements TalktoIncomingCommandHandler
+{
+    public function handle(TalktoMessage $message): TalktoIncomingCommandResult
+    {
+        return TalktoIncomingCommandResult::succeeded([
+            'reserved' => true,
+        ]);
+    }
+}
+```
+
+The durable callback is stored as an outgoing `talkto.result` message and delivered by `SendTalktoMessage`.
+
+Manual sending is still supported for advanced flows:
 
 ```php
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
-use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
 
-$result = TalktoIncomingCommandResult::succeeded([
-    'reserved' => true,
-]);
-
-$callback = app(ResultCallbackSenderContract::class)->sendResult($message, $result);
+app(ResultCallbackSenderContract::class)->sendResult($message, $result);
 ```
+
+If manual sending and auto-dispatch both target the same original message/status, Laravel Talkto reuses the deterministic durable callback message and suppresses duplicate queueing where possible.
 
 ## Callback Security
 

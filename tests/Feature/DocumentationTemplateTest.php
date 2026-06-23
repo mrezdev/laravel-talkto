@@ -216,6 +216,25 @@ test('readme and docs avoid fake callback api and describe mit release metadata'
         ->and(strtolower($combined))->toContain('mit license');
 });
 
+test('docs describe durable queued result callbacks and auto dispatch', function (): void {
+    $combined = implode("\n", [
+        p48ReadPackageFile('README.md'),
+        p48ReadPackageFile('docs/result-callbacks.md'),
+        p48ReadPackageFile('docs/configuration.md'),
+        p48ReadPackageFile('docs/examples/bidirectional-callback.md'),
+        p48ReadPackageFile('docs/testing.md'),
+        p48ReadPackageFile('docs/local-http-e2e-template.md'),
+        p48ReadPackageFile('UPGRADE.md'),
+    ]);
+
+    expect($combined)->toContain('TALKTO_CALLBACKS_AUTO_DISPATCH')
+        ->and($combined)->toContain('durable callback')
+        ->and($combined)->toContain('queued callback')
+        ->and($combined)->toContain('SendTalktoMessage')
+        ->and($combined)->toContain('talkto.result')
+        ->and($combined)->not->toContain('builds a signed callback envelope and posts it');
+});
+
 test('phase three docs describe safe public installation and v2 nonce security', function (): void {
     $combined = p48DocumentationText()."\n".p48ReadPackageFile('docs/architecture.md');
 

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Durable Result Callbacks
+
+- Documented durable queued result callback delivery, including automatic callback queueing after incoming processing, retry/DLQ-compatible callback messages, and `TALKTO_CALLBACKS_AUTO_DISPATCH`.
+- Clarified that `ResultCallbackSenderContract::sendResult()` now creates or reuses an outgoing durable callback message instead of performing immediate callback HTTP delivery.
+- Updated callback examples, testing guidance, troubleshooting, public API notes, and upgrade notes for the queued callback lifecycle.
+
 ### Final Cleanup And Callback State Safety
 
 - Normalized release hygiene by keeping generated phase ZIP/manifest artifacts ignored and cleaning public maintainer-note wording.

@@ -106,6 +106,7 @@ Important supported subkeys include:
 - `talkto.routes.callback_uri`
 - `talkto.routes.callback_name`
 - `talkto.callbacks.enabled`
+- `talkto.callbacks.auto_dispatch`
 - `talkto.callbacks.command`
 - `talkto.callbacks.endpoint`
 - `talkto.callbacks.timeout_seconds`
@@ -169,6 +170,13 @@ prefer `--json` where available.
 
 `IncomingCommandResultContract` exposes `isSucceeded()`, `isRetryable()`,
 `isSkipped()`, `errorClass()`, `errorMessage()`, `result()`, and `meta()`.
+
+`ResultCallbackSenderContract::sendResult()` is public and supported. The default
+implementation queues durable callback delivery instead of performing immediate
+callback HTTP delivery. Its return shape may include `sent=false`,
+`queued=true`, `message_id`, `callback_message_id`, `callback_message_db_id`,
+`original_message_id`, `target`, and `command`. Existing options such as
+`callback_message_id` remain supported.
 
 ## Public DTOs, result objects, and data objects
 

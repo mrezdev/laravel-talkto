@@ -173,18 +173,17 @@ The package verifies the envelope, stores the incoming row, applies idempotency 
 
 Callbacks let the destination app report handler results back to the source app. The generic signed callback runtime uses the same signed-envelope model, including v2 nonce replay protection.
 
-On the destination app, send a callback for an incoming message:
+Result callbacks are durable: the destination stores an outgoing `talkto.result` callback message in `talkto_messages`, queues `SendTalktoMessage`, and delivers the callback through the normal outgoing send pipeline. Callback delivery can use the existing retry, DLQ, report, panel, and reprocess behavior.
+
+Incoming processing auto-queues callbacks by default after a handler returns a `TalktoIncomingCommandResult`, so normal handlers only need to return the result:
 
 ```php
-use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
 use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
 
-$result = TalktoIncomingCommandResult::succeeded(['reserved' => true]);
-
-app(ResultCallbackSenderContract::class)->sendResult($message, $result);
+return TalktoIncomingCommandResult::succeeded(['reserved' => true]);
 ```
 
-The source app must configure the destination as an incoming source and allow the callback command, which defaults to `talkto.result`. Package callback routes depend on `talkto.routes.enabled` and `talkto.callbacks.enabled`; host-owned routes can call the receiver contract directly when package routes stay disabled.
+Manual `ResultCallbackSenderContract::sendResult($message, $result)` is still supported for advanced flows and returns queued delivery details such as `sent=false` and `queued=true`. The source app must configure the destination as an incoming source and allow the callback command, which defaults to `talkto.result`. Package callback routes depend on `talkto.routes.enabled` and `talkto.callbacks.enabled`; host-owned routes can call the receiver contract directly when package routes stay disabled.
 
 ## Retry, DLQ, And Observability
 

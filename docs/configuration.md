@@ -197,12 +197,41 @@ Callbacks are enabled by default:
 
 ```dotenv
 TALKTO_CALLBACKS_ENABLED=true
+TALKTO_CALLBACKS_AUTO_DISPATCH=true
 TALKTO_CALLBACK_COMMAND=talkto.result
 TALKTO_CALLBACK_ENDPOINT=/api/talkto/callback
 TALKTO_CALLBACK_TIMEOUT_SECONDS=20
 ```
 
-For result callbacks, the source app must allow the callback command under the destination service in `talkto.incoming`. The destination app must configure the source in `talkto.outgoing`.
+`callbacks.enabled=false` disables callback creation and sending. `callbacks.auto_dispatch=false` disables automatic callback queueing after incoming processing, but manual `ResultCallbackSenderContract::sendResult()` can still be used when callbacks are enabled. The recommended default is `auto_dispatch=true`.
+
+For result callbacks, every destination service that sends callbacks must configure the original source service in `talkto.outgoing` with a callback endpoint:
+
+```php
+'outgoing' => [
+    'source-service' => [
+        'url' => env('TALKTO_SOURCE_URL'),
+        'secret' => env('TALKTO_TO_SOURCE_SECRET'),
+        'callback_endpoint' => '/api/talkto/callback',
+    ],
+],
+```
+
+Every source service that receives callbacks must configure the destination service in `talkto.incoming` and allow the callback command:
+
+```php
+'incoming' => [
+    'destination-service' => [
+        'secret' => env('TALKTO_FROM_DESTINATION_SECRET'),
+        'allowed_commands' => [
+            'talkto.result' => [
+                'driver' => 'none',
+            ],
+        ],
+        'allow_all_commands' => false,
+    ],
+],
+```
 
 ## Dead Letter Queue
 

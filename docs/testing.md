@@ -49,7 +49,13 @@ Use testing databases and local-only queues. Do not test against production traf
 3. Configure one outgoing peer and one incoming source.
 4. Send a small generic command with an idempotency key.
 5. Confirm the destination records the incoming message, attempts, and events.
-6. Confirm the source receives a signed result callback.
-7. Inspect queues and failed jobs before repeating the flow.
+6. Run or fake the source command `SendTalktoMessage` job.
+7. Run or fake the destination `ProcessIncomingTalktoMessage` job.
+8. Confirm the destination auto-creates an outgoing durable callback message.
+9. Run or fake the destination callback `SendTalktoMessage` job.
+10. Confirm the source receives the signed result callback.
+11. Inspect queues and failed jobs before repeating the flow.
+
+Do not assume `ResultCallbackSenderContract::sendResult()` sends callback HTTP immediately. It queues durable callback delivery; local E2E tests should run the queued callback `SendTalktoMessage` job when they want the source-side status to update in the same test.
 
 The package provides the transport and lifecycle records. The host application verifies its own command handler behavior.

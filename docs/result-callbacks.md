@@ -2,17 +2,80 @@
 
 Result callbacks let the destination report command outcomes back to the source. Laravel Talkto provides a generic signed callback sender and receiver while keeping host business side effects in the host application.
 
-## Sender
+Result callbacks are durable. The default `TalktoResultCallbackSender` no longer posts callback HTTP directly. `ResultCallbackSenderContract::sendResult()` creates or reuses an outgoing durable callback message in `talkto_messages`, records a queued event, and dispatches `SendTalktoMessage`. Actual HTTP delivery happens later through the normal outgoing send pipeline.
 
-`ResultCallbackSenderContract` accepts a destination-side incoming message, an `IncomingCommandResultContract`, and optional transport settings. The default `TalktoResultCallbackSender` builds a signed callback envelope and posts it to the source service callback endpoint.
+## Durable Sender
 
-Destination apps must configure the source service under `talkto.outgoing` with `url`, `secret`, and `callback_endpoint`.
+`ResultCallbackSenderContract` accepts a destination-side incoming message, an `IncomingCommandResultContract`, and optional options such as `callback_message_id`.
+
+The default sender:
+
+- creates or reuses an outgoing callback message
+- stores it in `talkto_messages`
+- uses the callback command, which defaults to `talkto.result`
+- sets `parent_message_id` to the original incoming message id
+- dispatches `SendTalktoMessage` for queued delivery
+- returns `sent=false` and `queued=true` when it queues the durable callback
+
+Callback messages use the configured callback endpoint on the target, usually `/api/talkto/callback`. Because they are normal outgoing Talkto messages, they are eligible for existing attempts, retry, DLQ, report, panel, trace, and reprocess behavior.
+
+Destination apps must configure the original source service under `talkto.outgoing` with `url`, `secret`, and `callback_endpoint`.
+
+## Automatic Dispatch
+
+Incoming processing auto-queues durable callbacks by default after a handler result has been applied to the incoming message.
+
+```dotenv
+TALKTO_CALLBACKS_ENABLED=true
+TALKTO_CALLBACKS_AUTO_DISPATCH=true
+```
+
+Handlers no longer need to call `sendResult()` manually in normal cases. Return a stable result from the handler and let the package queue the callback after the incoming message becomes `succeeded`, `skipped`, `failed_retryable`, or `failed_final`.
+
+```php
+use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
+
+return TalktoIncomingCommandResult::succeeded([
+    'processed' => true,
+]);
+```
+
+Set `talkto.callbacks.auto_dispatch=false` only when the host intentionally wants to queue callbacks manually. If `talkto.callbacks.enabled=false`, callback creation and sending are disabled.
+
+Existing manual `sendResult()` calls remain supported and duplicate-safe. When a handler manually calls `sendResult()` and the pipeline also auto-dispatches the same result, the sender reuses the deterministic callback message and avoids duplicate send jobs when it can see that callback delivery was already queued.
+
+## Normal Lifecycle
+
+1. The source service sends an outgoing command message.
+2. The destination receive endpoint accepts it and the source-side outgoing message becomes `destination_received`.
+3. The destination processes the incoming command.
+4. The destination incoming message becomes `succeeded`, `skipped`, `failed_retryable`, or `failed_final`.
+5. The destination auto-creates a durable outgoing callback message with command `talkto.result`.
+6. The durable callback message points back to the original incoming message with `parent_message_id`.
+7. `SendTalktoMessage` delivers the callback through the outgoing send pipeline.
+8. The source callback receiver verifies the signed callback and updates the original outgoing message to `completed`, `failed_retryable`, or `failed_final` based on the callback result.
 
 ## Receiver
 
 `ResultCallbackReceiverContract` accepts a signed callback envelope and headers. The default `TalktoResultCallbackReceiver` verifies the envelope, matches the original outgoing message, applies the callback status, and records callback events.
 
-Source apps must configure the destination service under `talkto.incoming` and allow the callback command. The default callback command is `talkto.result`.
+Source apps must configure the destination service under `talkto.incoming` and allow the callback command:
+
+```php
+'incoming' => [
+    'destination-service' => [
+        'secret' => env('TALKTO_FROM_DESTINATION_SECRET'),
+        'allowed_commands' => [
+            'talkto.result' => [
+                'driver' => 'none',
+            ],
+        ],
+        'allow_all_commands' => false,
+    ],
+],
+```
+
+Package callback routes depend on `talkto.routes.enabled` and `talkto.callbacks.enabled`; host-owned routes can call the receiver contract directly when package routes stay disabled.
 
 ## Result Contract
 
@@ -34,4 +97,6 @@ Source apps must configure the destination service under `talkto.incoming` and a
 
 ## Boundary
 
-Callback envelopes, signing, verification, lifecycle transitions, and basic event recording are generic package behavior. Deciding what a result means for a host business process remains the host application's job. Hosts can override `ResultCallbackSenderContract` or `ResultCallbackReceiverContract` when they need custom transport or custom side-effect handling.
+Callback message creation, queue dispatch, envelope signing, verification, lifecycle transitions, and basic event recording are generic package behavior. Deciding what a result means for a host business process remains the host application's job.
+
+Hosts can override `ResultCallbackSenderContract` or `ResultCallbackReceiverContract` when they need custom callback behavior. Most hosts should use the default durable sender and receiver.

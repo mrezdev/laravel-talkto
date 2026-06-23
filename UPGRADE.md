@@ -52,7 +52,20 @@ Return to v2-only once all peers are upgraded.
 - DLQ support uses `talkto_dead_letters` when the DLQ migration is installed.
 - Nonce replay protection uses `talkto_nonces` and stores nonce hashes/fingerprints only.
 - Observability reports read existing `talkto_messages`, `talkto_attempts`, `talkto_events`, and `talkto_dead_letters` tables.
+- Durable result callbacks use outgoing `talkto_messages` rows and existing attempts, events, retry, and DLQ tables. No separate callback table or new required migration is needed for the durable callback change.
 - No project-specific business tables or mappings are included.
+
+## Durable Result Callbacks
+
+Result callbacks are now durable and queued. `ResultCallbackSenderContract::sendResult()` creates or reuses an outgoing callback message and dispatches `SendTalktoMessage`; it no longer performs immediate callback HTTP delivery.
+
+Upgrade notes:
+
+- Queue workers must be running on destination services for callback delivery.
+- `TALKTO_CALLBACKS_AUTO_DISPATCH` defaults to `true`.
+- Incoming handlers usually only return `TalktoIncomingCommandResult`; they no longer need to call `sendResult()` manually for normal callback flow.
+- Manual `sendResult()` remains supported for advanced flows and remains duplicate-safe where possible.
+- Tests that previously expected immediate callback HTTP side effects should run the queued callback `SendTalktoMessage` job before asserting source-side callback results.
 
 ## Extension Points
 

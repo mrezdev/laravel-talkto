@@ -129,6 +129,33 @@ Callbacks use signed envelopes too. The source app must configure the destinatio
 
 Callback v2 nonces are consumed by the same nonce replay ledger. A replayed callback should be rejected with `replay_nonce_reused`.
 
+## Durable Callback Operations
+
+Result callbacks are queued durable outgoing messages on the destination service. A source message stuck at `destination_received` usually means callback delivery is pending or failed, not necessarily that the destination handler failed.
+
+On the destination service, check:
+
+- the original incoming message was processed
+- the incoming status is `succeeded`, `skipped`, `failed_retryable`, or `failed_final`
+- an outgoing callback message exists with command `talkto.result`
+- the callback `parent_message_id` points to the original incoming message id
+- the callback `target_service` is the original source service
+- the callback status is `waiting_to_send`, `sending`, `completed`, `failed_retryable`, or `failed_final`
+- callback attempts and events exist
+- the DLQ does or does not contain the callback message
+- queue workers are running for `SendTalktoMessage`
+
+On the source service, check:
+
+- callback routes or host callback route are enabled
+- `TALKTO_CALLBACKS_ENABLED=true`
+- incoming config allows `talkto.result` from the destination
+- the callback secret matches the destination outgoing secret
+- nonce, timestamp, and signature settings match
+- the original outgoing message exists and matches the callback original message id
+
+Keep `TALKTO_CALLBACKS_AUTO_DISPATCH=true` unless a host intentionally queues callbacks manually.
+
 ## Panel Access Control
 
 The panel is disabled by default:

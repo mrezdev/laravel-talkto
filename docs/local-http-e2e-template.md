@@ -51,7 +51,7 @@ The source service may expose a local-only endpoint that sends one neutral comma
 
 The source service should expose the callback endpoint it expects the destination to call:
 
-- `POST /api/talkto/result-callback`
+- `POST /api/talkto/callback`
 - Verify signature and timestamp.
 - Match the callback to the original source message.
 - Handle duplicate callbacks safely.
@@ -67,7 +67,13 @@ Change one payload field after the payload hash is calculated. The destination m
 
 ## Callback Test
 
-After the destination handler returns a result, confirm the destination sends a signed callback to the source. The source should verify the callback, match it to the original message, update source-side status, and treat duplicate callbacks as safe.
+After the destination handler returns a result, confirm the destination auto-queues a durable outgoing callback message. Local tests that run jobs manually should simulate three job steps:
+
+1. source command `SendTalktoMessage`
+2. destination `ProcessIncomingTalktoMessage`
+3. destination callback `SendTalktoMessage`
+
+Do not assume `sendResult()` sends callback HTTP immediately. Callback HTTP delivery happens when the queued callback message is sent through `SendTalktoMessage`. The source should verify the callback, match it to the original message, update source-side status, and treat duplicate callbacks as safe.
 
 ## No Production URL Rule
 
@@ -84,6 +90,7 @@ Use a neutral command such as `example:sync-record`. Avoid real domain writes un
 - Destination verifies signature and payload hash.
 - Destination stores incoming message state.
 - Destination handler returns success or failure.
-- Destination sends a callback when configured.
+- Destination creates an outgoing durable callback message when configured.
+- Destination sends the callback when the queued callback `SendTalktoMessage` job runs.
 - Source verifies and records the callback.
 - Replay, tamper, retry, redaction, and rollback paths are covered.
