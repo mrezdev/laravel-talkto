@@ -1,8 +1,30 @@
 # Laravel Talkto
 
-Laravel Talkto is a Laravel package for reliable service-to-service command delivery. It gives Laravel applications a shared transport layer for signed envelopes, outbox/inbox storage, retries, dead letters, idempotency, replay protection, result callbacks, and read-only observability.
+Laravel Talkto helps Laravel applications communicate through reliable, signed, durable service-to-service messages. It is built for projects where multiple Laravel apps need to send commands, receive results, retry safely, and stay observable without turning every app into a copy of the others.
 
-The package owns the communication boundary. Your host applications still own business rules, validation, model lookup, permissions, dashboard policy, and what a callback result means.
+Talkto owns the communication boundary: envelopes, signatures, durable message records, retries, dead letters, callbacks, and operational visibility. Your host applications still own business rules, validation, payload meaning, permissions, model lookup, data mapping, dashboard policy, and what each result means.
+
+It helps teams move toward a more modular, microservice-friendly Laravel architecture without forcing a full event-streaming platform at the start.
+
+<p align="center">
+    <img src="docs/assets/talkto-laravel-thinking.webp" alt="Two Laravel applications communicating conceptually" width="900">
+</p>
+
+## Why Laravel Talkto?
+
+Direct HTTP calls between applications can become hard to reason about once retries, failures, duplicate delivery, security checks, and follow-up results enter the picture. Talkto gives Laravel apps a clearer communication boundary where messages can be signed, stored, retried, inspected, and completed with callbacks.
+
+Each Laravel app can stay focused on its own responsibility. Talkto handles the shared transport concerns, while the host app decides what a command means and how its own data should change.
+
+## From two apps to a distributed Laravel ecosystem
+
+Talkto can start with two Laravel apps talking to each other. The same model can also support several Laravel apps connected through clear commands, signed envelopes, retries, dead letters, callbacks, and observability.
+
+This helps teams keep applications more independent while still allowing them to work together through explicit, durable service conversations.
+
+<p align="center">
+    <img src="docs/assets/talkto-service-network.webp" alt="Network of connected Laravel services" width="900">
+</p>
 
 ## What It Does
 
@@ -240,7 +262,7 @@ For a host integration, also test one outgoing command, one incoming command, on
 ## Documentation Map
 
 Start with [docs/README.md](docs/README.md).
-The full documentation index now starts with a conceptual overview and then links into the technical docs.
+The full documentation index is a technical map with grouped links for setup, concepts, examples, operations, package development, and support.
 
 Common next stops:
 

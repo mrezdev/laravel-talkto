@@ -10,31 +10,23 @@ function documentationLandingFile(string $path): string
     return file_get_contents(documentationLandingPath($path)) ?: '';
 }
 
-test('public documentation index starts with the friendly landing page sections', function (): void {
+test('public documentation index is the full technical documentation map', function (): void {
     $index = documentationLandingFile('docs/README.md');
 
     foreach ([
         '# Laravel Talkto Documentation',
-        '## Two Laravel apps, one clear conversation',
-        '## A complete message lifecycle',
-        '## A distributed Laravel ecosystem',
-        '## Technical Documentation',
+        '## Start Here',
+        '## Core Concepts',
+        '## Examples',
+        '## Operations',
+        '## Package Development',
+        '## Upgrade And Support',
+        '## Maintainer Notes',
     ] as $heading) {
         expect($index)->toContain($heading);
     }
-});
 
-test('public documentation index references the landing page webp assets', function (): void {
-    $index = documentationLandingFile('docs/README.md');
-
-    foreach ([
-        'assets/talkto-laravel-thinking.webp',
-        'assets/talkto-two-service-flow.webp',
-        'assets/talkto-service-network.webp',
-    ] as $asset) {
-        expect($index)->toContain($asset)
-            ->and(documentationLandingPath('docs/'.$asset))->toBeFile();
-    }
+    expect($index)->toContain('full public documentation map');
 });
 
 test('public documentation index still links to the required technical docs', function (): void {
@@ -79,7 +71,8 @@ test('public documentation index still links to the required technical docs', fu
         '../SECURITY.md',
         '../SUPPORT.md',
     ] as $link) {
-        expect($index)->toContain('('.$link.')');
+        expect($index)->toContain('('.$link.')')
+            ->and(documentationLandingPath(str_starts_with($link, '../') ? substr($link, 3) : 'docs/'.$link))->toBeFile();
     }
 
     expect($index)->toContain('supported public surface')
@@ -92,4 +85,14 @@ test('public documentation index does not link to internal maintainer docs', fun
     expect($index)->toContain('Internal maintainer notes are kept in the repository only')
         ->and($index)->not->toContain('docs/internal')
         ->and($index)->not->toContain('internal/README.md');
+});
+
+test('documentation webp assets remain available for package landing pages', function (): void {
+    foreach ([
+        'docs/assets/talkto-laravel-thinking.webp',
+        'docs/assets/talkto-two-service-flow.webp',
+        'docs/assets/talkto-service-network.webp',
+    ] as $asset) {
+        expect(documentationLandingPath($asset))->toBeFile();
+    }
 });
