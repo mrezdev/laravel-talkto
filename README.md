@@ -16,6 +16,10 @@ Direct HTTP calls between applications can become hard to reason about once retr
 
 Each Laravel app can stay focused on its own responsibility. Talkto handles the shared transport concerns, while the host app decides what a command means and how its own data should change.
 
+<p align="center">
+    <img src="docs/assets/talkto-two-service-flow.webp" alt="Two Laravel applications communicating logic" width="900">
+</p>
+
 ## From two apps to a distributed Laravel ecosystem
 
 Talkto can start with two Laravel apps talking to each other. The same model can also support several Laravel apps connected through clear commands, signed envelopes, retries, dead letters, callbacks, and observability.
