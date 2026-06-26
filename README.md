@@ -240,6 +240,7 @@ For a host integration, also test one outgoing command, one incoming command, on
 ## Documentation Map
 
 Start with [docs/README.md](docs/README.md).
+The full documentation index now starts with a conceptual overview and then links into the technical docs.
 
 Common next stops:
 
