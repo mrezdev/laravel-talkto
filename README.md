@@ -1,5 +1,16 @@
 # Laravel Talkto
 
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/mrezdev/laravel-talkto.svg?style=flat-square)](https://packagist.org/packages/mrezdev/laravel-talkto)
+[![Total Downloads](https://img.shields.io/packagist/dt/mrezdev/laravel-talkto.svg?style=flat-square)](https://packagist.org/packages/mrezdev/laravel-talkto)
+[![License](https://img.shields.io/packagist/l/mrezdev/laravel-talkto.svg?style=flat-square)](https://packagist.org/packages/mrezdev/laravel-talkto)
+[![PHP Version](https://img.shields.io/packagist/php-v/mrezdev/laravel-talkto.svg?style=flat-square)](https://packagist.org/packages/mrezdev/laravel-talkto)
+[![Tests](https://img.shields.io/github/actions/workflow/status/mrezdev/laravel-talkto/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/mrezdev/laravel-talkto/actions/workflows/tests.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/mrezdev/laravel-talkto?style=flat-square)](https://github.com/mrezdev/laravel-talkto/releases)
+[![GitHub Stars](https://img.shields.io/github/stars/mrezdev/laravel-talkto?style=flat-square)](https://github.com/mrezdev/laravel-talkto/stargazers)
+[![GitHub Issues](https://img.shields.io/github/issues/mrezdev/laravel-talkto?style=flat-square)](https://github.com/mrezdev/laravel-talkto/issues)
+[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/mrezdev/laravel-talkto?style=flat-square)](https://github.com/mrezdev/laravel-talkto/pulls)
+[![Last Commit](https://img.shields.io/github/last-commit/mrezdev/laravel-talkto?style=flat-square)](https://github.com/mrezdev/laravel-talkto/commits/main)
+
 Laravel Talkto helps Laravel applications communicate through reliable, signed, durable service-to-service messages. It is built for projects where multiple Laravel apps need to send commands, receive results, retry safely, and stay observable without turning every app into a copy of the others.
 
 Talkto owns the communication boundary: envelopes, signatures, durable message records, retries, dead letters, callbacks, and operational visibility. Your host applications still own business rules, validation, payload meaning, permissions, model lookup, data mapping, dashboard policy, and what each result means.
