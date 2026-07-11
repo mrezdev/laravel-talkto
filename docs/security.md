@@ -30,6 +30,14 @@ The package signs canonical message fields, including the timestamp, payload has
 
 Incoming verification rejects requests when the signature is invalid, the timestamp is outside tolerance, the source is unknown, the target service does not match, the command is not allowed, the payload hash differs, or nonce replay protection fails.
 
+## Payload Hash Encoding
+
+Talkto payload hashes are calculated from deterministic JSON bytes. The encoder sorts associative keys for hashing, preserves list order, leaves Unicode and slashes unescaped, keeps valid JSON numeric values as numbers, and rejects unsupported non-finite float values such as `NAN`, `INF`, and `-INF`.
+
+The default HTTP transport also uses deterministic JSON for the final request body. This prevents valid float payloads from being signed under one PHP `serialize_precision` setting and sent or verified under another. Payload hash checks are still strict: Talkto does not skip hash verification or accept arbitrary hashes.
+
+Host applications may still choose decimal strings for money or quantity contracts that require exact scale. That is a domain contract choice; the Talkto transport itself safely supports valid JSON floats.
+
 ## Nonce Replay Protection
 
 v2 nonce replay protection is separate from `message_id` idempotency:

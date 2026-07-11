@@ -11,6 +11,8 @@ use Mrezdev\LaravelTalkto\Data\TalktoHttpResponse;
  */
 class LaravelTalktoHttpClient implements TalktoHttpClientWithOptions
 {
+    public function __construct(private readonly ?TalktoJsonEncoder $json = null) {}
+
     public function post(string $url, array $headers, array $envelope, int $timeout): TalktoHttpResponse
     {
         return $this->postWithOptions($url, $headers, $envelope, $timeout);
@@ -19,13 +21,14 @@ class LaravelTalktoHttpClient implements TalktoHttpClientWithOptions
     public function postWithOptions(string $url, array $headers, array $envelope, int $timeout, array $options = []): TalktoHttpResponse
     {
         $request = Http::withHeaders($headers)
+            ->withBody($this->encoder()->encode($envelope), 'application/json')
             ->timeout($timeout);
 
         if ($options !== []) {
             $request = $request->withOptions($options);
         }
 
-        $response = $request->post($url, $envelope);
+        $response = $request->post($url);
 
         return new TalktoHttpResponse(
             statusCode: $response->status(),
@@ -33,5 +36,10 @@ class LaravelTalktoHttpClient implements TalktoHttpClientWithOptions
             headers: $response->headers(),
             successful: $response->successful(),
         );
+    }
+
+    private function encoder(): TalktoJsonEncoder
+    {
+        return $this->json ?? new TalktoJsonEncoder;
     }
 }

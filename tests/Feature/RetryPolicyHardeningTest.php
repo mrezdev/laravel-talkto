@@ -10,6 +10,7 @@ use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
 use Mrezdev\LaravelTalkto\Services\TalktoOutgoingEnvelopeBuilder;
+use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 
 beforeEach(function (): void {
@@ -408,14 +409,16 @@ test('retry event metadata uses the persisted jittered delay instead of recomput
 
 function p06RetryMessage(string $messageId, array $attributes = []): TalktoMessage
 {
+    $payload = $attributes['payload'] ?? ['id' => $messageId];
+
     return TalktoMessage::query()->create(array_merge([
         'message_id' => $messageId,
         'direction' => 'outgoing',
         'source_service' => 'testing',
         'target_service' => 'peer',
         'command' => 'domain.command',
-        'payload' => ['id' => $messageId],
-        'payload_hash' => 'hash',
+        'payload' => $payload,
+        'payload_hash' => app(TalktoPayloadHasher::class)->hash($payload),
         'schema_version' => 1,
         'source_action_status' => 'succeeded_assumed',
         'transport_status' => 'failed',

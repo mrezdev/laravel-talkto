@@ -12,6 +12,7 @@ use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
 use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
 use Mrezdev\LaravelTalkto\Services\TalktoOutgoingEnvelopeBuilder;
+use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 
 beforeEach(function (): void {
@@ -127,14 +128,16 @@ test('dead letter reprocess dry run remains read only', function (): void {
 
 function p06DlqOutgoingMessage(string $messageId, array $attributes = []): TalktoMessage
 {
+    $payload = $attributes['payload'] ?? ['id' => $messageId];
+
     return TalktoMessage::query()->create(array_merge([
         'message_id' => $messageId,
         'direction' => 'outgoing',
         'source_service' => 'testing',
         'target_service' => 'peer',
         'command' => 'domain.command',
-        'payload' => ['id' => $messageId],
-        'payload_hash' => 'hash',
+        'payload' => $payload,
+        'payload_hash' => app(TalktoPayloadHasher::class)->hash($payload),
         'schema_version' => 1,
         'source_action_status' => 'succeeded_assumed',
         'transport_status' => 'pending',
@@ -147,14 +150,16 @@ function p06DlqOutgoingMessage(string $messageId, array $attributes = []): Talkt
 
 function p06DlqIncomingMessage(string $messageId, array $attributes = []): TalktoMessage
 {
+    $payload = $attributes['payload'] ?? ['id' => $messageId];
+
     return TalktoMessage::query()->create(array_merge([
         'message_id' => $messageId,
         'direction' => 'incoming',
         'source_service' => 'source',
         'target_service' => 'testing',
         'command' => 'domain.command',
-        'payload' => ['id' => $messageId],
-        'payload_hash' => 'hash',
+        'payload' => $payload,
+        'payload_hash' => app(TalktoPayloadHasher::class)->hash($payload),
         'schema_version' => 1,
         'destination_receive_status' => 'received',
         'destination_action_status' => 'queued',

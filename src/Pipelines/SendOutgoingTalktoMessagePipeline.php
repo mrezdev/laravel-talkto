@@ -13,6 +13,7 @@ use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
 use Mrezdev\LaravelTalkto\Services\TalktoOutgoingEnvelopeBuilder;
+use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 use Throwable;
@@ -65,6 +66,10 @@ class SendOutgoingTalktoMessagePipeline
 
         [$message, $attempt] = $sending;
 
+        if (! $this->guardStoredPayloadHash($message, $attempt, $retryPolicy)) {
+            return;
+        }
+
         try {
             $endpoint = $builder->endpointFor($message);
             $envelope = $builder->buildEnvelope($message);
@@ -88,6 +93,44 @@ class SendOutgoingTalktoMessagePipeline
         } catch (Throwable $throwable) {
             $this->applyUnexpectedFailure($message, $attempt, $throwable, $retryPolicy);
         }
+    }
+
+    private function guardStoredPayloadHash(TalktoMessage $message, TalktoAttempt $attempt, TalktoRetryPolicy $retryPolicy): bool
+    {
+        try {
+            $deterministicHash = app(TalktoPayloadHasher::class)->hash($message->payload);
+        } catch (Throwable $throwable) {
+            $this->applyStoredPayloadHashFailure(
+                $message,
+                $attempt,
+                $retryPolicy,
+                'stored_payload_hash_unencodable',
+                'Stored Talkto payload could not be deterministically encoded.',
+                ['error_class' => $throwable::class]
+            );
+
+            return false;
+        }
+
+        $storedHash = is_string($message->payload_hash) ? $message->payload_hash : (string) $message->payload_hash;
+
+        if ($storedHash !== '' && hash_equals($storedHash, $deterministicHash)) {
+            return true;
+        }
+
+        $this->applyStoredPayloadHashFailure(
+            $message,
+            $attempt,
+            $retryPolicy,
+            'stored_payload_hash_mismatch',
+            'Stored Talkto payload hash does not match the deterministic payload hash.',
+            [
+                'stored_payload_hash' => $storedHash,
+                'deterministic_payload_hash' => $deterministicHash,
+            ]
+        );
+
+        return false;
     }
 
     private function isSendable(TalktoMessage $message, TalktoRetryPolicy $retryPolicy): bool
@@ -601,6 +644,56 @@ class SendOutgoingTalktoMessagePipeline
             ]);
 
             $this->recordRetryEvent($eventClass, $message, $retryable ? 'retry_scheduled' : 'retry_exhausted');
+        });
+    }
+
+    private function applyStoredPayloadHashFailure(
+        TalktoMessage $message,
+        TalktoAttempt $attempt,
+        TalktoRetryPolicy $retryPolicy,
+        string $errorCode,
+        string $errorMessage,
+        array $meta = []
+    ): void {
+        $messageClass = $this->messageModelClass();
+        $eventClass = $this->eventModelClass();
+
+        DB::transaction(function () use ($messageClass, $eventClass, $message, $attempt, $retryPolicy, $errorCode, $errorMessage, $meta): void {
+            $message = $messageClass::query()->whereKey($message->id)->lockForUpdate()->first();
+
+            if (! $message) {
+                return;
+            }
+
+            $retryPolicy->markFinalFailure($message, 'transport_status', $errorCode);
+
+            $this->storeDeadLetterIfEnabled($message, $errorCode);
+
+            $attempt->forceFill([
+                'status' => $message->overall_status,
+                'error_class' => $errorCode,
+                'error_message' => $errorMessage,
+                'meta' => array_merge([
+                    'retryable' => false,
+                    'review_required' => true,
+                ], $meta),
+            ])->save();
+
+            $eventClass::create([
+                'talkto_message_id' => $message->id,
+                'message_id' => $message->message_id,
+                'service_name' => config('talkto.service', 'app'),
+                'event_type' => 'message_send_failed',
+                'old_status' => TalktoMessageStatus::Sending->value,
+                'new_status' => $message->overall_status,
+                'meta' => array_merge([
+                    'error_code' => $errorCode,
+                    'retryable' => false,
+                    'review_required' => true,
+                ], $meta),
+            ]);
+
+            $this->recordRetryEvent($eventClass, $message, 'retry_not_scheduled');
         });
     }
 

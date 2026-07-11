@@ -81,6 +81,22 @@ Dead letters move through a small lifecycle:
 
 Use `php artisan talkto:trace <message-id>` to inspect attempts, events, and DLQ transitions before running recovery commands.
 
+## Payload Hash Repair
+
+For old outgoing rows that failed with `payload_hash_mismatch` because the row was created under legacy float precision behavior, use the single-message repair command. It is dry-run by default and does not dispatch any job:
+
+```bash
+php artisan talkto:repair-payload-hash <message-id>
+```
+
+To mutate one eligible failed outgoing row, provide both confirmation and an operator reason:
+
+```bash
+php artisan talkto:repair-payload-hash <message-id> --confirm --reason="legacy serialize_precision hash drift"
+```
+
+The command refuses incoming messages, non-failed states, unrelated failures, and rows whose deterministic hash already matches. After repair, use the existing `talkto:retry-failed` or `talkto:dlq-reprocess` command deliberately.
+
 ## Recovery Action Safety Gates
 
 Recovery actions should require:

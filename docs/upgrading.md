@@ -29,6 +29,21 @@ Incoming and outgoing peer shared secrets can use `secret`; `signing_secret` is 
 
 Outgoing HTTP TLS verification is enabled by default through `talkto.http.verify_ssl`. Hosts that use private certificate authorities should copy the new `ca_bundle` settings and keep verification enabled in production.
 
+## Float Payload Hash Hardening
+
+This patch makes Talkto-controlled payload hashing and the default HTTP transport independent of the ambient PHP `serialize_precision` setting. Deploy the patched package to both sender and receiver services before retrying or DLQ-reprocessing old rows that failed with `payload_hash_mismatch`.
+
+Mixed versions have a limitation: a patched service calculates deterministic hashes, while an unpatched peer may still calculate hashes with its local `serialize_precision`. For messages containing decimal floats such as `79.95`, either mixed direction can still reject if one side is unpatched and the processes use different precision settings. The safe rollout is:
+
+1. Pause retries or DLQ reprocess for affected float-bearing messages.
+2. Deploy the patched package to receivers and senders.
+3. Restart PHP-FPM and long-running queue workers.
+4. Confirm new float messages verify successfully.
+5. Repair old stale outgoing rows one at a time with `talkto:repair-payload-hash`.
+6. Reprocess deliberately through `talkto:retry-failed` or `talkto:dlq-reprocess`.
+
+Use `serialize_precision=-1` in PHP configuration as defense in depth, but do not rely on matching INI settings as the primary correctness mechanism.
+
 ## V2 Security Defaults
 
 New installs should use v2 signatures, required v2 nonces, and replay protection:

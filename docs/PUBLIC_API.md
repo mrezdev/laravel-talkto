@@ -150,6 +150,7 @@ The supported command names and public options are:
 - `talkto:make-outgoing {service} {talktoCommand} {--force} {--dry-run} {--transactional} {--base-path=} {--base-namespace=}`
 - `talkto:retry-failed {--direction=} {--limit=} {--dry-run}`
 - `talkto:dlq-reprocess {--id=} {--message-id=} {--direction=} {--limit=} {--dry-run} {--force}`
+- `talkto:repair-payload-hash {message_id} {--confirm} {--reason=}`
 - `talkto:report {--hours=} {--from=} {--to=} {--json} {--direction=} {--limit=}`
 - `talkto:trace {message_id?} {--correlation} {--json} {--limit=} {--payload}`
 - `talkto:security-audit {--json} {--fail-on=}`
@@ -256,6 +257,7 @@ Public exceptions that host apps may catch are:
 
 - `Mrezdev\LaravelTalkto\Exceptions\TalktoException`
 - `Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoSignatureException`
+- `Mrezdev\LaravelTalkto\Exceptions\TalktoJsonEncodingException`
 - `Mrezdev\LaravelTalkto\Exceptions\TalktoCommandNotAllowedException`
 - `Mrezdev\LaravelTalkto\Exceptions\TalktoIdempotencyException`
 - `Mrezdev\LaravelTalkto\Exceptions\TalktoPayloadHashMismatchException`

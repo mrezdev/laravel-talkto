@@ -66,6 +66,37 @@ Likely cause: Different peer secrets, wrong source/target names, payload hash mi
 
 Safe fix: Verify both services use matching secrets and service names, v2 headers are present, clocks are synchronized, and payloads are sent unchanged. Run `php artisan talkto:security-audit`.
 
+## `payload_hash_mismatch` With Decimal Floats
+
+Symptom: A valid outgoing message is rejected with:
+
+```json
+{"received":false,"status":"rejected","error":"payload_hash_mismatch"}
+```
+
+Likely cause: Older package code calculated the payload hash with one PHP `serialize_precision` setting, then a database reload, queue worker, HTTP client, or receiver recalculated or encoded the same decoded float payload under another setting. Only some decimal values show this because binary floating-point values such as `79.95` can be rendered as either short JSON (`79.95`) or a long decimal expansion (`79.950000000000002842...`) depending on precision.
+
+Safe fix for new messages: deploy the hardened package to both sender and receiver services, clear config/opcache as usual, and restart PHP-FPM plus long-running queue workers. The package now uses deterministic encoding for Talkto hashes and the default HTTP body. Keep `serialize_precision=-1` in PHP config as defense in depth.
+
+Safe fix for old failed outgoing rows: do not edit payloads manually and do not bulk repair. Inspect the message and run a dry run first:
+
+```bash
+php artisan talkto:repair-payload-hash 2c4be25d-c9bb-4d5d-b345-1b75653d7140
+```
+
+If the output shows a stale stored hash and the row has payload-hash mismatch evidence, confirm one repair with an operator reason:
+
+```bash
+php artisan talkto:repair-payload-hash 2c4be25d-c9bb-4d5d-b345-1b75653d7140 --confirm --reason="legacy serialize_precision hash drift"
+```
+
+Repair updates only the stored derived payload hash and records an audit event. It does not resend. After repair, use the existing deliberate retry or DLQ flow:
+
+```bash
+php artisan talkto:dlq-reprocess --message-id=2c4be25d-c9bb-4d5d-b345-1b75653d7140 --dry-run
+php artisan talkto:dlq-reprocess --message-id=2c4be25d-c9bb-4d5d-b345-1b75653d7140
+```
+
 ## Missing Nonce
 
 Symptom: v2 request is rejected because a nonce is missing.

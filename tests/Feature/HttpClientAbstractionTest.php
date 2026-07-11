@@ -55,6 +55,11 @@ test('default laravel implementation sends url headers body timeout and options'
         ->with(['X-Test' => 'yes'])
         ->andReturn($pending);
 
+    $pending->shouldReceive('withBody')
+        ->once()
+        ->with('{"hello":"world"}', 'application/json')
+        ->andReturnSelf();
+
     $pending->shouldReceive('timeout')
         ->once()
         ->with(17)
@@ -67,7 +72,7 @@ test('default laravel implementation sends url headers body timeout and options'
 
     $pending->shouldReceive('post')
         ->once()
-        ->with('https://peer.test/api/talkto/receive', ['hello' => 'world'])
+        ->with('https://peer.test/api/talkto/receive')
         ->andReturn(new LaravelHttpResponse(new PsrResponse(
             202,
             ['X-Reply' => ['accepted']],
@@ -98,6 +103,11 @@ test('default laravel implementation keeps four argument post backward compatibl
         ->with(['X-Test' => 'yes'])
         ->andReturn($pending);
 
+    $pending->shouldReceive('withBody')
+        ->once()
+        ->with('{"hello":"world"}', 'application/json')
+        ->andReturnSelf();
+
     $pending->shouldReceive('timeout')
         ->once()
         ->with(17)
@@ -107,7 +117,7 @@ test('default laravel implementation keeps four argument post backward compatibl
 
     $pending->shouldReceive('post')
         ->once()
-        ->with('https://peer.test/api/talkto/receive', ['hello' => 'world'])
+        ->with('https://peer.test/api/talkto/receive')
         ->andReturn(new LaravelHttpResponse(new PsrResponse(
             200,
             [],
@@ -136,10 +146,14 @@ test('existing outgoing send succeeds using the default implementation', functio
     (new SendTalktoMessage($message->id))->handle(app(TalktoOutgoingEnvelopeBuilder::class), app(TalktoRetryPolicy::class));
 
     Http::assertSent(function (Request $request): bool {
+        $decoded = json_decode($request->body(), true);
+
         return $request->url() === 'https://peer.test/api/talkto/receive'
             && $request->hasHeader('X-Custom', 'custom')
             && $request->hasHeader('X-Talkto-Signature')
-            && ($request->data()['payload_hash'] ?? null) === app(TalktoPayloadHasher::class)->hash(['id' => 'http-default-success']);
+            && $request->hasHeader('Content-Type', 'application/json')
+            && is_array($decoded)
+            && ($decoded['payload_hash'] ?? null) === app(TalktoPayloadHasher::class)->hash(['id' => 'http-default-success']);
     });
 
     $message = $message->fresh();

@@ -10,6 +10,7 @@ use Illuminate\Support\ServiceProvider;
 use Mrezdev\LaravelTalkto\Console\Commands\MakeTalktoIncomingCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\MakeTalktoIntegrationCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\MakeTalktoOutgoingCommand;
+use Mrezdev\LaravelTalkto\Console\Commands\RepairTalktoPayloadHashCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\ReportTalktoMessagesCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\ReprocessTalktoDeadLettersCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\RetryFailedTalktoMessagesCommand;
@@ -103,6 +104,7 @@ class LaravelTalktoServiceProvider extends ServiceProvider
                 MakeTalktoIncomingCommand::class,
                 MakeTalktoIntegrationCommand::class,
                 MakeTalktoOutgoingCommand::class,
+                RepairTalktoPayloadHashCommand::class,
                 RetryFailedTalktoMessagesCommand::class,
                 ReprocessTalktoDeadLettersCommand::class,
                 ReportTalktoMessagesCommand::class,
