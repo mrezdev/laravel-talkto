@@ -5,15 +5,32 @@ namespace Mrezdev\LaravelTalkto\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackReceiverContract;
+use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoRequestJsonException;
+use Mrezdev\LaravelTalkto\Services\TalktoSignedRequestDecoder;
 
 /**
  * @internal Package route adapter; use callback contracts instead.
  */
 class TalktoResultCallbackController
 {
+    public function __construct(private readonly ?TalktoSignedRequestDecoder $signedRequestDecoder = null) {}
+
     public function __invoke(Request $request, ResultCallbackReceiverContract $receiver): JsonResponse
     {
-        $result = $receiver->receiveResult($request->all(), $request->headers->all());
+        try {
+            $envelope = $this->signedRequestDecoder()->decode($request);
+        } catch (InvalidTalktoRequestJsonException $exception) {
+            return new JsonResponse([
+                'accepted' => false,
+                'status' => 'rejected',
+                'message_id' => null,
+                'original_message_id' => null,
+                'duplicate' => false,
+                'error' => $exception->error(),
+            ], $exception->status());
+        }
+
+        $result = $receiver->receiveResult($envelope, $request->headers->all());
 
         return new JsonResponse($result, $this->statusCode($result));
     }
@@ -34,5 +51,10 @@ class TalktoResultCallbackController
             'original_message_not_found' => 404,
             default => 422,
         };
+    }
+
+    private function signedRequestDecoder(): TalktoSignedRequestDecoder
+    {
+        return $this->signedRequestDecoder ?? app(TalktoSignedRequestDecoder::class);
     }
 }

@@ -66,6 +66,24 @@ Likely cause: Different peer secrets, wrong source/target names, payload hash mi
 
 Safe fix: Verify both services use matching secrets and service names, v2 headers are present, clocks are synchronized, and payloads are sent unchanged. Run `php artisan talkto:security-audit`.
 
+## `invalid_json`
+
+Symptom: The receive or callback route returns:
+
+```json
+{"received":false,"status":"rejected","error":"invalid_json"}
+```
+
+or:
+
+```json
+{"accepted":false,"status":"rejected","error":"invalid_json"}
+```
+
+Likely cause: The request declares a JSON content type but the body is empty, malformed, not a root JSON object, invalid UTF-8, or too deeply nested.
+
+Safe fix: Send the signed envelope as raw JSON with `Content-Type: application/json` or another supported JSON media type. Do not rely on form fields, query strings, or Laravel-mutated parsed input to repair malformed signed JSON.
+
 ## `payload_hash_mismatch` With Decimal Floats
 
 Symptom: A valid outgoing message is rejected with:

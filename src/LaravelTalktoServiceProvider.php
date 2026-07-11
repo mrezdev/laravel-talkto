@@ -51,6 +51,7 @@ use Mrezdev\LaravelTalkto\Services\TalktoResultCallbackReceiver;
 use Mrezdev\LaravelTalkto\Services\TalktoResultCallbackSender;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 use Mrezdev\LaravelTalkto\Services\TalktoSecurityAuditor;
+use Mrezdev\LaravelTalkto\Services\TalktoSignedRequestDecoder;
 use Mrezdev\LaravelTalkto\Services\TalktoStaleMessageRecoveryService;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelJsonPresenter;
 use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
@@ -81,6 +82,7 @@ class LaravelTalktoServiceProvider extends ServiceProvider
         $this->app->bind(TalktoPanelConnectionHealthChecker::class);
         $this->app->bind(TalktoPanelJsonPresenter::class);
         $this->app->bind(TalktoResultCallbackMessageFactory::class);
+        $this->app->bind(TalktoSignedRequestDecoder::class);
         $this->app->bind(ResultCallbackSenderContract::class, TalktoResultCallbackSender::class);
         $this->app->bind(ResultCallbackReceiverContract::class, TalktoResultCallbackReceiver::class);
         $this->app->bind(ReceiveIncomingTalktoMessagePipeline::class);

@@ -38,6 +38,12 @@ The default HTTP transport also uses deterministic JSON for the final request bo
 
 Host applications may still choose decimal strings for money or quantity contracts that require exact scale. That is a domain contract choice; the Talkto transport itself safely supports valid JSON floats.
 
+## Raw JSON Body Verification
+
+Package receive and callback routes verify JSON requests from the raw HTTP body, not from Laravel's parsed input bags. This matters because normal Laravel middleware such as `TrimStrings` and `ConvertEmptyStringsToNull` can change parsed JSON values before a controller runs. Signed Talkto JSON is decoded from `Request::getContent()`, then the same decoded envelope is used for validation, payload hash verification, signature verification, storage, dispatch, and callback application.
+
+JSON requests must use a JSON content type such as `application/json`, `application/json; charset=UTF-8`, or an `application/*+json` media type. Malformed, empty, scalar, list-root, invalid UTF-8, or excessively nested JSON requests fail closed with `invalid_json`; the package does not fall back to parsed input for malformed JSON. Clearly non-JSON requests keep the previous parsed-input compatibility path.
+
 ## Nonce Replay Protection
 
 v2 nonce replay protection is separate from `message_id` idempotency:

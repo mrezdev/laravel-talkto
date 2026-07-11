@@ -9,10 +9,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageDirection;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
+use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoRequestJsonException;
 use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoNonceLedger;
 use Mrezdev\LaravelTalkto\Services\TalktoSignatureVerifier;
+use Mrezdev\LaravelTalkto\Services\TalktoSignedRequestDecoder;
 use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 use Throwable;
 
@@ -21,9 +23,20 @@ use Throwable;
  */
 class ReceiveIncomingTalktoMessagePipeline
 {
+    public function __construct(private readonly ?TalktoSignedRequestDecoder $signedRequestDecoder = null) {}
+
     public function receive(Request $request, TalktoSignatureVerifier $verifier): JsonResponse
     {
-        $envelope = $request->all();
+        try {
+            $envelope = $this->signedRequestDecoder()->decode($request);
+        } catch (InvalidTalktoRequestJsonException $exception) {
+            return new JsonResponse([
+                'received' => false,
+                'status' => 'rejected',
+                'error' => $exception->error(),
+            ], $exception->status());
+        }
+
         $messageClass = $this->messageModelClass();
 
         $validator = Validator::make($envelope, [
@@ -300,5 +313,10 @@ class ReceiveIncomingTalktoMessagePipeline
         return is_string($class) && is_a($class, ProcessIncomingTalktoMessage::class, true)
             ? $class
             : ProcessIncomingTalktoMessage::class;
+    }
+
+    private function signedRequestDecoder(): TalktoSignedRequestDecoder
+    {
+        return $this->signedRequestDecoder ?? app(TalktoSignedRequestDecoder::class);
     }
 }
