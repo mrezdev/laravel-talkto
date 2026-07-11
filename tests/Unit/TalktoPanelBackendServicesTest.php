@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Schema;
+use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
 use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
@@ -31,6 +32,7 @@ test('panel message filters normalize empty strings and export arrays', function
     $filters = TalktoPanelMessageFilters::fromArray([
         'direction' => ' outgoing ',
         'status' => '',
+        'completion_state' => ' not_completed ',
         'service' => 'target-alpha',
         'command' => 'domain.sync',
         'message_id' => ' ',
@@ -43,12 +45,14 @@ test('panel message filters normalize empty strings and export arrays', function
 
     expect($filters->direction)->toBe('outgoing')
         ->and($filters->status)->toBeNull()
+        ->and($filters->completionState)->toBe('not_completed')
         ->and($filters->messageId)->toBeNull()
         ->and($filters->correlationId)->toBe('corr-123')
         ->and($filters->idempotencyKey)->toBeNull()
         ->and($filters->toArray())->toMatchArray([
             'direction' => 'outgoing',
             'status' => null,
+            'completion_state' => 'not_completed',
             'service' => 'target-alpha',
             'command' => 'domain.sync',
             'message_id' => null,
@@ -64,12 +68,14 @@ test('panel message filters ignore unsupported finite values and invalid dates',
     $filters = TalktoPanelMessageFilters::fromArray([
         'direction' => 'sideways',
         'status' => 'not-real',
+        'completion_state' => 'finished-ish',
         'createdFrom' => 'not-a-date',
         'createdTo' => '2026-01-02T15:30',
     ]);
 
     expect($filters->direction)->toBeNull()
         ->and($filters->status)->toBeNull()
+        ->and($filters->completionState)->toBeNull()
         ->and($filters->createdFrom)->toBeNull()
         ->and($filters->createdTo)->toBe('2026-01-02 15:30:00');
 });
@@ -294,6 +300,79 @@ test('panel message query paginates latest messages and applies filters', functi
     expect($query->findMessage('panel-in')?->id)->toBe($incoming->id);
     expect($query->findMessage('missing-message'))->toBeNull();
     expect($query->paginate(TalktoPanelMessageFilters::fromArray(['message_id' => (string) $old->id]), 10)->total())->toBe(1);
+});
+
+test('panel message query filters completed and not completed states from canonical statuses', function (): void {
+    foreach (TalktoMessageStatus::cases() as $status) {
+        panelMessage('panel-completion-'.$status->value, $status === TalktoMessageStatus::Succeeded ? 'incoming' : 'outgoing', $status->value);
+    }
+
+    $query = app(TalktoPanelMessageQuery::class);
+    $completed = collect($query->paginate(TalktoPanelMessageFilters::fromArray([
+        'completion_state' => TalktoPanelMessageFilters::COMPLETION_STATE_COMPLETED,
+    ]), 100)->items())->pluck('message_id')->sort()->values()->all();
+    $notCompleted = collect($query->paginate(TalktoPanelMessageFilters::fromArray([
+        'completion_state' => TalktoPanelMessageFilters::COMPLETION_STATE_NOT_COMPLETED,
+    ]), 100)->items())->pluck('message_id')->sort()->values()->all();
+
+    $expectedCompleted = collect(TalktoMessageStatus::successfulCompletionValues())
+        ->map(fn (string $status): string => 'panel-completion-'.$status)
+        ->sort()
+        ->values()
+        ->all();
+    $expectedNotCompleted = collect(TalktoMessageStatus::cases())
+        ->reject(fn (TalktoMessageStatus $status): bool => $status->isSuccessfulCompletion())
+        ->map(fn (TalktoMessageStatus $status): string => 'panel-completion-'.$status->value)
+        ->sort()
+        ->values()
+        ->all();
+
+    expect(TalktoMessageStatus::successfulCompletionValues())->toBe(['succeeded', 'completed'])
+        ->and($completed)->toBe($expectedCompleted)
+        ->and($notCompleted)->toBe($expectedNotCompleted);
+});
+
+test('panel message completion filter combines with detailed status and direction filters', function (): void {
+    panelMessage('panel-completed-outgoing', 'outgoing', 'completed', [
+        'target_service' => 'target-alpha',
+        'command' => 'domain.sync',
+    ]);
+    panelMessage('panel-succeeded-incoming', 'incoming', 'succeeded', [
+        'source_service' => 'source-alpha',
+        'command' => 'website.event-created',
+    ]);
+    panelMessage('panel-final-outgoing', 'outgoing', 'failed_final', [
+        'target_service' => 'target-alpha',
+        'command' => 'domain.sync',
+        'business_key' => 'business-failed',
+    ]);
+    panelMessage('panel-retryable-incoming', 'incoming', 'failed_retryable', [
+        'source_service' => 'source-alpha',
+        'command' => 'website.event-created',
+        'business_key' => 'business-retryable',
+    ]);
+
+    $query = app(TalktoPanelMessageQuery::class);
+
+    expect($query->paginate(TalktoPanelMessageFilters::fromArray([
+        'completion_state' => 'not_completed',
+        'status' => 'failed_final',
+    ]), 10)->total())->toBe(1)
+        ->and($query->paginate(TalktoPanelMessageFilters::fromArray([
+            'completion_state' => 'completed',
+            'status' => 'failed_final',
+        ]), 10)->total())->toBe(0)
+        ->and($query->paginate(TalktoPanelMessageFilters::fromArray([
+            'completion_state' => 'completed',
+            'status' => 'succeeded',
+        ]), 10)->total())->toBe(1)
+        ->and($query->paginate(TalktoPanelMessageFilters::fromArray([
+            'completion_state' => 'not_completed',
+            'direction' => 'incoming',
+            'service' => 'source-alpha',
+            'command' => 'website.event-created',
+            'business_key' => 'business-retryable',
+        ]), 10)->total())->toBe(1);
 });
 
 test('panel message query returns empty results when messages table is missing', function (): void {

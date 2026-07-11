@@ -5,6 +5,7 @@ namespace Mrezdev\LaravelTalkto\Services\Panel;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator as LaravelLengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
 use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
@@ -131,6 +132,7 @@ class TalktoPanelMessageQuery
         return $query
             ->when($filters->direction !== null, fn (Builder $query) => $query->where('direction', $filters->direction))
             ->when($filters->status !== null, fn (Builder $query) => $query->where('overall_status', $filters->status))
+            ->when($filters->completionState !== null, fn (Builder $query) => $this->applyCompletionStateFilter($query, $filters->completionState))
             ->when($filters->service !== null, function (Builder $query) use ($filters): void {
                 if ($filters->direction === 'outgoing') {
                     $query->where('target_service', $filters->service);
@@ -167,6 +169,24 @@ class TalktoPanelMessageQuery
             ->when($filters->idempotencyKey !== null, fn (Builder $query) => $query->where('idempotency_key', 'like', '%'.$filters->idempotencyKey.'%'))
             ->when($filters->createdFrom !== null, fn (Builder $query) => $query->where('created_at', '>=', $filters->createdFrom))
             ->when($filters->createdTo !== null, fn (Builder $query) => $query->where('created_at', '<=', $filters->createdTo));
+    }
+
+    private function applyCompletionStateFilter(Builder $query, string $completionState): void
+    {
+        $completedStatuses = TalktoMessageStatus::successfulCompletionValues();
+
+        if ($completionState === TalktoPanelMessageFilters::COMPLETION_STATE_COMPLETED) {
+            $query->whereIn('overall_status', $completedStatuses);
+
+            return;
+        }
+
+        if ($completionState === TalktoPanelMessageFilters::COMPLETION_STATE_NOT_COMPLETED) {
+            $query->where(function (Builder $query) use ($completedStatuses): void {
+                $query->whereNull('overall_status')
+                    ->orWhereNotIn('overall_status', $completedStatuses);
+            });
+        }
     }
 
     private function baseMessageQuery(): Builder

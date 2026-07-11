@@ -12,6 +12,9 @@
     $statusOptions = collect(\Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus::cases())
         ->mapWithKeys(fn ($case) => [$case->value => __('talkto::panel.messages.statuses.'.$case->value)])
         ->all();
+    $completionStateOptions = collect(\Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelMessageFilters::completionStates())
+        ->mapWithKeys(fn ($value) => [$value => __('talkto::panel.messages.completion_states.'.$value)])
+        ->all();
     $datetimeLocalValue = static function (?string $value): string {
         if ($value === null || trim($value) === '') {
             return '';
@@ -49,6 +52,16 @@
                     <option value="">{{ __('talkto::panel.common.any') }}</option>
                     @foreach ($statusOptions as $value => $label)
                         <option value="{{ $value }}" @selected(($currentFilters['status'] ?? null) === $value)>{{ $label }}</option>
+                    @endforeach
+                </select>
+            </label>
+
+            <label class="block text-sm">
+                <span class="font-medium text-slate-700">{{ __('talkto::panel.messages.filters.completion_state') }}</span>
+                <select name="completion_state" class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500">
+                    <option value="">{{ __('talkto::panel.messages.completion_states.all') }}</option>
+                    @foreach ($completionStateOptions as $value => $label)
+                        <option value="{{ $value }}" @selected(($currentFilters['completion_state'] ?? null) === $value)>{{ $label }}</option>
                     @endforeach
                 </select>
             </label>

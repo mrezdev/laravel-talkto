@@ -49,12 +49,17 @@ test('message filters render finite selects datetime controls and preserve value
         'updated_at' => Carbon::parse('2026-06-20 12:15:00'),
     ]);
 
-    $this->get('/talkto/messages?direction=outgoing&status=completed&createdFrom=2026-06-20T10:00&createdTo=2026-06-21T10:00&messageId=phase8&command=domain.sync')
+    $this->get('/talkto/messages?direction=outgoing&status=completed&completion_state=completed&createdFrom=2026-06-20T10:00&createdTo=2026-06-21T10:00&messageId=phase8&command=domain.sync')
         ->assertOk()
         ->assertSee('<select name="direction"', false)
         ->assertSee('<option value="outgoing" selected>outgoing</option>', false)
         ->assertSee('<select name="status"', false)
         ->assertSee('<option value="completed" selected>completed</option>', false)
+        ->assertSee('Completion state')
+        ->assertSee('<select name="completion_state"', false)
+        ->assertSee('<option value="">All</option>', false)
+        ->assertSee('<option value="completed" selected>Completed</option>', false)
+        ->assertSee('<option value="not_completed" >Not completed</option>', false)
         ->assertSee('<input type="datetime-local" name="createdFrom" value="2026-06-20T10:00"', false)
         ->assertSee('<input type="datetime-local" name="createdTo" value="2026-06-21T10:00"', false)
         ->assertSee('<input type="text" name="messageId" value="phase8"', false)
@@ -68,10 +73,11 @@ test('message filters ignore invalid finite and datetime values', function (): v
 
     p8PanelMessage('phase8-invalid-filter', 'outgoing', 'completed');
 
-    $this->getJson('/talkto/messages?direction=sideways&status=nope&createdFrom=not-a-date&createdTo=also-nope')
+    $this->getJson('/talkto/messages?direction=sideways&status=nope&completion_state=invalid&createdFrom=not-a-date&createdTo=also-nope')
         ->assertOk()
         ->assertJsonPath('filters.direction', null)
         ->assertJsonPath('filters.status', null)
+        ->assertJsonPath('filters.completion_state', null)
         ->assertJsonPath('filters.created_from', null)
         ->assertJsonPath('filters.created_to', null)
         ->assertJsonPath('messages.total', 1);
@@ -93,14 +99,43 @@ test('message filters still apply direction status date range and text filters',
         'updated_at' => Carbon::parse('2026-06-19 12:15:00'),
     ]);
 
-    $this->getJson('/talkto/messages?direction=outgoing&status=completed&createdFrom=2026-06-20T00:00&createdTo=2026-06-20T23:59&messageId=phase8-filter-out')
+    $this->getJson('/talkto/messages?direction=outgoing&status=completed&completion_state=completed&createdFrom=2026-06-20T00:00&createdTo=2026-06-20T23:59&messageId=phase8-filter-out')
         ->assertOk()
         ->assertJsonPath('filters.direction', 'outgoing')
         ->assertJsonPath('filters.status', 'completed')
+        ->assertJsonPath('filters.completion_state', 'completed')
         ->assertJsonPath('filters.created_from', '2026-06-20 00:00:00')
         ->assertJsonPath('filters.created_to', '2026-06-20 23:59:00')
         ->assertJsonPath('messages.total', 1)
         ->assertJsonPath('messages.data.0.message_id', 'phase8-filter-out');
+});
+
+test('completion state filter persists through pagination and clear link resets it', function (): void {
+    ($this->bootPhase8PanelApp)();
+
+    config(['talkto.panel.messages.per_page' => 1]);
+
+    p8PanelMessage('phase8-page-completed', 'outgoing', 'completed', [
+        'created_at' => Carbon::parse('2026-06-22 12:00:00'),
+        'updated_at' => Carbon::parse('2026-06-22 12:00:00'),
+    ]);
+    p8PanelMessage('phase8-page-pending', 'outgoing', 'waiting_to_send', [
+        'created_at' => Carbon::parse('2026-06-21 12:00:00'),
+        'updated_at' => Carbon::parse('2026-06-21 12:00:00'),
+    ]);
+    p8PanelMessage('phase8-page-final', 'outgoing', 'failed_final', [
+        'created_at' => Carbon::parse('2026-06-20 12:00:00'),
+        'updated_at' => Carbon::parse('2026-06-20 12:00:00'),
+    ]);
+
+    $this->get('/talkto/messages?completion_state=not_completed&page=2')
+        ->assertOk()
+        ->assertSee('<option value="not_completed" selected>Not completed</option>', false)
+        ->assertSee('phase8-page-final')
+        ->assertDontSee('phase8-page-completed')
+        ->assertSee('completion_state=not_completed', false)
+        ->assertSee('Clear')
+        ->assertDontSee('name="page"', false);
 });
 
 function p8PanelUseEnv(array $values = []): void

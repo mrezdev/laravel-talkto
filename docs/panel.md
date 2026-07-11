@@ -123,6 +123,14 @@ The dashboard shows recent local Talkto messages and passive connection health. 
 
 Dashboard and message list queries use a small list-safe column set. They intentionally avoid loading payloads, response bodies, large error text, lock fields, or full heavy records that are only needed by detail, trace, or action flows.
 
+The message list keeps the detailed `Status` filter for technical lifecycle values and also includes a separate `Completion state` filter for business-level review:
+
+- `All`: no completion-state predicate.
+- `Completed`: messages whose `overall_status` is one of the package's successful final states, currently `succeeded` or `completed`.
+- `Not completed`: messages whose `overall_status` has not reached a successful final state, including pending, waiting, sending, received, processing, retryable failures, final failures, dead letters, skipped, cancelled, unknown, and any future non-success status.
+
+The completion-state filter is virtual and is never stored as a message status. It combines with the detailed `Status` filter using normal AND behavior, so `Completion state = Not completed` plus `Status = failed_final` shows only final failures, while `Completion state = Completed` plus `Status = failed_final` shows no rows.
+
 Incoming-only services may show `unknown` when there is no recent local traffic. That means the panel has no local evidence yet; it is not a confirmed outage.
 
 When multiple services share the same Talkto database, the panel shows only rows involving the current configured service by default:

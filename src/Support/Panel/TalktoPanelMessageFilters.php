@@ -11,9 +11,14 @@ use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
  */
 class TalktoPanelMessageFilters
 {
+    public const COMPLETION_STATE_COMPLETED = 'completed';
+
+    public const COMPLETION_STATE_NOT_COMPLETED = 'not_completed';
+
     public function __construct(
         public readonly ?string $direction = null,
         public readonly ?string $status = null,
+        public readonly ?string $completionState = null,
         public readonly ?string $service = null,
         public readonly ?string $command = null,
         public readonly ?string $messageId = null,
@@ -38,6 +43,7 @@ class TalktoPanelMessageFilters
         return new self(
             self::allowedStringOrNull($input['direction'] ?? null, $directions),
             self::allowedStringOrNull($input['status'] ?? null, $statuses),
+            self::allowedStringOrNull($input['completion_state'] ?? $input['completionState'] ?? null, self::completionStates()),
             self::stringOrNull($input['service'] ?? null),
             self::stringOrNull($input['command'] ?? null),
             self::stringOrNull($input['message_id'] ?? $input['messageId'] ?? null),
@@ -54,6 +60,7 @@ class TalktoPanelMessageFilters
         return [
             'direction' => $this->direction,
             'status' => $this->status,
+            'completion_state' => $this->completionState,
             'service' => $this->service,
             'command' => $this->command,
             'message_id' => $this->messageId,
@@ -62,6 +69,17 @@ class TalktoPanelMessageFilters
             'idempotency_key' => $this->idempotencyKey,
             'created_from' => $this->createdFrom,
             'created_to' => $this->createdTo,
+        ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function completionStates(): array
+    {
+        return [
+            self::COMPLETION_STATE_COMPLETED,
+            self::COMPLETION_STATE_NOT_COMPLETED,
         ];
     }
 

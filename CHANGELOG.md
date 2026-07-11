@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Panel Usability
+
+- Added a Talkto Panel completion-state filter beside the existing detailed status filter, with `Completed` showing canonical successful final states and `Not completed` showing pending, in-progress, failed, dead-lettered, and other non-success states.
+
 ### Float Payload Hash Hardening
 
 - Added deterministic Talkto JSON encoding for payload hashing and the default HTTP transport so valid JSON floats such as `79.95` and `77.95` are stable across PHP `serialize_precision` settings.

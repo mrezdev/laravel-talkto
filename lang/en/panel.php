@@ -97,6 +97,7 @@ return [
         'filters' => [
             'direction' => 'Direction',
             'status' => 'Status',
+            'completion_state' => 'Completion state',
             'service' => 'Service',
             'command' => 'Command',
             'message_id' => 'Message ID',
@@ -175,6 +176,12 @@ return [
             'dead_lettered' => 'dead lettered',
             'cancelled' => 'cancelled',
             'unknown' => 'unknown',
+        ],
+
+        'completion_states' => [
+            'all' => 'All',
+            'completed' => 'Completed',
+            'not_completed' => 'Not completed',
         ],
     ],
 

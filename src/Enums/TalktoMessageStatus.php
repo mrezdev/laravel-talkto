@@ -26,4 +26,23 @@ enum TalktoMessageStatus: string
     case DeadLettered = 'dead_lettered';
     case Cancelled = 'cancelled';
     case Unknown = 'unknown';
+
+    public function isSuccessfulCompletion(): bool
+    {
+        return in_array($this, [
+            self::Succeeded,
+            self::Completed,
+        ], true);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function successfulCompletionValues(): array
+    {
+        return array_values(array_map(
+            static fn (self $status): string => $status->value,
+            array_filter(self::cases(), static fn (self $status): bool => $status->isSuccessfulCompletion())
+        ));
+    }
 }

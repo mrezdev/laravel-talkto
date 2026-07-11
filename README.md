@@ -259,6 +259,8 @@ TALKTO_PANEL_ENABLED=false
 
 If you enable it, keep every panel route behind host-owned auth/admin middleware and the configured gate. Keep payload and response visibility disabled unless operators are explicitly allowed to view that data. See [docs/panel.md](docs/panel.md).
 
+The message list includes both the detailed technical `Status` filter and a business-level `Completion state` filter for reviewing completed versus not-completed operations without selecting each lifecycle status manually.
+
 ## Testing And Local Validation
 
 For a package checkout:
