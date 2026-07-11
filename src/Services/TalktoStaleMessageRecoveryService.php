@@ -2,12 +2,12 @@
 
 namespace Mrezdev\LaravelTalkto\Services;
 
-use Illuminate\Support\Facades\DB;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageDirection;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
 use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
 use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Support\TalktoModelConnection;
 use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 
 /**
@@ -91,7 +91,9 @@ class TalktoStaleMessageRecoveryService
     {
         $messageClass = $this->messageModelClass();
 
-        return DB::transaction(function () use ($messageClass, $message, $olderThanMinutes): array {
+        TalktoModelConnection::assertSameConnection($message, $this->eventModelClass());
+
+        return TalktoModelConnection::transaction($message, function () use ($messageClass, $message, $olderThanMinutes): array {
             $locked = $messageClass::query()
                 ->whereKey($message->id)
                 ->lockForUpdate()
@@ -127,6 +129,8 @@ class TalktoStaleMessageRecoveryService
                 ]);
 
                 if ($this->deadLetterQueue->autoStoreEnabled()) {
+                    TalktoModelConnection::assertSameConnection($locked, $this->deadLetterModelClass(), $this->eventModelClass());
+
                     $this->deadLetterQueue->store($locked, $locked->last_error);
                 }
 
@@ -205,6 +209,8 @@ class TalktoStaleMessageRecoveryService
     {
         $eventClass = $this->eventModelClass();
 
+        TalktoModelConnection::assertSameConnection($message, $eventClass);
+
         $eventClass::query()->create([
             'talkto_message_id' => $message->id,
             'message_id' => $message->message_id,
@@ -237,6 +243,11 @@ class TalktoStaleMessageRecoveryService
     private function eventModelClass(): string
     {
         return app(TalktoModelResolver::class)->event();
+    }
+
+    private function deadLetterModelClass(): string
+    {
+        return app(TalktoModelResolver::class)->deadLetter();
     }
 
     private function sendJobClass(): string

@@ -4,7 +4,6 @@ namespace Mrezdev\LaravelTalkto\Services;
 
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Database\QueryException;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use JsonSerializable;
@@ -12,6 +11,7 @@ use Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageDirection;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Support\TalktoModelConnection;
 use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 use Throwable;
 
@@ -72,8 +72,10 @@ class TalktoOutgoingMessageFactory
             }
         }
 
+        TalktoModelConnection::assertSameConnection($messageClass, $eventClass);
+
         try {
-            return DB::transaction(function () use (
+            return TalktoModelConnection::transaction($messageClass, function () use (
                 $messageClass,
                 $eventClass,
                 $messageId,

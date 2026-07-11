@@ -2,7 +2,6 @@
 
 namespace Mrezdev\LaravelTalkto\Pipelines;
 
-use Illuminate\Support\Facades\DB;
 use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
 use Mrezdev\LaravelTalkto\Enums\TalktoAttemptStatus;
@@ -14,6 +13,7 @@ use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
 use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResolver;
 use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
+use Mrezdev\LaravelTalkto\Support\TalktoModelConnection;
 use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
 use Throwable;
@@ -118,6 +118,8 @@ class ProcessIncomingTalktoMessagePipeline
     {
         $attemptClass = $this->attemptModelClass();
 
+        TalktoModelConnection::assertSameConnection($message, $attemptClass);
+
         $attemptClass::query()->create([
             'talkto_message_id' => $message->id,
             'message_id' => $message->message_id,
@@ -131,11 +133,13 @@ class ProcessIncomingTalktoMessagePipeline
 
     private function markProcessing(TalktoRetryPolicy $retryPolicy): ?array
     {
-        return DB::transaction(function () use ($retryPolicy): ?array {
-            $messageClass = $this->messageModelClass();
-            $attemptClass = $this->attemptModelClass();
-            $eventClass = $this->eventModelClass();
+        $messageClass = $this->messageModelClass();
+        $attemptClass = $this->attemptModelClass();
+        $eventClass = $this->eventModelClass();
 
+        TalktoModelConnection::assertSameConnection($messageClass, $attemptClass, $eventClass);
+
+        return TalktoModelConnection::transaction($messageClass, function () use ($messageClass, $attemptClass, $eventClass, $retryPolicy): ?array {
             $message = $messageClass::query()
                 ->whereKey($this->talktoMessageId)
                 ->lockForUpdate()
@@ -236,6 +240,8 @@ class ProcessIncomingTalktoMessagePipeline
     {
         $eventClass = $this->eventModelClass();
 
+        TalktoModelConnection::assertSameConnection($message, $eventClass);
+
         $eventClass::query()->create([
             'talkto_message_id' => $message->id,
             'message_id' => $message->message_id,
@@ -252,7 +258,9 @@ class ProcessIncomingTalktoMessagePipeline
 
     private function applySkippedResult(TalktoMessage $message, TalktoAttempt $attempt, IncomingCommandResultContract $result): void
     {
-        DB::transaction(function () use ($message, $attempt, $result): void {
+        TalktoModelConnection::assertSameConnection($message, $attempt, $this->eventModelClass());
+
+        TalktoModelConnection::transaction($message, function () use ($message, $attempt, $result): void {
             $messageClass = $this->messageModelClass();
             $eventClass = $this->eventModelClass();
             $meta = $result->meta();
@@ -296,7 +304,9 @@ class ProcessIncomingTalktoMessagePipeline
 
     private function applySuccessfulResult(TalktoMessage $message, TalktoAttempt $attempt, IncomingCommandResultContract $result): void
     {
-        DB::transaction(function () use ($message, $attempt, $result): void {
+        TalktoModelConnection::assertSameConnection($message, $attempt, $this->eventModelClass());
+
+        TalktoModelConnection::transaction($message, function () use ($message, $attempt, $result): void {
             $messageClass = $this->messageModelClass();
             $eventClass = $this->eventModelClass();
             $resultPayload = $result->result();
@@ -347,7 +357,9 @@ class ProcessIncomingTalktoMessagePipeline
     {
         $newStatus = $result->isRetryable() ? TalktoMessageStatus::FailedRetryable->value : TalktoMessageStatus::FailedFinal->value;
 
-        DB::transaction(function () use ($message, $attempt, $result, $newStatus, $retryPolicy): void {
+        TalktoModelConnection::assertSameConnection($message, $attempt, $this->eventModelClass());
+
+        TalktoModelConnection::transaction($message, function () use ($message, $attempt, $result, $newStatus, $retryPolicy): void {
             $messageClass = $this->messageModelClass();
             $eventClass = $this->eventModelClass();
             $retryable = $result->isRetryable();
@@ -418,7 +430,11 @@ class ProcessIncomingTalktoMessagePipeline
 
     private function applyUnexpectedFailure(TalktoMessage $message, ?TalktoAttempt $attempt, Throwable $throwable, TalktoRetryPolicy $retryPolicy): ?IncomingCommandResultContract
     {
-        return DB::transaction(function () use ($message, $attempt, $throwable, $retryPolicy): ?IncomingCommandResultContract {
+        $attempt instanceof TalktoAttempt
+            ? TalktoModelConnection::assertSameConnection($message, $attempt, $this->eventModelClass())
+            : TalktoModelConnection::assertSameConnection($message, $this->eventModelClass());
+
+        return TalktoModelConnection::transaction($message, function () use ($message, $attempt, $throwable, $retryPolicy): ?IncomingCommandResultContract {
             $messageClass = $this->messageModelClass();
             $eventClass = $this->eventModelClass();
 
@@ -524,6 +540,8 @@ class ProcessIncomingTalktoMessagePipeline
             return;
         }
 
+        TalktoModelConnection::assertSameConnection($message, $this->deadLetterModelClass(), $this->eventModelClass());
+
         $deadLetterQueue->store($message, $failureReason, $throwable);
     }
 
@@ -598,5 +616,10 @@ class ProcessIncomingTalktoMessagePipeline
     private function eventModelClass(): string
     {
         return app(TalktoModelResolver::class)->event();
+    }
+
+    private function deadLetterModelClass(): string
+    {
+        return app(TalktoModelResolver::class)->deadLetter();
     }
 }

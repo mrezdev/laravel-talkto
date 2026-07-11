@@ -3,13 +3,13 @@
 namespace Mrezdev\LaravelTalkto\Console\Commands;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageDirection;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
 use Mrezdev\LaravelTalkto\Exceptions\TalktoJsonEncodingException;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
+use Mrezdev\LaravelTalkto\Support\TalktoModelConnection;
 use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 
 class RepairTalktoPayloadHashCommand extends Command
@@ -85,7 +85,9 @@ class RepairTalktoPayloadHashCommand extends Command
             return self::FAILURE;
         }
 
-        return DB::transaction(function () use ($messageClass, $message, $hasher, $reason): int {
+        TalktoModelConnection::assertSameConnection($message, $this->eventModelClass());
+
+        return TalktoModelConnection::transaction($message, function () use ($messageClass, $message, $hasher, $reason): int {
             $locked = $messageClass::query()
                 ->whereKey($message->id)
                 ->lockForUpdate()

@@ -3,13 +3,14 @@
 namespace Mrezdev\LaravelTalkto\Services;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\DB;
 use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
 use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Support\TalktoModelConnection;
+use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
 use Throwable;
 
@@ -100,6 +101,10 @@ class TalktoResultCallbackSender implements ResultCallbackSenderContract
     {
         $eventClass = $this->eventModelClass();
 
+        if ($message instanceof TalktoMessage) {
+            TalktoModelConnection::assertSameConnection($message, $eventClass);
+        }
+
         $eventClass::query()->create([
             'talkto_message_id' => $message->id,
             'message_id' => (string) ($message->message_id ?? ''),
@@ -113,11 +118,7 @@ class TalktoResultCallbackSender implements ResultCallbackSenderContract
 
     private function eventModelClass(): string
     {
-        $class = config('talkto.models.event', TalktoEvent::class);
-
-        return is_string($class) && is_a($class, TalktoEvent::class, true)
-            ? $class
-            : TalktoEvent::class;
+        return app(TalktoModelResolver::class)->event();
     }
 
     private function dispatchSendJob(int $messageId): void
@@ -144,7 +145,9 @@ class TalktoResultCallbackSender implements ResultCallbackSenderContract
      */
     private function prepareDispatchDecision(TalktoMessage $message, TalktoMessage $callbackMessage): array
     {
-        return DB::transaction(function () use ($message, $callbackMessage): array {
+        TalktoModelConnection::assertSameConnection($callbackMessage, $this->eventModelClass());
+
+        return TalktoModelConnection::transaction($callbackMessage, function () use ($message, $callbackMessage): array {
             $lockedCallbackMessage = $callbackMessage->newQuery()
                 ->whereKey($callbackMessage->getKey())
                 ->lockForUpdate()

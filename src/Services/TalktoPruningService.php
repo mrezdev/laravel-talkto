@@ -3,8 +3,8 @@
 namespace Mrezdev\LaravelTalkto\Services;
 
 use Carbon\CarbonInterface;
-use Illuminate\Support\Facades\DB;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
+use Mrezdev\LaravelTalkto\Support\TalktoModelConnection;
 use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 
 /**
@@ -142,7 +142,14 @@ class TalktoPruningService
             return $result;
         }
 
-        return DB::transaction(function () use ($messageClass, $ids, $result): array {
+        TalktoModelConnection::assertSameConnection(
+            $messageClass,
+            $this->attemptModelClass(),
+            $this->eventModelClass(),
+            $this->deadLetterModelClass()
+        );
+
+        return TalktoModelConnection::transaction($messageClass, function () use ($messageClass, $ids, $result): array {
             $messages = $messageClass::query()
                 ->whereKey($ids)
                 ->whereIn('overall_status', self::TERMINAL_MESSAGE_STATUSES)

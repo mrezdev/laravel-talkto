@@ -2,13 +2,13 @@
 
 namespace Mrezdev\LaravelTalkto\Services;
 
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use InvalidArgumentException;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackReceiverContract;
 use Mrezdev\LaravelTalkto\Data\TalktoResultCallbackData;
-use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Support\TalktoModelConnection;
+use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 
 /**
  * @internal Default receiver behind ResultCallbackReceiverContract.
@@ -119,7 +119,7 @@ class TalktoResultCallbackReceiver implements ResultCallbackReceiverContract
             return $this->accepted('stale_ignored', $callback, false);
         }
 
-        $applyResult = DB::transaction(function () use ($message, $callback, $destinationStatus, $overallStatus): array {
+        $applyResult = TalktoModelConnection::transaction($message, function () use ($message, $callback, $destinationStatus, $overallStatus): array {
             $messageClass = $this->messageModelClass();
             $message = $messageClass::query()->whereKey($message->id)->lockForUpdate()->first();
 
@@ -320,6 +320,8 @@ class TalktoResultCallbackReceiver implements ResultCallbackReceiverContract
     {
         $eventClass = $this->eventModelClass();
 
+        TalktoModelConnection::assertSameConnection($message, $eventClass);
+
         $eventClass::query()->create([
             'talkto_message_id' => $message->id,
             'message_id' => $message->message_id,
@@ -355,19 +357,11 @@ class TalktoResultCallbackReceiver implements ResultCallbackReceiverContract
 
     private function messageModelClass(): string
     {
-        $class = config('talkto.models.message', TalktoMessage::class);
-
-        return is_string($class) && is_a($class, TalktoMessage::class, true)
-            ? $class
-            : TalktoMessage::class;
+        return app(TalktoModelResolver::class)->message();
     }
 
     private function eventModelClass(): string
     {
-        $class = config('talkto.models.event', TalktoEvent::class);
-
-        return is_string($class) && is_a($class, TalktoEvent::class, true)
-            ? $class
-            : TalktoEvent::class;
+        return app(TalktoModelResolver::class)->event();
     }
 }

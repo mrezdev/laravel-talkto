@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Connection-Aware Transactions
+
+- Hardened Talkto-owned transactions and row locks so message, attempt, event, dead-letter, retry, callback, stale recovery, repair, prune, and panel mutation writes run on the resolved Talkto model connection instead of Laravel's default transaction connection.
+- Added an internal connection compatibility guard for atomic Talkto writes; incompatible custom Talkto model connections now fail clearly before partial message/event writes.
+- Added focused regression coverage for default storage, separate Talkto storage, callback dispatch locking, rollback on event-write failure, custom model connection overrides, and incompatible custom event connections.
+
 ### Panel Usability
 
 - Added a Talkto Panel completion-state filter beside the existing detailed status filter, with `Completed` showing canonical successful final states and `Not completed` showing pending, in-progress, failed, dead-lettered, and other non-success states.

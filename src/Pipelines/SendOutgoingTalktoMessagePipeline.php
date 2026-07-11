@@ -2,7 +2,6 @@
 
 namespace Mrezdev\LaravelTalkto\Pipelines;
 
-use Illuminate\Support\Facades\DB;
 use Mrezdev\LaravelTalkto\Contracts\TalktoHttpClient;
 use Mrezdev\LaravelTalkto\Contracts\TalktoHttpClientWithOptions;
 use Mrezdev\LaravelTalkto\Enums\TalktoAttemptStatus;
@@ -15,6 +14,7 @@ use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
 use Mrezdev\LaravelTalkto\Services\TalktoOutgoingEnvelopeBuilder;
 use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
+use Mrezdev\LaravelTalkto\Support\TalktoModelConnection;
 use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 use Throwable;
 
@@ -168,6 +168,8 @@ class SendOutgoingTalktoMessagePipeline
     {
         $attemptClass = $this->attemptModelClass();
 
+        TalktoModelConnection::assertSameConnection($message, $attemptClass);
+
         $attemptClass::create([
             'talkto_message_id' => $message->id,
             'message_id' => $message->message_id,
@@ -185,7 +187,9 @@ class SendOutgoingTalktoMessagePipeline
         $attemptClass = $this->attemptModelClass();
         $eventClass = $this->eventModelClass();
 
-        return DB::transaction(function () use ($messageClass, $attemptClass, $eventClass, $retryPolicy): ?array {
+        TalktoModelConnection::assertSameConnection($messageClass, $attemptClass, $eventClass);
+
+        return TalktoModelConnection::transaction($messageClass, function () use ($messageClass, $attemptClass, $eventClass, $retryPolicy): ?array {
             $message = $messageClass::query()
                 ->whereKey($this->talktoMessageId)
                 ->lockForUpdate()
@@ -293,7 +297,9 @@ class SendOutgoingTalktoMessagePipeline
         $messageClass = $this->messageModelClass();
         $eventClass = $this->eventModelClass();
 
-        DB::transaction(function () use ($messageClass, $eventClass, $message, $attempt, $response, $received, $destinationStatus, $overallStatus, $responseExcerpt): void {
+        TalktoModelConnection::assertSameConnection($message, $attempt, $eventClass);
+
+        TalktoModelConnection::transaction($message, function () use ($messageClass, $eventClass, $message, $attempt, $response, $received, $destinationStatus, $overallStatus, $responseExcerpt): void {
             $message = $messageClass::query()->whereKey($message->id)->lockForUpdate()->first();
 
             if (! $message) {
@@ -384,7 +390,9 @@ class SendOutgoingTalktoMessagePipeline
         $messageClass = $this->messageModelClass();
         $eventClass = $this->eventModelClass();
 
-        DB::transaction(function () use ($messageClass, $eventClass, $message, $attempt, $response, $callbackStatus, $responseExcerpt, $json): void {
+        TalktoModelConnection::assertSameConnection($message, $attempt, $eventClass);
+
+        TalktoModelConnection::transaction($message, function () use ($messageClass, $eventClass, $message, $attempt, $response, $callbackStatus, $responseExcerpt, $json): void {
             $message = $messageClass::query()->whereKey($message->id)->lockForUpdate()->first();
 
             if (! $message) {
@@ -472,7 +480,9 @@ class SendOutgoingTalktoMessagePipeline
         $messageClass = $this->messageModelClass();
         $eventClass = $this->eventModelClass();
 
-        DB::transaction(function () use ($messageClass, $eventClass, $message, $attempt, $response, $responseExcerpt, $destinationStatus, $errorCode, $errorMessage, $retryPolicy): void {
+        TalktoModelConnection::assertSameConnection($message, $attempt, $eventClass);
+
+        TalktoModelConnection::transaction($message, function () use ($messageClass, $eventClass, $message, $attempt, $response, $responseExcerpt, $destinationStatus, $errorCode, $errorMessage, $retryPolicy): void {
             $message = $messageClass::query()->whereKey($message->id)->lockForUpdate()->first();
 
             if (! $message) {
@@ -551,7 +561,9 @@ class SendOutgoingTalktoMessagePipeline
         $messageClass = $this->messageModelClass();
         $eventClass = $this->eventModelClass();
 
-        DB::transaction(function () use ($messageClass, $eventClass, $message, $attempt, $response, $status, $errorMessage, $responseExcerpt, $retryPolicy): void {
+        TalktoModelConnection::assertSameConnection($message, $attempt, $eventClass);
+
+        TalktoModelConnection::transaction($message, function () use ($messageClass, $eventClass, $message, $attempt, $response, $status, $errorMessage, $responseExcerpt, $retryPolicy): void {
             $message = $messageClass::query()->whereKey($message->id)->lockForUpdate()->first();
 
             if (! $message) {
@@ -608,7 +620,9 @@ class SendOutgoingTalktoMessagePipeline
         $messageClass = $this->messageModelClass();
         $eventClass = $this->eventModelClass();
 
-        DB::transaction(function () use ($messageClass, $eventClass, $message, $attempt, $throwable, $errorMessage, $retryPolicy): void {
+        TalktoModelConnection::assertSameConnection($message, $attempt, $eventClass);
+
+        TalktoModelConnection::transaction($message, function () use ($messageClass, $eventClass, $message, $attempt, $throwable, $errorMessage, $retryPolicy): void {
             $message = $messageClass::query()->whereKey($message->id)->lockForUpdate()->first();
 
             if (! $message) {
@@ -658,7 +672,9 @@ class SendOutgoingTalktoMessagePipeline
         $messageClass = $this->messageModelClass();
         $eventClass = $this->eventModelClass();
 
-        DB::transaction(function () use ($messageClass, $eventClass, $message, $attempt, $retryPolicy, $errorCode, $errorMessage, $meta): void {
+        TalktoModelConnection::assertSameConnection($message, $attempt, $eventClass);
+
+        TalktoModelConnection::transaction($message, function () use ($messageClass, $eventClass, $message, $attempt, $retryPolicy, $errorCode, $errorMessage, $meta): void {
             $message = $messageClass::query()->whereKey($message->id)->lockForUpdate()->first();
 
             if (! $message) {
@@ -704,6 +720,8 @@ class SendOutgoingTalktoMessagePipeline
         if (! $deadLetterQueue->autoStoreEnabled()) {
             return;
         }
+
+        TalktoModelConnection::assertSameConnection($message, $this->deadLetterModelClass(), $this->eventModelClass());
 
         $deadLetterQueue->store($message, $failureReason, $throwable);
     }
@@ -810,6 +828,11 @@ class SendOutgoingTalktoMessagePipeline
     protected function eventModelClass(): string
     {
         return app(TalktoModelResolver::class)->event();
+    }
+
+    protected function deadLetterModelClass(): string
+    {
+        return app(TalktoModelResolver::class)->deadLetter();
     }
 
     private function excerpt(mixed $value, int $limit = 2000): ?string

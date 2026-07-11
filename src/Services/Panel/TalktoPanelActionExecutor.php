@@ -2,17 +2,17 @@
 
 namespace Mrezdev\LaravelTalkto\Services\Panel;
 
-use Illuminate\Support\Facades\DB;
 use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
 use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
-use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoCurrentServiceGuard;
 use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 use Mrezdev\LaravelTalkto\Services\TalktoTraceReporter;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelActionResult;
+use Mrezdev\LaravelTalkto\Support\TalktoModelConnection;
+use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
 use Mrezdev\LaravelTalkto\Support\TalktoTraceSnapshot;
 use Throwable;
@@ -204,7 +204,9 @@ class TalktoPanelActionExecutor
     {
         $messageClass = $this->messageModelClass();
 
-        return DB::transaction(function () use ($messageClass, $message): TalktoMessage {
+        TalktoModelConnection::assertSameConnection($message, $this->eventModelClass());
+
+        return TalktoModelConnection::transaction($message, function () use ($messageClass, $message): TalktoMessage {
             $locked = $messageClass::query()
                 ->whereKey($message->id)
                 ->lockForUpdate()
@@ -286,6 +288,8 @@ class TalktoPanelActionExecutor
     {
         $eventClass = $this->eventModelClass();
 
+        TalktoModelConnection::assertSameConnection($message, $eventClass);
+
         $eventClass::query()->create([
             'talkto_message_id' => $message->id,
             'message_id' => $message->message_id,
@@ -344,20 +348,12 @@ class TalktoPanelActionExecutor
 
     private function messageModelClass(): string
     {
-        $class = config('talkto.models.message', TalktoMessage::class);
-
-        return is_string($class) && is_a($class, TalktoMessage::class, true)
-            ? $class
-            : TalktoMessage::class;
+        return app(TalktoModelResolver::class)->message();
     }
 
     private function eventModelClass(): string
     {
-        $class = config('talkto.models.event', TalktoEvent::class);
-
-        return is_string($class) && is_a($class, TalktoEvent::class, true)
-            ? $class
-            : TalktoEvent::class;
+        return app(TalktoModelResolver::class)->event();
     }
 
     private function sendJobClass(): string

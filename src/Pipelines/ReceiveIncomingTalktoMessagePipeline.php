@@ -5,7 +5,6 @@ namespace Mrezdev\LaravelTalkto\Pipelines;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageDirection;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
@@ -15,6 +14,7 @@ use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoNonceLedger;
 use Mrezdev\LaravelTalkto\Services\TalktoSignatureVerifier;
 use Mrezdev\LaravelTalkto\Services\TalktoSignedRequestDecoder;
+use Mrezdev\LaravelTalkto\Support\TalktoModelConnection;
 use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 use Throwable;
 
@@ -107,8 +107,10 @@ class ReceiveIncomingTalktoMessagePipeline
             }
         }
 
+        TalktoModelConnection::assertSameConnection($messageClass, $this->eventModelClass());
+
         try {
-            $message = DB::transaction(function () use ($envelope, $messageClass): TalktoMessage {
+            $message = TalktoModelConnection::transaction($messageClass, function () use ($envelope, $messageClass): TalktoMessage {
                 $eventClass = $this->eventModelClass();
 
                 $message = $messageClass::create([

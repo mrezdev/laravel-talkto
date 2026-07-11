@@ -3,10 +3,10 @@
 namespace Mrezdev\LaravelTalkto\Services;
 
 use Illuminate\Database\QueryException;
-use Illuminate\Support\Facades\DB;
 use Mrezdev\LaravelTalkto\Enums\TalktoDeadLetterStatus;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Support\TalktoModelConnection;
 use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 use Throwable;
 
@@ -32,6 +32,9 @@ class TalktoDeadLetterQueue
         array $headers = []
     ): TalktoDeadLetter {
         $deadLetterClass = $this->deadLetterModelClass();
+
+        TalktoModelConnection::assertSameConnection($message, $deadLetterClass, $this->eventModelClass());
+
         $existing = $this->findExistingDeadLetter($message);
 
         if ($existing) {
@@ -39,7 +42,17 @@ class TalktoDeadLetterQueue
         }
 
         try {
-            $deadLetter = $deadLetterClass::query()->create($this->deadLetterAttributes($message, $failureReason, $exception, $headers));
+            return TalktoModelConnection::transaction($message, function () use ($deadLetterClass, $message, $failureReason, $exception, $headers): TalktoDeadLetter {
+                $deadLetter = $deadLetterClass::query()->create($this->deadLetterAttributes($message, $failureReason, $exception, $headers));
+
+                $this->recordEvent($message, 'dead_lettered', [
+                    'dead_letter_id' => $deadLetter->id,
+                    'failed_status' => $message->overall_status,
+                    'retry_count' => (int) ($message->retry_count ?? 0),
+                ]);
+
+                return $deadLetter;
+            });
         } catch (QueryException $queryException) {
             if (! $this->isDuplicateDeadLetterException($queryException)) {
                 throw $queryException;
@@ -53,14 +66,6 @@ class TalktoDeadLetterQueue
 
             return $this->refreshExistingFinalFailure($existing, $message, $failureReason, $exception);
         }
-
-        $this->recordEvent($message, 'dead_lettered', [
-            'dead_letter_id' => $deadLetter->id,
-            'failed_status' => $message->overall_status,
-            'retry_count' => (int) ($message->retry_count ?? 0),
-        ]);
-
-        return $deadLetter;
     }
 
     public function autoStoreEnabled(): bool
@@ -94,7 +99,7 @@ class TalktoDeadLetterQueue
     {
         $deadLetterClass = $this->deadLetterModelClass();
 
-        return DB::transaction(function () use ($deadLetterClass, $deadLetter, $force): ?TalktoDeadLetter {
+        return TalktoModelConnection::transaction($deadLetter, function () use ($deadLetterClass, $deadLetter, $force): ?TalktoDeadLetter {
             $locked = $deadLetterClass::query()
                 ->whereKey($deadLetter->id)
                 ->lockForUpdate()
@@ -137,30 +142,35 @@ class TalktoDeadLetterQueue
 
     public function markReprocessedForMessage(TalktoMessage $message): ?TalktoDeadLetter
     {
+        TalktoModelConnection::assertSameConnection($message, $this->deadLetterModelClass(), $this->eventModelClass());
+
         $deadLetterClass = $this->deadLetterModelClass();
-        $messageKey = $message->getKey();
-        $deadLetter = $deadLetterClass::query()
-            ->where('status', TalktoDeadLetterStatus::Reprocessing->value)
-            ->where(function ($query) use ($message, $messageKey): void {
-                $query->where('message_id', $message->message_id);
 
-                if ($messageKey !== null) {
-                    $query->orWhere('talkto_message_id', $messageKey);
-                }
-            })
-            ->first();
+        return TalktoModelConnection::transaction($message, function () use ($deadLetterClass, $message): ?TalktoDeadLetter {
+            $messageKey = $message->getKey();
+            $deadLetter = $deadLetterClass::query()
+                ->where('status', TalktoDeadLetterStatus::Reprocessing->value)
+                ->where(function ($query) use ($message, $messageKey): void {
+                    $query->where('message_id', $message->message_id);
 
-        if (! $deadLetter) {
-            return null;
-        }
+                    if ($messageKey !== null) {
+                        $query->orWhere('talkto_message_id', $messageKey);
+                    }
+                })
+                ->first();
 
-        $deadLetter = $this->markReprocessed($deadLetter);
-        $this->recordEvent($message, 'dead_letter_reprocessed', [
-            'dead_letter_id' => $deadLetter->id,
-            'reprocess_count' => (int) $deadLetter->reprocess_count,
-        ]);
+            if (! $deadLetter) {
+                return null;
+            }
 
-        return $deadLetter;
+            $deadLetter = $this->markReprocessed($deadLetter);
+            $this->recordEvent($message, 'dead_letter_reprocessed', [
+                'dead_letter_id' => $deadLetter->id,
+                'reprocess_count' => (int) $deadLetter->reprocess_count,
+            ]);
+
+            return $deadLetter;
+        });
     }
 
     public function markFailedReprocess(TalktoDeadLetter $deadLetter, ?string $reason = null, ?Throwable $exception = null): TalktoDeadLetter
@@ -189,6 +199,8 @@ class TalktoDeadLetterQueue
     public function recordEvent(TalktoMessage $message, string $eventType, array $meta = []): void
     {
         $eventClass = $this->eventModelClass();
+
+        TalktoModelConnection::assertSameConnection($message, $eventClass);
 
         $eventClass::query()->create([
             'talkto_message_id' => $message->id,
