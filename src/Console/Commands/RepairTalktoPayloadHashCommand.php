@@ -6,6 +6,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageDirection;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
+use Mrezdev\LaravelTalkto\Exceptions\TalktoJsonEncodingException;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
@@ -40,8 +41,18 @@ class RepairTalktoPayloadHashCommand extends Command
             return self::FAILURE;
         }
 
+        if (! $this->hasRepairableStatus($message)) {
+            $this->error('Message is not in a repairable stopped state. Only failed_final and dead_lettered outgoing messages can be repaired.');
+
+            return self::FAILURE;
+        }
+
         $storedHash = (string) ($message->payload_hash ?? '');
-        $deterministicHash = $hasher->hash($message->payload);
+        $deterministicHash = $this->deterministicHash($hasher, $message);
+
+        if ($deterministicHash === null) {
+            return self::FAILURE;
+        }
 
         $this->line('Talkto payload hash repair');
         $this->line('message_id='.$message->message_id);
@@ -54,12 +65,6 @@ class RepairTalktoPayloadHashCommand extends Command
             $this->line('No repair needed: stored payload hash already matches the deterministic hash.');
 
             return self::SUCCESS;
-        }
-
-        if (! $this->hasRepairableStatus($message)) {
-            $this->error('Message is not in a repairable failed or review state.');
-
-            return self::FAILURE;
         }
 
         if (! $this->hasPayloadHashMismatchEvidence($message)) {
@@ -92,8 +97,18 @@ class RepairTalktoPayloadHashCommand extends Command
                 return self::FAILURE;
             }
 
+            if (! $this->hasRepairableStatus($locked)) {
+                $this->error('Message is no longer eligible for repair.');
+
+                return self::FAILURE;
+            }
+
             $storedHash = (string) ($locked->payload_hash ?? '');
-            $deterministicHash = $hasher->hash($locked->payload);
+            $deterministicHash = $this->deterministicHash($hasher, $locked);
+
+            if ($deterministicHash === null) {
+                return self::FAILURE;
+            }
 
             if ($storedHash !== '' && hash_equals($storedHash, $deterministicHash)) {
                 $this->line('No repair needed: stored payload hash already matches the deterministic hash.');
@@ -101,7 +116,7 @@ class RepairTalktoPayloadHashCommand extends Command
                 return self::SUCCESS;
             }
 
-            if (! $this->hasRepairableStatus($locked) || ! $this->hasPayloadHashMismatchEvidence($locked)) {
+            if (! $this->hasPayloadHashMismatchEvidence($locked)) {
                 $this->error('Message is no longer eligible for repair.');
 
                 return self::FAILURE;
@@ -149,9 +164,19 @@ class RepairTalktoPayloadHashCommand extends Command
     {
         return in_array($message->overall_status, [
             TalktoMessageStatus::FailedFinal->value,
-            TalktoMessageStatus::FailedRetryable->value,
             TalktoMessageStatus::DeadLettered->value,
         ], true);
+    }
+
+    private function deterministicHash(TalktoPayloadHasher $hasher, TalktoMessage $message): ?string
+    {
+        try {
+            return $hasher->hash($message->payload);
+        } catch (TalktoJsonEncodingException) {
+            $this->error('Unable to calculate the deterministic payload hash for this message.');
+
+            return null;
+        }
     }
 
     private function hasPayloadHashMismatchEvidence(TalktoMessage $message): bool

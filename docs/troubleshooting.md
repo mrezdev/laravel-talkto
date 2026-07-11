@@ -78,7 +78,7 @@ Likely cause: Older package code calculated the payload hash with one PHP `seria
 
 Safe fix for new messages: deploy the hardened package to both sender and receiver services, clear config/opcache as usual, and restart PHP-FPM plus long-running queue workers. The package now uses deterministic encoding for Talkto hashes and the default HTTP body. Keep `serialize_precision=-1` in PHP config as defense in depth.
 
-Safe fix for old failed outgoing rows: do not edit payloads manually and do not bulk repair. Inspect the message and run a dry run first:
+Safe fix for old failed outgoing rows: do not edit payloads manually and do not bulk repair. The repair command is only for stopped outgoing rows in `failed_final` or `dead_lettered`. It refuses `failed_retryable` because that status may still be scheduled for automatic retry or already dispatched to a worker. Inspect the message and run a dry run first:
 
 ```bash
 php artisan talkto:repair-payload-hash 2c4be25d-c9bb-4d5d-b345-1b75653d7140
@@ -90,7 +90,7 @@ If the output shows a stale stored hash and the row has payload-hash mismatch ev
 php artisan talkto:repair-payload-hash 2c4be25d-c9bb-4d5d-b345-1b75653d7140 --confirm --reason="legacy serialize_precision hash drift"
 ```
 
-Repair updates only the stored derived payload hash and records an audit event. It does not resend. After repair, use the existing deliberate retry or DLQ flow:
+Repair updates only the stored derived payload hash and records an audit event. If deterministic JSON encoding fails, the command reports a short redacted error and makes no changes. Repair does not resend. After repair, use the existing deliberate DLQ reprocess flow:
 
 ```bash
 php artisan talkto:dlq-reprocess --message-id=2c4be25d-c9bb-4d5d-b345-1b75653d7140 --dry-run

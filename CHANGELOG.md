@@ -7,6 +7,7 @@
 - Added deterministic Talkto JSON encoding for payload hashing and the default HTTP transport so valid JSON floats such as `79.95` and `77.95` are stable across PHP `serialize_precision` settings.
 - Added a sender-side integrity guard that fails stale stored payload hashes locally as `stored_payload_hash_mismatch` before any HTTP request is sent.
 - Added `talkto:repair-payload-hash` for explicit, single-message, dry-run-first repair of old failed outgoing rows with payload hash mismatch evidence.
+- Hardened `talkto:repair-payload-hash` so it only repairs stopped outgoing rows in `failed_final` or `dead_lettered`, refuses `failed_retryable`, and reports deterministic JSON encoding failures without leaking exception details.
 - Documented the root cause, safe recovery flow, deployment order, and the defense-in-depth recommendation to keep PHP `serialize_precision=-1`.
 
 ### HTTP SSL Options

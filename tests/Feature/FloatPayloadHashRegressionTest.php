@@ -4,6 +4,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Mrezdev\LaravelTalkto\Exceptions\TalktoJsonEncodingException;
 use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
@@ -332,6 +333,9 @@ test('repair command is dry run by default and confirmed repair enables delibera
         'last_error' => 'HTTP transport failed with status [422].',
         'failed_at' => now(),
     ]);
+    $originalPayload = $message->payload;
+    $originalMessageId = $message->message_id;
+    $originalFingerprint = $message->idempotency_fingerprint;
 
     TalktoDeadLetter::query()->create([
         'talkto_message_id' => $message->id,
@@ -365,12 +369,149 @@ test('repair command is dry run by default and confirmed repair enables delibera
     $message = $message->fresh();
 
     expect($message->payload_hash)->toBe(app(TalktoPayloadHasher::class)->hash($message->payload))
+        ->and($message->payload)->toBe($originalPayload)
+        ->and($message->message_id)->toBe($originalMessageId)
+        ->and($message->idempotency_fingerprint)->toBe($originalFingerprint)
         ->and(TalktoEvent::query()->where('message_id', 'float-repair-command')->where('event_type', 'payload_hash_repaired')->exists())->toBeTrue();
 
     Queue::assertNothingPushed();
 
     expect(Artisan::call('talkto:dlq-reprocess', ['--message-id' => 'float-repair-command']))->toBe(0);
     Queue::assertPushed(SendTalktoMessage::class, 1);
+});
+
+test('repair command permits dead lettered stale outgoing hashes without dispatching', function (): void {
+    Queue::fake();
+    Http::fake();
+
+    $payload = floatStockPayload();
+    $message = createFloatRepairMessage('float-repair-dead-lettered', [
+        'overall_status' => 'dead_lettered',
+        'transport_status' => 'failed_final',
+        'last_response' => '{"received":false,"status":"rejected","error":"payload_hash_mismatch"}',
+    ]);
+    $originalPayload = $message->payload;
+    $originalMessageId = $message->message_id;
+    $originalFingerprint = $message->idempotency_fingerprint;
+
+    TalktoDeadLetter::query()->create([
+        'talkto_message_id' => $message->id,
+        'message_id' => $message->message_id,
+        'direction' => 'outgoing',
+        'source' => 'inventory',
+        'target' => 'website',
+        'command' => 'webhook:update-stock',
+        'payload' => $payload,
+        'failure_reason' => 'payload_hash_mismatch',
+        'failed_status' => 'failed_final',
+        'status' => 'open',
+    ]);
+
+    expect(Artisan::call('talkto:repair-payload-hash', [
+        'message_id' => 'float-repair-dead-lettered',
+        '--confirm' => true,
+        '--reason' => 'confirmed stopped dead letter repair',
+    ]))->toBe(0);
+
+    $message = $message->fresh();
+
+    expect($message->payload_hash)->toBe(app(TalktoPayloadHasher::class)->hash($message->payload))
+        ->and($message->payload)->toBe($originalPayload)
+        ->and($message->message_id)->toBe($originalMessageId)
+        ->and($message->idempotency_fingerprint)->toBe($originalFingerprint)
+        ->and(TalktoEvent::query()->where('message_id', 'float-repair-dead-lettered')->where('event_type', 'payload_hash_repaired')->exists())->toBeTrue();
+
+    Queue::assertNothingPushed();
+    Http::assertNothingSent();
+});
+
+test('repair command refuses failed retryable stale hashes without mutation or dispatching', function (): void {
+    Queue::fake();
+    Http::fake();
+
+    $nextRetryAt = now()->addMinutes(10)->startOfSecond();
+    $nextAttemptAt = now()->addMinutes(11)->startOfSecond();
+    $message = createFloatRepairMessage('float-repair-retryable-refused', [
+        'overall_status' => 'failed_retryable',
+        'transport_status' => 'failed_retryable',
+        'retry_count' => 1,
+        'next_retry_at' => $nextRetryAt,
+        'next_attempt_at' => $nextAttemptAt,
+        'last_response' => '{"received":false,"status":"rejected","error":"payload_hash_mismatch"}',
+    ]);
+    $originalPayload = $message->payload;
+    $originalHash = $message->payload_hash;
+    $originalFingerprint = $message->idempotency_fingerprint;
+
+    expect(Artisan::call('talkto:repair-payload-hash', [
+        'message_id' => 'float-repair-retryable-refused',
+        '--confirm' => true,
+        '--reason' => 'test repair',
+    ]))->toBe(1);
+
+    $output = Artisan::output();
+    $message = $message->fresh();
+
+    expect($output)->toContain('Message is not in a repairable stopped state')
+        ->and($message->payload)->toBe($originalPayload)
+        ->and($message->payload_hash)->toBe($originalHash)
+        ->and($message->idempotency_fingerprint)->toBe($originalFingerprint)
+        ->and($message->overall_status)->toBe('failed_retryable')
+        ->and($message->next_retry_at?->toIso8601String())->toBe($nextRetryAt->toIso8601String())
+        ->and($message->next_attempt_at?->toIso8601String())->toBe($nextAttemptAt->toIso8601String())
+        ->and(TalktoEvent::query()->where('message_id', 'float-repair-retryable-refused')->where('event_type', 'payload_hash_repaired')->exists())->toBeFalse();
+
+    Queue::assertNothingPushed();
+    Http::assertNothingSent();
+});
+
+test('repair command handles deterministic hash encoding exceptions without leaking details', function (): void {
+    Queue::fake();
+    Http::fake();
+
+    $message = createFloatRepairMessage('float-repair-encoding-exception', [
+        'overall_status' => 'failed_final',
+        'transport_status' => 'failed_final',
+        'last_response' => '{"received":false,"status":"rejected","error":"payload_hash_mismatch"}',
+    ]);
+    $originalPayload = $message->payload;
+    $originalHash = $message->payload_hash;
+    $originalFingerprint = $message->idempotency_fingerprint;
+    $originalStatus = $message->overall_status;
+
+    $this->app->instance(TalktoPayloadHasher::class, new class extends TalktoPayloadHasher
+    {
+        public function hash(mixed $payload): string
+        {
+            throw new TalktoJsonEncodingException('secret payload details stock=79.95');
+        }
+    });
+
+    try {
+        expect(Artisan::call('talkto:repair-payload-hash', [
+            'message_id' => 'float-repair-encoding-exception',
+            '--confirm' => true,
+            '--reason' => 'test repair',
+        ]))->toBe(1);
+    } finally {
+        $this->app->forgetInstance(TalktoPayloadHasher::class);
+    }
+
+    $output = Artisan::output();
+    $message = $message->fresh();
+
+    expect($output)->toContain('Unable to calculate the deterministic payload hash for this message.')
+        ->and($output)->not->toContain('secret payload details')
+        ->and($output)->not->toContain('stock=79.95')
+        ->and($output)->not->toContain('Stack trace')
+        ->and($message->payload)->toBe($originalPayload)
+        ->and($message->payload_hash)->toBe($originalHash)
+        ->and($message->idempotency_fingerprint)->toBe($originalFingerprint)
+        ->and($message->overall_status)->toBe($originalStatus)
+        ->and(TalktoEvent::query()->where('message_id', 'float-repair-encoding-exception')->where('event_type', 'payload_hash_repaired')->exists())->toBeFalse();
+
+    Queue::assertNothingPushed();
+    Http::assertNothingSent();
 });
 
 test('repair command refuses wrong direction inappropriate status unrelated failures and noops already correct hashes', function (): void {
@@ -450,6 +591,35 @@ function floatStockPayload(): array
             ],
         ],
     ];
+}
+
+function createFloatRepairMessage(string $messageId, array $overrides = []): TalktoMessage
+{
+    $payload = floatStockPayload();
+
+    return TalktoMessage::query()->create(array_merge([
+        'message_id' => $messageId,
+        'direction' => 'outgoing',
+        'source_service' => 'inventory',
+        'target_service' => 'website',
+        'command' => 'webhook:update-stock',
+        'business_key' => 'material_detail:31',
+        'idempotency_key' => $messageId,
+        'payload' => $payload,
+        'payload_hash' => legacyFloatPayloadHash($payload, '53'),
+        'schema_version' => 1,
+        'source_action_status' => 'succeeded_assumed',
+        'transport_status' => 'failed_final',
+        'destination_receive_status' => 'received',
+        'destination_action_status' => 'rejected',
+        'overall_status' => 'failed_final',
+        'attempts' => 1,
+        'retry_count' => 0,
+        'max_attempts' => 5,
+        'last_http_status' => 422,
+        'last_error' => 'HTTP transport failed with status [422].',
+        'failed_at' => now(),
+    ], $overrides));
 }
 
 function legacyFloatPayloadHash(array $payload, string $precision): string

@@ -95,7 +95,9 @@ To mutate one eligible failed outgoing row, provide both confirmation and an ope
 php artisan talkto:repair-payload-hash <message-id> --confirm --reason="legacy serialize_precision hash drift"
 ```
 
-The command refuses incoming messages, non-failed states, unrelated failures, and rows whose deterministic hash already matches. After repair, use the existing `talkto:retry-failed` or `talkto:dlq-reprocess` command deliberately.
+Only stopped outgoing rows in `failed_final` or `dead_lettered` are repairable. The command refuses incoming messages, `failed_retryable`, non-failed states, unrelated failures, and rows whose deterministic hash already matches. `failed_retryable` is intentionally never repairable because it may still be selected by `talkto:retry-failed` or an already-running worker. Let the normal retry lifecycle finish or move the message into a stopped review state first.
+
+If the deterministic hash cannot be calculated, the command returns a redacted failure and makes no changes. Repair never resends automatically; after repair, use the existing `talkto:dlq-reprocess` command deliberately, or another operator-approved retry path for the stopped row.
 
 ## Recovery Action Safety Gates
 
