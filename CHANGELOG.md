@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Migration Publishing And README Badges
+
+- Switched package migration publishing to Laravel's `publishesMigrations()` API so new host-published Talkto migration copies use Laravel-standard current sequential timestamps when the host has `database.migrations.update_date_on_publish=true`.
+- Kept both existing migration publish tags, `laravel-talkto-migrations` and `talkto-migrations`, and left optional direct package migration loading through `TALKTO_MIGRATIONS_ENABLED=true` unchanged.
+- Documented the Laravel host database configuration key, existing-installation behavior, and the warning not to repeatedly publish Talkto migrations into apps that already own reviewed migration files.
+- Simplified the README badge block to four essential badges: Latest Version on Packagist, Tests, PHP Version, and License.
+
 ### Envelope Control-Character Validation
 
 - Added centralized validation for Talkto envelope identifiers and Talkto protocol headers so ASCII controls `U+0000` through `U+001F`, `U+007F`, and Unicode line/paragraph separators `U+2028` and `U+2029` are rejected before signing, routing, persistence, nonce storage, HTTP transport, callback application, or handler execution.

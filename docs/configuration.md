@@ -36,13 +36,24 @@ php artisan vendor:publish --tag=laravel-talkto-migrations
 php artisan migrate
 ```
 
+Published Talkto migration copies use Laravel's `publishesMigrations()` behavior. In current Laravel 12/13 applications, `config/database.php` normally contains:
+
+```php
+'migrations' => [
+    'table' => 'migrations',
+    'update_date_on_publish' => true,
+],
+```
+
+With that host setting enabled, `vendor:publish` writes Talkto migrations with current, unique, sequential timestamps and keeps the original logical order and suffixes. If a custom or upgraded application has the key missing or set to `false`, Laravel publishes the package's stable source filenames instead. Talkto does not change this global database setting because it also affects other packages.
+
 Package migration loading is disabled by default:
 
 ```dotenv
 TALKTO_MIGRATIONS_ENABLED=false
 ```
 
-Set it to true only when the host intentionally wants the package service provider to load migrations directly.
+Set it to true only when the host intentionally wants the package service provider to load migrations directly. Direct package migration loading uses the stable package filenames and is independent of the timestamp rewriting used by `vendor:publish`.
 
 ## Routes
 

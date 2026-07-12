@@ -1,15 +1,6 @@
 # Laravel Talkto
 
-[![Latest Version on Packagist](https://img.shields.io/packagist/v/mrezdev/laravel-talkto.svg?style=flat-square)](https://packagist.org/packages/mrezdev/laravel-talkto)
-[![Total Downloads](https://img.shields.io/packagist/dt/mrezdev/laravel-talkto.svg?style=flat-square)](https://packagist.org/packages/mrezdev/laravel-talkto)
-[![License](https://img.shields.io/packagist/l/mrezdev/laravel-talkto.svg?style=flat-square)](https://packagist.org/packages/mrezdev/laravel-talkto)
-[![PHP Version](https://img.shields.io/packagist/php-v/mrezdev/laravel-talkto.svg?style=flat-square)](https://packagist.org/packages/mrezdev/laravel-talkto)
-[![Tests](https://img.shields.io/github/actions/workflow/status/mrezdev/laravel-talkto/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/mrezdev/laravel-talkto/actions/workflows/tests.yml)
-[![GitHub Release](https://img.shields.io/github/v/release/mrezdev/laravel-talkto?style=flat-square)](https://github.com/mrezdev/laravel-talkto/releases)
-[![GitHub Stars](https://img.shields.io/github/stars/mrezdev/laravel-talkto?style=flat-square)](https://github.com/mrezdev/laravel-talkto/stargazers)
-[![GitHub Issues](https://img.shields.io/github/issues/mrezdev/laravel-talkto?style=flat-square)](https://github.com/mrezdev/laravel-talkto/issues)
-[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/mrezdev/laravel-talkto?style=flat-square)](https://github.com/mrezdev/laravel-talkto/pulls)
-[![Last Commit](https://img.shields.io/github/last-commit/mrezdev/laravel-talkto?style=flat-square)](https://github.com/mrezdev/laravel-talkto/commits/main)
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/mrezdev/laravel-talkto.svg?style=flat-square)](https://packagist.org/packages/mrezdev/laravel-talkto) [![Tests](https://img.shields.io/github/actions/workflow/status/mrezdev/laravel-talkto/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/mrezdev/laravel-talkto/actions/workflows/tests.yml) [![PHP Version](https://img.shields.io/packagist/php-v/mrezdev/laravel-talkto.svg?style=flat-square)](https://packagist.org/packages/mrezdev/laravel-talkto) [![License](https://img.shields.io/packagist/l/mrezdev/laravel-talkto.svg?style=flat-square)](https://packagist.org/packages/mrezdev/laravel-talkto)
 
 Laravel Talkto helps Laravel applications communicate through reliable, signed, durable service-to-service messages. It is built for projects where multiple Laravel apps need to send commands, receive results, retry safely, and stay observable without turning every app into a copy of the others.
 
@@ -85,6 +76,8 @@ Short publish tags are also available:
 php artisan vendor:publish --tag=talkto-config
 php artisan vendor:publish --tag=talkto-migrations
 ```
+
+Published Talkto migration copies use Laravel's standard migration publisher. Current Laravel 12/13 applications normally set `database.migrations.update_date_on_publish=true`, so newly published copies receive current, unique, sequential timestamps while the package source filenames stay stable. If Talkto migrations already exist in the host app, keep those reviewed files unless you intentionally republish and inspect the result.
 
 Panel Blade views are optional and publishable with:
 

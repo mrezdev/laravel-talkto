@@ -125,12 +125,12 @@ class LaravelTalktoServiceProvider extends ServiceProvider
             __DIR__.'/../config/talkto.php' => config_path('talkto.php'),
         ], 'talkto-config');
 
-        $this->publishes([
+        $this->publishesMigrations([
             __DIR__.'/../database/migrations' => database_path('migrations'),
-        ], 'laravel-talkto-migrations');
-        $this->publishes([
-            __DIR__.'/../database/migrations' => database_path('migrations'),
-        ], 'talkto-migrations');
+        ], [
+            'laravel-talkto-migrations',
+            'talkto-migrations',
+        ]);
 
         $this->publishes([
             __DIR__.'/../resources/views/panel' => resource_path('views/vendor/talkto/panel'),

@@ -34,6 +34,31 @@ Likely cause: Migrations were not published/run, or the app is using a different
 
 Safe fix: Publish migrations, verify `TALKTO_DB_CONNECTION` and table names, run `php artisan migrate`, and clear config cache.
 
+## Published Migration Dates Did Not Update
+
+Symptom: `vendor:publish --tag=laravel-talkto-migrations` or `vendor:publish --tag=talkto-migrations` creates Talkto migration files with the package's stable repository timestamps instead of current host timestamps.
+
+Likely cause: The host Laravel app is upgraded/customized and has `database.migrations.update_date_on_publish` missing or set to `false`.
+
+Safe fix: Current Laravel 12/13 application skeletons normally already set this in `config/database.php`:
+
+```php
+'migrations' => [
+    'table' => 'migrations',
+    'update_date_on_publish' => true,
+],
+```
+
+Add or enable that key before publishing if the host wants Laravel-standard current migration timestamps. Talkto does not force the setting globally because it affects migration publishing for every package.
+
+## Repeated Migration Publishing
+
+Symptom: Publishing Talkto migrations again creates additional migration files to review.
+
+Likely cause: Laravel's migration publisher gives newly published copies current sequential timestamps when `update_date_on_publish` is enabled. Existing host-owned Talkto migrations are not renamed or removed automatically.
+
+Safe fix: Do not repeatedly publish Talkto migrations into an application that already owns reviewed Talkto migration files unless you intentionally compare the result. Existing installs should normally keep their current Talkto migration files and migrations-table rows unchanged.
+
 ## Config Cache Is Stale
 
 Symptom: Env changes do not affect Talkto behavior.

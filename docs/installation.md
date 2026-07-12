@@ -31,6 +31,17 @@ php artisan vendor:publish --tag=laravel-talkto-migrations
 php artisan migrate
 ```
 
+Talkto uses Laravel's migration-specific publisher, so newly published migration copies can receive current sequential timestamps in the host application while the package source filenames remain stable. Current Laravel 12/13 application skeletons normally already include:
+
+```php
+'migrations' => [
+    'table' => 'migrations',
+    'update_date_on_publish' => true,
+],
+```
+
+If an upgraded or custom host app is missing this key, add it to `config/database.php` before publishing when you want Laravel-standard current timestamps. Do not repeatedly publish Talkto migrations into an app that already owns reviewed Talkto migration files unless you intentionally compare and keep the desired result.
+
 The short aliases are equivalent:
 
 ```bash
