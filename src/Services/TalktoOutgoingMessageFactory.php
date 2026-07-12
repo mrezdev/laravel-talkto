@@ -2,11 +2,9 @@
 
 namespace Mrezdev\LaravelTalkto\Services;
 
-use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
-use JsonSerializable;
 use Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageDirection;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
@@ -22,7 +20,8 @@ class TalktoOutgoingMessageFactory
 {
     public function __construct(
         private readonly TalktoPayloadHasher $payloadHasher,
-        private readonly TalktoOutgoingTargetRegistryContract $targets
+        private readonly TalktoOutgoingTargetRegistryContract $targets,
+        private readonly ?TalktoPayloadFreezer $payloadFreezer = null
     ) {}
 
     public function create(
@@ -37,8 +36,6 @@ class TalktoOutgoingMessageFactory
             throw new InvalidArgumentException("Talkto outgoing target [{$target}] is not configured.");
         }
 
-        $normalizedPayload = $this->normalizePayload($payload);
-        $payloadHash = $this->payloadHasher->hash($normalizedPayload);
         $configuredSourceService = $options['source_service'] ?? config('talkto.service', 'app');
         $sourceService = is_string($configuredSourceService) && $configuredSourceService !== ''
             ? $configuredSourceService
@@ -74,6 +71,9 @@ class TalktoOutgoingMessageFactory
 
         TalktoModelConnection::assertSameConnection($messageClass, $eventClass);
 
+        $frozenPayload = $this->payloadFreezer()->freezePayload($payload);
+        $payloadHash = $this->payloadHasher->hash($frozenPayload);
+
         try {
             return TalktoModelConnection::transaction($messageClass, function () use (
                 $messageClass,
@@ -87,7 +87,7 @@ class TalktoOutgoingMessageFactory
                 $businessKey,
                 $idempotencyKey,
                 $idempotencyFingerprint,
-                $normalizedPayload,
+                $frozenPayload,
                 $payloadHash,
                 $sourceActionStatus,
                 $transportStatus,
@@ -106,7 +106,7 @@ class TalktoOutgoingMessageFactory
                     'business_key' => $businessKey,
                     'idempotency_key' => $idempotencyKey,
                     'idempotency_fingerprint' => $idempotencyFingerprint,
-                    'payload' => $normalizedPayload,
+                    'payload' => $frozenPayload,
                     'payload_hash' => $payloadHash,
                     'schema_version' => $options['schema_version'] ?? 1,
                     'source_action_status' => $sourceActionStatus,
@@ -181,39 +181,9 @@ class TalktoOutgoingMessageFactory
         return app(TalktoModelResolver::class)->event();
     }
 
-    private function normalizePayload(mixed $payload): ?array
+    private function payloadFreezer(): TalktoPayloadFreezer
     {
-        if ($payload === null) {
-            return null;
-        }
-
-        if (is_array($payload)) {
-            return $payload;
-        }
-
-        if ($payload instanceof Arrayable) {
-            return $payload->toArray();
-        }
-
-        if ($payload instanceof JsonSerializable) {
-            $serialized = $payload->jsonSerialize();
-
-            if ($serialized === null || is_array($serialized)) {
-                return $serialized;
-            }
-
-            if (is_scalar($serialized)) {
-                return ['value' => $serialized];
-            }
-
-            throw new InvalidArgumentException('Talkto payload must be arrayable, json serializable, scalar, array, or null.');
-        }
-
-        if (is_scalar($payload)) {
-            return ['value' => $payload];
-        }
-
-        throw new InvalidArgumentException('Talkto payload must be arrayable, json serializable, scalar, array, or null.');
+        return $this->payloadFreezer ?? app(TalktoPayloadFreezer::class);
     }
 
     private function isDuplicateIdempotencyFingerprintException(QueryException $exception): bool

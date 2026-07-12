@@ -8,16 +8,19 @@ Laravel Talkto is an outbox/inbox transport package. Host apps own their busines
 flowchart LR
     A["Source host business code"] --> B["Optional local DB transaction"]
     B --> C["Host business record"]
-    B --> D["Talkto outgoing message"]
-    D --> E["Queue worker after commit"]
-    E --> F["Signed v2 HTTP request"]
-    F --> G["Target receive route"]
-    G --> H["Verify signature, timestamp, hash, nonce"]
-    H --> I["Store incoming message"]
-    I --> J["Dispatch or run handler"]
+    B --> D["Freeze payload once"]
+    D --> E["Talkto outgoing message"]
+    E --> F["Queue worker after commit"]
+    F --> G["Signed v2 HTTP request"]
+    G --> H["Target receive route"]
+    H --> I["Verify signature, timestamp, hash, nonce"]
+    I --> J["Store incoming message"]
+    J --> K["Dispatch or run handler"]
 ```
 
 The source transaction may create a host business record and the Talkto outbox row together. Remote delivery happens after commit through the worker/retry flow; do not treat local message creation as synchronous remote success.
+
+The outgoing payload freeze happens once before the outbox row is written. The stored primitive payload is reused for hashing, signing, sending, retry, DLQ, callbacks, and repair.
 
 ## Incoming Command Flow
 
@@ -41,17 +44,19 @@ Verification is fail-closed. Unknown sources, target mismatches, invalid signatu
 ```mermaid
 flowchart LR
     A["Target handler result"] --> B["ResultCallbackSenderContract"]
-    B --> C["Build callback envelope"]
-    C --> D["Sign callback with v2 nonce"]
-    D --> E["Source callback route"]
-    E --> F["Verify callback signature and nonce"]
-    F --> G["Find original outgoing message"]
-    G --> H["Validate callback relationship"]
-    H --> I["Update destination result/status"]
-    I --> J["Record callback events"]
+    B --> C["Freeze callback payload once"]
+    C --> D["Store durable callback message"]
+    D --> E["Queue SendTalktoMessage"]
+    E --> F["Sign callback with v2 nonce"]
+    F --> G["Source callback route"]
+    G --> H["Verify callback signature and nonce"]
+    H --> I["Find original outgoing message"]
+    I --> J["Validate callback relationship"]
+    J --> K["Update destination result/status"]
+    K --> L["Record callback events"]
 ```
 
-Callbacks are ordinary signed Talkto messages with the callback command, which defaults to `talkto.result`. The source app must configure the destination as an incoming source and allow the callback command.
+Callbacks are ordinary signed Talkto messages with the callback command, which defaults to `talkto.result`. Callback data captures one frozen primitive payload snapshot, so repeated direct `toPayload()` or `toEnvelope()` calls reuse the same payload and hash. The source app must configure the destination as an incoming source and allow the callback command.
 
 ## Retry And DLQ Flow
 

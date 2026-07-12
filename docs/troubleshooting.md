@@ -115,6 +115,14 @@ php artisan talkto:dlq-reprocess --message-id=2c4be25d-c9bb-4d5d-b345-1b75653d71
 php artisan talkto:dlq-reprocess --message-id=2c4be25d-c9bb-4d5d-b345-1b75653d7140
 ```
 
+## Unsupported Outgoing Payload Value
+
+Symptom: Creating an outgoing message throws `TalktoUnsupportedPayloadValueException`.
+
+Likely cause: The host payload contains a runtime-only value that cannot be frozen into JSON-safe primitives, such as a resource/stream, closure, generator, traversable object without an explicit supported serialization contract, internal hidden-state object, callable/invokable object without a supported serialization contract, native `DateTimeInterface`, pure enum, implicit `Stringable` object, invalid UTF-8 string, non-finite float, circular reference, or excessive nesting.
+
+Safe fix: Convert the value inside the host payload builder before calling Talkto. Use arrays, strings, integers, finite floats, booleans, nulls, collections, `Arrayable`, `JsonSerializable`, backed enums, Carbon/JSON-serializable date objects, `stdClass`, or simple public-property DTOs. Convert native `DateTimeInterface` and `Stringable` values to strings explicitly. Do not catch and retry the same unsupported object; no message row or event is written when freezing fails.
+
 ## Missing Nonce
 
 Symptom: v2 request is rejected because a nonce is missing.

@@ -86,6 +86,12 @@ Every incoming source should explicitly allow only the commands it accepts:
 
 Never use `allow_all_commands=true` in production.
 
+## Payload Contracts
+
+Keep outgoing payload builders deterministic. Build payloads from arrays and JSON-safe primitive values, or from objects that intentionally expose JSON-safe data through collections, `Arrayable`, `JsonSerializable`, backed enums, Carbon/JSON-serializable date objects, or public properties. Format native `DateTime` values as strings explicitly before passing them to Talkto.
+
+Talkto freezes each outgoing payload before hashing and persistence. During one freeze operation, a repeated supported object instance is converted once and memoized as a final primitive result. The frozen tree is what workers, retries, DLQ rows, callbacks, and repair commands use later. Direct callback snapshots passed into `TalktoResultCallbackData` are validated and frozen the same way before they are stored. Unsupported runtime values fail before persistence, so host tests should cover representative payloads before rollout.
+
 ## Routes
 
 Package routes are disabled by default:

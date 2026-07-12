@@ -19,6 +19,8 @@ The default sender:
 
 Callback messages use the configured callback endpoint on the target, usually `/api/talkto/callback`. Because they are normal outgoing Talkto messages, they are eligible for existing attempts, retry, DLQ, report, panel, trace, and reprocess behavior.
 
+Callback result and meta payloads pass through the same outgoing one-time freeze boundary as ordinary commands. The durable callback row stores the frozen primitive tree, and direct `TalktoResultCallbackData` instances capture one immutable frozen payload snapshot that `toPayload()` and `toEnvelope()` reuse for repeatable callback hashes. The optional constructor snapshot array remains accepted for compatibility, but it is validated and frozen on entry; do not pass live resources, closures, generators, native `DateTimeInterface` values, circular structures, or mutable runtime objects that cannot be converted into JSON-safe primitives.
+
 Destination apps must configure the original source service under `talkto.outgoing` with `base_url`, `receive_endpoint`, `callback_endpoint`, and `secret`, or with explicit full `receive_url` and `callback_url` values. The `url` and `endpoint` keys still work as aliases for `base_url` and `receive_endpoint`.
 
 ## Automatic Dispatch

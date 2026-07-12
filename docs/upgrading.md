@@ -29,6 +29,16 @@ Incoming and outgoing peer shared secrets can use `secret`; `signing_secret` is 
 
 Outgoing HTTP TLS verification is enabled by default through `talkto.http.verify_ssl`. Hosts that use private certificate authorities should copy the new `ca_bundle` settings and keep verification enabled in production.
 
+## One-Time Outgoing Payload Freezing
+
+This patch freezes new outgoing payloads before hashing and persistence, with repeated supported object instances converted once per freeze operation. It is a code-only hardening: no migrations, config keys, commands, routes, signature headers, or hash algorithm changes are required. Already-primitive JSON payloads keep their existing deterministic payload hashes.
+
+Deploy the patch to app, scheduler, and queue-worker processes together. Restart long-running workers so all new outgoing rows, durable callback rows, retry sends, DLQ reprocesses, and repair checks use the same frozen stored payload behavior.
+
+Review host payload builders for runtime-only values. Arrays, JSON primitives, collections, `Arrayable`, `JsonSerializable`, backed enums, Carbon/JSON-serializable date objects, `stdClass`, and public-property DTOs are supported. Native `DateTimeInterface` values should be formatted explicitly by the host. Resources, closures, generators, traversable/internal hidden-state objects, pure enums, implicit `Stringable` objects, invalid UTF-8, non-finite floats, circular references, and excessive nesting now fail before a message row is created instead of failing later or producing split hash/body behavior.
+
+Rollback is straightforward for package code because no schema or config state is introduced. If a rollback is necessary, pause sends and workers first; rows created by the patched version contain ordinary JSON-safe payloads and remain readable by the previous package version.
+
 ## Float Payload Hash Hardening
 
 This patch makes Talkto-controlled payload hashing and the default HTTP transport independent of the ambient PHP `serialize_precision` setting. Deploy the patched package to both sender and receiver services before retrying or DLQ-reprocessing old rows that failed with `payload_hash_mismatch`.

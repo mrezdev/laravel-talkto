@@ -179,6 +179,8 @@ $message = app(TalktoOutgoingMessageFactory::class)->create(
 
 Delivery is handled after the message is stored, usually by a queue worker and retry policy. Host apps decide when to create their own business record and how to correlate it with the Talkto message.
 
+Before an outgoing row is written, Talkto freezes the host-supplied payload into JSON-safe primitives. Each supported object instance is converted once per freeze operation, even when the same instance appears in multiple payload paths. The stored payload, payload hash, signed envelope, HTTP body, retries, DLQ rows, callbacks, and hash repair all reuse that frozen tree. Direct callback data snapshots supplied to `TalktoResultCallbackData` are also validated and frozen before `toPayload()` or `toEnvelope()` can reuse them. Already-primitive JSON payloads keep the same deterministic hashes; unsupported runtime values such as closures, resources, generators, internal/traversable hidden-state objects, native `DateTimeInterface`, pure enums, invalid UTF-8, non-finite floats, circular references, and excessive nesting fail before persistence. Carbon and other `JsonSerializable` date objects keep their JSON representation.
+
 ## Receiving Commands
 
 Incoming commands are accepted only from configured sources and only when the command is allowed. A minimal handler implements `TalktoIncomingCommandHandler`:

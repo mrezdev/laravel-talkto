@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### One-Time Outgoing Payload Freezing
+
+- Added an internal outgoing payload freezer so host-supplied payloads are converted into a JSON-safe primitive tree before payload hashing, persistence, envelope creation, HTTP transport, retry, DLQ, callback creation, and hash repair paths use them.
+- Corrected the freezer to memoize each supported object instance during one freeze operation, so repeated references to the same `Arrayable`, `JsonSerializable`, Eloquent model, collection item, or public DTO reuse the same final primitive result instead of re-running conversion.
+- Updated result callback data to capture one immutable frozen payload snapshot; repeated `toPayload()` and `toEnvelope()` calls now reuse the same payload, hash, and timestamp. Caller-supplied callback snapshots passed through the optional constructor snapshot parameter are now validated and frozen before storage instead of being trusted as already primitive.
+- Preserved public outgoing APIs, routes, commands, migrations, config keys, signature headers, and the deterministic payload hash algorithm for already-primitive JSON payloads.
+- Supported common Laravel payload inputs at the boundary, including arrays, top-level scalars, collections, `Arrayable`, `JsonSerializable`, backed enums, Carbon/JSON-serializable date objects, `stdClass`, and userland public-property DTOs, while rejecting resources, closures, generators, traversable/internal hidden-state objects, native `DateTimeInterface`, pure enums, non-finite floats, invalid UTF-8, circular references, and excessive nesting before persistence.
+- Made unsupported payload failures catchable as `InvalidArgumentException` while preserving the package-specific `TalktoUnsupportedPayloadValueException` class and bounded path/error-code diagnostics.
+- Moved duplicate idempotency lookup ahead of payload freezing when the metadata-only fingerprint already identifies an existing outgoing message.
+- Added focused regression coverage for shared object memoization, explicit callback snapshot validation, callback snapshot repeatability, `fromEnvelope()` primitive preservation, exception compatibility, Carbon/native DateTime policy, unsupported internals/traversables, DTOs, collections, Eloquent models, primitive hash compatibility, retry/DLQ reuse, hash repair, rollback, custom message models, and separate Talkto database connections.
+
 ### Atomic Redispatch Claiming
 
 - Added an internal durable dispatch-claim service for retry redispatch, dead-letter reprocess, stale lock recovery, result callback queueing, and panel redispatch actions.

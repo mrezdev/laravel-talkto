@@ -4,6 +4,7 @@ namespace Mrezdev\LaravelTalkto\Data;
 
 use Illuminate\Database\Eloquent\Model;
 use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
+use Mrezdev\LaravelTalkto\Services\TalktoPayloadFreezer;
 use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
 
 /**
@@ -11,6 +12,10 @@ use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
  */
 final readonly class TalktoResultCallbackData
 {
+    private array $frozenPayload;
+
+    private string $createdAt;
+
     public function __construct(
         public string $callbackMessageId,
         public string $originalMessageId,
@@ -24,7 +29,14 @@ final readonly class TalktoResultCallbackData
         public ?string $idempotencyKey,
         public string $status,
         public TalktoIncomingCommandResultData $resultData,
-    ) {}
+        ?array $frozenPayload = null,
+        ?string $createdAt = null,
+    ) {
+        $payload = $frozenPayload ?? $this->rawPayload();
+
+        $this->frozenPayload = self::freezePayloadSnapshot($payload);
+        $this->createdAt = $createdAt ?? now()->toIso8601String();
+    }
 
     public static function fromIncomingMessageResult(Model $message, IncomingCommandResultContract $result, array $options = []): self
     {
@@ -50,6 +62,8 @@ final readonly class TalktoResultCallbackData
             self::nullableString($message->idempotency_key ?? null),
             $status,
             $resultData,
+            null,
+            now()->toIso8601String(),
         );
     }
 
@@ -79,10 +93,17 @@ final readonly class TalktoResultCallbackData
             self::nullableString($envelope['idempotency_key'] ?? null),
             (string) ($payload['status'] ?? self::statusFromResultData($resultData)),
             $resultData,
+            $payload,
+            self::nullableString($envelope['created_at'] ?? null),
         );
     }
 
     public function toPayload(): array
+    {
+        return $this->frozenPayload;
+    }
+
+    private function rawPayload(): array
     {
         $result = $this->resultData->toArray();
 
@@ -102,7 +123,7 @@ final readonly class TalktoResultCallbackData
 
     public function toEnvelope(): array
     {
-        $payload = $this->toPayload();
+        $payload = $this->frozenPayload;
 
         return [
             'protocol_version' => 2,
@@ -115,7 +136,7 @@ final readonly class TalktoResultCallbackData
             'business_key' => $this->businessKey,
             'idempotency_key' => $this->idempotencyKey,
             'schema_version' => 1,
-            'created_at' => now()->toIso8601String(),
+            'created_at' => $this->createdAt,
             'payload_hash' => app(TalktoPayloadHasher::class)->hash($payload),
             'payload' => $payload,
         ];
@@ -149,5 +170,10 @@ final readonly class TalktoResultCallbackData
     private static function nullableString(mixed $value): ?string
     {
         return $value === null ? null : (string) $value;
+    }
+
+    private static function freezePayloadSnapshot(array $payload): array
+    {
+        return app(TalktoPayloadFreezer::class)->freezePayload($payload) ?? [];
     }
 }

@@ -38,6 +38,16 @@ The default HTTP transport also uses deterministic JSON for the final request bo
 
 Host applications may still choose decimal strings for money or quantity contracts that require exact scale. That is a domain contract choice; the Talkto transport itself safely supports valid JSON floats.
 
+## Outgoing Payload Freeze Boundary
+
+Outgoing message creation freezes the host-supplied logical payload before hashing or persistence. Each supported object instance is converted once per freeze operation and repeated references reuse the same final primitive result. After that point, the package uses the stored primitive tree for the `payload_hash`, `talkto_messages.payload`, signed envelopes, default HTTP JSON body, retry sends, DLQ storage/reprocess, durable result callback messages, and payload-hash repair.
+
+The freeze boundary accepts JSON primitives, arrays, top-level scalars, Laravel collections, Laravel `Arrayable` values, `JsonSerializable` values, backed enums, Carbon and other JSON-serializable date objects, `stdClass`, and userland DTOs with public properties. Top-level scalar payloads keep the existing `['value' => ...]` wrapper. Carbon and other `JsonSerializable` date objects keep their own JSON serialization, including microseconds where their JSON output includes them. Native `DateTimeInterface` values are rejected unless the host formats them explicitly as strings.
+
+Unsupported values fail before a message row is created: resources or streams, closures, generators, traversable objects without an explicit supported serialization contract, internal hidden-state objects, callable/invokable objects without a supported serialization contract, native `DateTimeInterface`, pure `UnitEnum` values, implicit `Stringable` objects, non-finite floats, invalid UTF-8 strings, circular references, and excessively nested payloads. Exception messages identify the path and error code without dumping payload values and remain catchable as `InvalidArgumentException`.
+
+This boundary does not change route behavior, signatures, header names, config, migrations, commands, or the deterministic hash algorithm for already-primitive JSON payloads.
+
 ## Raw JSON Body Verification
 
 Package receive and callback routes verify JSON requests from the raw HTTP body, not from Laravel's parsed input bags. This matters because normal Laravel middleware such as `TrimStrings` and `ConvertEmptyStringsToNull` can change parsed JSON values before a controller runs. Signed Talkto JSON is decoded from `Request::getContent()`, then the same decoded envelope is used for validation, payload hash verification, signature verification, storage, dispatch, and callback application.
