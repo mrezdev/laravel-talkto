@@ -124,6 +124,8 @@ Review retry settings before production:
 
 Incoming retries are opt-in because handlers may perform host-owned side effects.
 
+`talkto:retry-failed` is safe to run from more than one scheduler or operator process: each selected message is locked, rechecked, moved into the dispatchable state, and tagged with a timestamped dispatch claim before the queue job is pushed. A second runner should skip the row because it is no longer in the retryable candidate pool. If a process crashes after the claim commits but before queue dispatch, `talkto:recover-stale` can recover the old `dispatch-claim:*` row after the stale threshold.
+
 ## Failed Jobs And DLQ
 
 Keep dead-letter storage enabled unless you have a host-owned replacement:
@@ -139,7 +141,9 @@ Review DLQ rows before reprocessing:
 php artisan talkto:dlq-reprocess --dry-run
 ```
 
-Use `--force` only for operator-approved recovery.
+Use `--force` only for operator-approved recovery. Force can bypass safe policy limits such as max reprocess attempts, but it must not be used to steal active work: `reprocessing` dead letters, messages already carrying `dispatch-claim:*`, and messages in active sending/processing states remain blocked.
+
+DLQ reprocess claims the original message row and the dead-letter row together when they share the configured Talkto model connection. Every package path that mutates both resources uses the same lock order: `TalktoMessage` first, then `TalktoDeadLetter`. If queue dispatch fails before a job is queued, the dead letter is marked `failed_reprocess` and the original message is restored only if it still carries the same dispatch claim and the dead letter still has the expected reprocess count.
 
 ## Callback Verification
 
@@ -153,7 +157,7 @@ Result callbacks are queued durable outgoing messages on the destination service
 
 When a destination handler throws unexpectedly, Talkto applies the normal retry/final-failure behavior first and then queues a durable failed callback. Exception callback payloads include a safe exception class/message summary, not a stack trace. Expected business errors should still be returned explicitly with `failedRetryable()` or `failedFinal()` from the handler.
 
-Duplicate callback queue attempts are suppressed where practical by reusing the deterministic callback message, locking that callback row during the queue decision, and checking queued/queue-failed events for the same callback before dispatching `SendTalktoMessage`. Failed callback delivery remains an outgoing-message retry/DLQ/reprocess concern.
+Duplicate callback queue attempts are suppressed where practical by reusing the deterministic callback message, locking that callback row during the queue decision, tagging it with a timestamped dispatch claim, and checking queued/queue-failed events for the same callback before dispatching `SendTalktoMessage`. If dispatch fails before a job is queued, Talkto reloads the callback row, verifies the exact failed claim and expected pending callback state, records `result_callback_queue_failed`, and clears that claim in one Talkto transaction. If the event write fails, the claim is left in place for stale recovery instead of being cleared without an audit event. If a process crashes after the callback claim commits but before dispatch, stale recovery can queue the existing callback message once. Failed callback delivery after a job starts remains an outgoing-message retry/DLQ/reprocess concern.
 
 On the destination service, check:
 

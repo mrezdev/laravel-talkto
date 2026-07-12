@@ -49,12 +49,6 @@ class SendOutgoingTalktoMessagePipeline
         }
 
         if (! $this->isSendable($message, $retryPolicy)) {
-            $this->createSkippedAttempt(
-                $message,
-                'not_sendable',
-                'Message is not eligible for transport sending.'
-            );
-
             return;
         }
 
@@ -210,12 +204,6 @@ class SendOutgoingTalktoMessagePipeline
             }
 
             if (! $this->isSendable($message, $retryPolicy)) {
-                $this->createSkippedAttempt(
-                    $message,
-                    'not_sendable',
-                    'Message is not eligible for transport sending.'
-                );
-
                 return null;
             }
 

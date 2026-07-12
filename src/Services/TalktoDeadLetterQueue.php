@@ -6,6 +6,7 @@ use Illuminate\Database\QueryException;
 use Mrezdev\LaravelTalkto\Enums\TalktoDeadLetterStatus;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Support\TalktoDispatchTestHooks;
 use Mrezdev\LaravelTalkto\Support\TalktoModelConnection;
 use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 use Throwable;
@@ -35,20 +36,26 @@ class TalktoDeadLetterQueue
 
         TalktoModelConnection::assertSameConnection($message, $deadLetterClass, $this->eventModelClass());
 
-        $existing = $this->findExistingDeadLetter($message);
-
-        if ($existing) {
-            return $this->refreshExistingFinalFailure($existing, $message, $failureReason, $exception);
-        }
-
         try {
             return TalktoModelConnection::transaction($message, function () use ($deadLetterClass, $message, $failureReason, $exception, $headers): TalktoDeadLetter {
-                $deadLetter = $deadLetterClass::query()->create($this->deadLetterAttributes($message, $failureReason, $exception, $headers));
+                $lockedMessage = $this->lockMessage($message, 'store');
 
-                $this->recordEvent($message, 'dead_lettered', [
+                if (! $lockedMessage instanceof TalktoMessage) {
+                    throw new \RuntimeException('Talkto message could not be locked for dead-letter storage.');
+                }
+
+                $existing = $this->findExistingDeadLetter($lockedMessage, true, 'store');
+
+                if ($existing) {
+                    return $this->refreshExistingFinalFailure($existing, $lockedMessage, $failureReason, $exception);
+                }
+
+                $deadLetter = $deadLetterClass::query()->create($this->deadLetterAttributes($lockedMessage, $failureReason, $exception, $headers));
+
+                $this->recordEvent($lockedMessage, 'dead_lettered', [
                     'dead_letter_id' => $deadLetter->id,
-                    'failed_status' => $message->overall_status,
-                    'retry_count' => (int) ($message->retry_count ?? 0),
+                    'failed_status' => $lockedMessage->overall_status,
+                    'retry_count' => (int) ($lockedMessage->retry_count ?? 0),
                 ]);
 
                 return $deadLetter;
@@ -58,13 +65,21 @@ class TalktoDeadLetterQueue
                 throw $queryException;
             }
 
-            $existing = $this->findExistingDeadLetter($message);
+            return TalktoModelConnection::transaction($message, function () use ($message, $failureReason, $exception, $queryException): TalktoDeadLetter {
+                $lockedMessage = $this->lockMessage($message, 'store');
 
-            if (! $existing) {
-                throw $queryException;
-            }
+                if (! $lockedMessage instanceof TalktoMessage) {
+                    throw $queryException;
+                }
 
-            return $this->refreshExistingFinalFailure($existing, $message, $failureReason, $exception);
+                $existing = $this->findExistingDeadLetter($lockedMessage, true, 'store');
+
+                if (! $existing instanceof TalktoDeadLetter) {
+                    throw $queryException;
+                }
+
+                return $this->refreshExistingFinalFailure($existing, $lockedMessage, $failureReason, $exception);
+            });
         }
     }
 
@@ -80,15 +95,15 @@ class TalktoDeadLetterQueue
             return false;
         }
 
+        if (! in_array($deadLetter->status, [TalktoDeadLetterStatus::Open->value, TalktoDeadLetterStatus::FailedReprocess->value], true)) {
+            return $force && $deadLetter->status !== TalktoDeadLetterStatus::Reprocessing->value;
+        }
+
         if ($force) {
             return true;
         }
 
         if (! (bool) config('talkto.dead_letter.allow_reprocess', true)) {
-            return false;
-        }
-
-        if (! in_array($deadLetter->status, [TalktoDeadLetterStatus::Open->value, TalktoDeadLetterStatus::FailedReprocess->value], true)) {
             return false;
         }
 
@@ -147,24 +162,33 @@ class TalktoDeadLetterQueue
         $deadLetterClass = $this->deadLetterModelClass();
 
         return TalktoModelConnection::transaction($message, function () use ($deadLetterClass, $message): ?TalktoDeadLetter {
-            $messageKey = $message->getKey();
+            $lockedMessage = $this->lockMessage($message, 'mark_reprocessed');
+
+            if (! $lockedMessage instanceof TalktoMessage) {
+                return null;
+            }
+
+            $messageKey = $lockedMessage->getKey();
             $deadLetter = $deadLetterClass::query()
                 ->where('status', TalktoDeadLetterStatus::Reprocessing->value)
-                ->where(function ($query) use ($message, $messageKey): void {
-                    $query->where('message_id', $message->message_id);
+                ->where(function ($query) use ($lockedMessage, $messageKey): void {
+                    $query->where('message_id', $lockedMessage->message_id);
 
                     if ($messageKey !== null) {
                         $query->orWhere('talkto_message_id', $messageKey);
                     }
                 })
+                ->lockForUpdate()
                 ->first();
 
             if (! $deadLetter) {
                 return null;
             }
 
+            $this->fireDeadLetterLockedHook($deadLetter, 'mark_reprocessed');
+
             $deadLetter = $this->markReprocessed($deadLetter);
-            $this->recordEvent($message, 'dead_letter_reprocessed', [
+            $this->recordEvent($lockedMessage, 'dead_letter_reprocessed', [
                 'dead_letter_id' => $deadLetter->id,
                 'reprocess_count' => (int) $deadLetter->reprocess_count,
             ]);
@@ -213,18 +237,27 @@ class TalktoDeadLetterQueue
         ]);
     }
 
-    private function findExistingDeadLetter(TalktoMessage $message): ?TalktoDeadLetter
+    private function findExistingDeadLetter(TalktoMessage $message, bool $lock = false, ?string $operation = null): ?TalktoDeadLetter
     {
         $deadLetterClass = $this->deadLetterModelClass();
 
         $messageKey = $message->getKey();
 
         if ($messageKey !== null) {
-            $existing = $deadLetterClass::query()
-                ->where('talkto_message_id', $messageKey)
-                ->first();
+            $query = $deadLetterClass::query()
+                ->where('talkto_message_id', $messageKey);
+
+            if ($lock) {
+                $query->lockForUpdate();
+            }
+
+            $existing = $query->first();
 
             if ($existing) {
+                if ($lock) {
+                    $this->fireDeadLetterLockedHook($existing, $operation);
+                }
+
                 return $existing;
             }
         }
@@ -233,9 +266,20 @@ class TalktoDeadLetterQueue
             return null;
         }
 
-        return $deadLetterClass::query()
-            ->where('message_id', $message->message_id)
-            ->first();
+        $query = $deadLetterClass::query()
+            ->where('message_id', $message->message_id);
+
+        if ($lock) {
+            $query->lockForUpdate();
+        }
+
+        $existing = $query->first();
+
+        if ($existing && $lock) {
+            $this->fireDeadLetterLockedHook($existing, $operation);
+        }
+
+        return $existing;
     }
 
     private function refreshExistingFinalFailure(
@@ -309,6 +353,34 @@ class TalktoDeadLetterQueue
     private function deadLetterModelClass(): string
     {
         return app(TalktoModelResolver::class)->deadLetter();
+    }
+
+    private function lockMessage(TalktoMessage $message, string $operation): ?TalktoMessage
+    {
+        $locked = $message->newQuery()
+            ->whereKey($message->getKey())
+            ->lockForUpdate()
+            ->first();
+
+        if ($locked instanceof TalktoMessage) {
+            TalktoDispatchTestHooks::fire('dlq.message_locked', [
+                'operation' => $operation,
+                'message_db_id' => $locked->id,
+                'message_id' => $locked->message_id,
+            ]);
+        }
+
+        return $locked instanceof TalktoMessage ? $locked : null;
+    }
+
+    private function fireDeadLetterLockedHook(TalktoDeadLetter $deadLetter, ?string $operation): void
+    {
+        TalktoDispatchTestHooks::fire('dlq.dead_letter_locked', [
+            'operation' => $operation,
+            'dead_letter_id' => $deadLetter->id,
+            'message_db_id' => $deadLetter->talkto_message_id,
+            'message_id' => $deadLetter->message_id,
+        ]);
     }
 
     private function eventModelClass(): string

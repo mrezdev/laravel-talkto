@@ -156,8 +156,9 @@ The Retry action is a safe manual retry helper for eligible retryable messages. 
 - Checks panel authorization.
 - Checks retry action configuration.
 - Checks the retry policy.
-- Makes the message due now by clearing the scheduled wait and lock fields.
+- Locks and rechecks the message row, then makes the message due now with a timestamped dispatch claim.
 - Dispatches the existing Talkto send/process job.
+- Restores the previous retry state if queue dispatch fails before a job is queued.
 - Records panel-specific events.
 
 It does not increment `retry_count` directly and does not call remote services from the HTTP request.
@@ -168,12 +169,12 @@ The dead-letter reprocess action:
 
 - Checks panel authorization.
 - Checks dead-letter action configuration.
-- Claims the dead letter for reprocess.
-- Prepares the original message for the existing queued pipeline.
+- Locks and rechecks the original message row and dead-letter row in one claim transaction, using the same `TalktoMessage` then `TalktoDeadLetter` order as the CLI command.
+- Claims the dead letter for reprocess and prepares the original message for the existing queued pipeline.
 - Dispatches the existing Talkto job.
-- Marks failed reprocess if dispatch fails.
+- Marks failed reprocess and restores the original message state if queue dispatch fails before a job is queued and the same claim still owns both rows.
 
-It will not reprocess a terminal successful original message.
+It will not reprocess a terminal successful original message, an already `reprocessing` dead letter, or an original message that is already carrying an active dispatch claim.
 
 ## Connection Health
 

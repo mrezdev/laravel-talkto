@@ -9,6 +9,7 @@ use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
 use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Support\TalktoDispatchTestHooks;
 use Mrezdev\LaravelTalkto\Support\TalktoModelConnection;
 use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
@@ -21,7 +22,8 @@ class TalktoResultCallbackSender implements ResultCallbackSenderContract
 {
     public function __construct(
         private readonly TalktoResultCallbackMessageFactory $callbackMessages,
-        private readonly TalktoSecurityRedactor $redactor
+        private readonly TalktoSecurityRedactor $redactor,
+        private readonly TalktoDispatchClaimingService $dispatchClaims,
     ) {}
 
     public function sendResult(Model $message, IncomingCommandResultContract $result, array $options = []): array
@@ -57,6 +59,7 @@ class TalktoResultCallbackSender implements ResultCallbackSenderContract
         }
 
         $callbackMessage = null;
+        $callbackClaimId = null;
 
         try {
             if (! $message instanceof TalktoMessage) {
@@ -66,23 +69,42 @@ class TalktoResultCallbackSender implements ResultCallbackSenderContract
             $callbackMessage = $this->callbackMessages->createForIncomingResult($message, $result, $options);
             $decision = $this->prepareDispatchDecision($message, $callbackMessage);
             $callbackMessage = $decision['callback_message'];
+            $callbackClaimId = $decision['claim_id'] ?? null;
 
             if (! $decision['dispatch']) {
                 return $this->duplicateSummary($message, $callbackMessage);
             }
 
+            TalktoDispatchTestHooks::fire('dispatch.before_queue', [
+                'operation' => 'result-callback',
+                'message_db_id' => $callbackMessage->id,
+                'message_id' => $callbackMessage->message_id,
+                'direction' => $callbackMessage->direction,
+                'claim_id' => $callbackClaimId,
+            ]);
+
             $this->dispatchSendJob((int) $callbackMessage->id);
 
             return $this->queuedSummary($message, $callbackMessage);
         } catch (Throwable $throwable) {
-            $this->recordEvent($message, 'result_callback_queue_failed', null, 'failed', [
+            $failureMeta = [
                 'callback_message_id' => $callbackMessage?->message_id,
                 'callback_message_db_id' => $callbackMessage?->id,
                 'target' => $callbackMessage?->target_service,
                 'command' => $callbackMessage?->command,
                 'error_class' => $throwable::class,
                 'error_message' => $this->excerpt($throwable->getMessage(), 500),
-            ]);
+            ];
+
+            if ($message instanceof TalktoMessage && $callbackMessage instanceof TalktoMessage && is_string($callbackClaimId)) {
+                try {
+                    $this->dispatchClaims->compensateCallbackQueueDispatchFailure($message, $callbackMessage, $callbackClaimId, $failureMeta);
+                } catch (Throwable) {
+                    //
+                }
+            } else {
+                $this->recordEvent($message, 'result_callback_queue_failed', null, 'failed', $failureMeta);
+            }
 
             return [
                 'sent' => false,
@@ -141,7 +163,7 @@ class TalktoResultCallbackSender implements ResultCallbackSenderContract
     }
 
     /**
-     * @return array{dispatch: bool, callback_message: TalktoMessage}
+     * @return array{dispatch: bool, callback_message: TalktoMessage, claim_id?: string|null}
      */
     private function prepareDispatchDecision(TalktoMessage $message, TalktoMessage $callbackMessage): array
     {
@@ -161,6 +183,7 @@ class TalktoResultCallbackSender implements ResultCallbackSenderContract
                 return [
                     'dispatch' => false,
                     'callback_message' => $lockedCallbackMessage,
+                    'claim_id' => null,
                 ];
             }
 
@@ -168,19 +191,29 @@ class TalktoResultCallbackSender implements ResultCallbackSenderContract
                 return [
                     'dispatch' => false,
                     'callback_message' => $lockedCallbackMessage,
+                    'claim_id' => null,
                 ];
             }
 
-            $this->recordQueuedEvent($message, $lockedCallbackMessage);
+            $claimId = $this->dispatchClaims->newClaimId('result-callback');
+            $lockedCallbackMessage->forceFill([
+                'locked_at' => now(),
+                'locked_by' => $claimId,
+            ])->save();
+
+            $lockedCallbackMessage = $lockedCallbackMessage->fresh() ?? $lockedCallbackMessage;
+
+            $this->recordQueuedEvent($message, $lockedCallbackMessage, $claimId);
 
             return [
                 'dispatch' => true,
                 'callback_message' => $lockedCallbackMessage,
+                'claim_id' => $claimId,
             ];
         });
     }
 
-    private function recordQueuedEvent(Model $message, TalktoMessage $callbackMessage): void
+    private function recordQueuedEvent(Model $message, TalktoMessage $callbackMessage, string $claimId): void
     {
         $this->recordEvent($message, 'result_callback_queued', null, 'queued', [
             'callback_message_id' => $callbackMessage->message_id,
@@ -189,6 +222,7 @@ class TalktoResultCallbackSender implements ResultCallbackSenderContract
             'command' => $callbackMessage->command,
             'callback_status' => $this->callbackStatus($callbackMessage),
             'durable' => true,
+            'claim_id' => $claimId,
         ]);
     }
 

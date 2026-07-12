@@ -6,9 +6,14 @@ use Illuminate\Console\Command;
 use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
 use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
-use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoCurrentServiceGuard;
 use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
+use Mrezdev\LaravelTalkto\Services\TalktoDispatchClaimingService;
+use Mrezdev\LaravelTalkto\Support\TalktoDispatchClaim;
+use Mrezdev\LaravelTalkto\Support\TalktoDispatchTestHooks;
+use Mrezdev\LaravelTalkto\Support\TalktoModelConnection;
+use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 
 class ReprocessTalktoDeadLettersCommand extends Command
 {
@@ -22,8 +27,11 @@ class ReprocessTalktoDeadLettersCommand extends Command
 
     protected $description = 'Dispatch jobs for eligible Talkto dead letter rows.';
 
-    public function handle(TalktoDeadLetterQueue $deadLetterQueue): int
-    {
+    public function handle(
+        TalktoDeadLetterQueue $deadLetterQueue,
+        TalktoDispatchClaimingService $dispatchClaims,
+        TalktoCurrentServiceGuard $currentServiceGuard
+    ): int {
         $direction = (string) $this->option('direction');
 
         if (! in_array($direction, ['incoming', 'outgoing', 'all'], true)) {
@@ -85,6 +93,19 @@ class ReprocessTalktoDeadLettersCommand extends Command
                 continue;
             }
 
+            if (! $currentServiceGuard->allowsProcessing($message)) {
+                $skipped++;
+
+                if (! $dryRun) {
+                    $deadLetterQueue->recordEvent($message, 'dead_letter_reprocess_skipped', [
+                        'dead_letter_id' => $deadLetter->id,
+                        'reason' => 'wrong_service',
+                    ]);
+                }
+
+                continue;
+            }
+
             if (in_array($message->overall_status, ['succeeded', 'completed'], true)) {
                 $skipped++;
 
@@ -118,34 +139,51 @@ class ReprocessTalktoDeadLettersCommand extends Command
                 continue;
             }
 
-            $claimed = $deadLetterQueue->claimForReprocess($deadLetter, $force);
+            $claim = $dispatchClaims->claimDeadLetterForReprocess($deadLetter, $force, 'dlq-command');
 
-            if (! $claimed) {
+            if (! $claim->claimed || ! $claim->message || ! $claim->deadLetter) {
                 $skipped++;
-                $failedClaim++;
+
+                if (in_array($claim->status, ['dead_letter_not_reprocessable', 'missing_dead_letter'], true)) {
+                    $failedClaim++;
+                }
+
+                $this->recordSkippedClaim($deadLetterQueue, $claim, $deadLetter);
 
                 continue;
             }
 
             $claimedCount++;
             $eligible++;
-            $this->prepareOriginalMessageForReprocess($message);
-
-            $failureMarked = false;
 
             try {
-                $dispatchedSuccessfully = $this->dispatchReprocessJob($message);
+                TalktoDispatchTestHooks::fire('dispatch.before_queue', [
+                    'operation' => 'dlq-command',
+                    'message_db_id' => $claim->message->id,
+                    'message_id' => $claim->message->message_id,
+                    'direction' => $claim->message->direction,
+                    'claim_id' => $claim->claimId,
+                    'dead_letter_id' => $claim->deadLetter->id,
+                ]);
+
+                $dispatchedSuccessfully = $this->dispatchReprocessJob($claim->message);
             } catch (\Throwable $throwable) {
                 $dispatchedSuccessfully = false;
-                $deadLetterQueue->markFailedReprocess($claimed, 'Dispatch failed.', $throwable);
-                $failureMarked = true;
+                $compensated = $dispatchClaims->compensateDeadLetterClaim($claim, 'Dispatch failed.', $throwable);
+                $deadLetterQueue->recordEvent($claim->message, 'dead_letter_reprocess_dispatch_failed', [
+                    'dead_letter_id' => $claim->deadLetter->id,
+                    'direction' => $claim->message->direction,
+                    'exception_class' => $throwable::class,
+                    'compensated' => $compensated,
+                ]);
             }
 
             if ($dispatchedSuccessfully) {
-                $deadLetterQueue->recordEvent($message, 'dead_letter_reprocess_dispatched', [
-                    'dead_letter_id' => $claimed->id,
-                    'direction' => $message->direction,
-                    'reprocess_count' => (int) $claimed->reprocess_count,
+                $deadLetterQueue->recordEvent($claim->message, 'dead_letter_reprocess_dispatched', [
+                    'dead_letter_id' => $claim->deadLetter->id,
+                    'direction' => $claim->message->direction,
+                    'reprocess_count' => (int) $claim->deadLetter->reprocess_count,
+                    'claim_id' => $claim->claimId,
                 ]);
                 $dispatched++;
 
@@ -154,14 +192,6 @@ class ReprocessTalktoDeadLettersCommand extends Command
 
             $skipped++;
             $failedDispatch++;
-            if (! $failureMarked) {
-                $deadLetterQueue->markFailedReprocess($claimed, 'Dispatch failed.');
-            }
-            $deadLetterQueue->recordEvent($message, 'dead_letter_reprocess_skipped', [
-                'dead_letter_id' => $claimed->id,
-                'reason' => 'unsupported_direction',
-                'direction' => $message->direction,
-            ]);
         }
 
         $dryRunValue = $dryRun ? 'true' : 'false';
@@ -214,31 +244,50 @@ class ReprocessTalktoDeadLettersCommand extends Command
         return in_array($message->direction, ['incoming', 'outgoing'], true);
     }
 
-    private function prepareOriginalMessageForReprocess(TalktoMessage $message): void
+    private function recordSkippedClaim(TalktoDeadLetterQueue $deadLetterQueue, TalktoDispatchClaim $claim, TalktoDeadLetter $deadLetter): void
     {
-        $attributes = [
-            'next_retry_at' => null,
-            'next_attempt_at' => null,
-            'locked_at' => null,
-            'locked_by' => null,
-        ];
+        if ($claim->status === 'missing_original') {
+            $this->recordMissingOriginalEvent($deadLetter);
 
-        if ($message->direction === 'outgoing') {
-            $attributes['transport_status'] = 'pending';
-            $attributes['overall_status'] = 'waiting_to_send';
+            return;
         }
 
-        if ($message->direction === 'incoming') {
-            $attributes['destination_action_status'] = 'queued';
-            $attributes['overall_status'] = 'queued';
+        if (! $claim->message instanceof TalktoMessage) {
+            return;
         }
 
-        $message->forceFill($attributes)->save();
+        if ($claim->status === 'terminal_success') {
+            $deadLetterQueue->recordEvent($claim->message, 'dead_letter_reprocess_skipped', [
+                'dead_letter_id' => $deadLetter->id,
+                'reason' => 'terminal_success',
+            ]);
+
+            return;
+        }
+
+        if ($claim->status === 'unsupported_direction') {
+            $deadLetterQueue->recordEvent($claim->message, 'dead_letter_reprocess_skipped', [
+                'dead_letter_id' => $deadLetter->id,
+                'reason' => 'unsupported_direction',
+                'direction' => $claim->message->direction,
+            ]);
+
+            return;
+        }
+
+        if ($claim->status === 'wrong_service') {
+            $deadLetterQueue->recordEvent($claim->message, 'dead_letter_reprocess_skipped', [
+                'dead_letter_id' => $deadLetter->id,
+                'reason' => 'wrong_service',
+            ]);
+        }
     }
 
     private function recordMissingOriginalEvent(TalktoDeadLetter $deadLetter): void
     {
         $eventClass = $this->eventModelClass();
+
+        TalktoModelConnection::assertSameConnection($deadLetter, $eventClass);
 
         $eventClass::query()->create([
             'talkto_message_id' => null,
@@ -255,29 +304,17 @@ class ReprocessTalktoDeadLettersCommand extends Command
 
     private function deadLetterModelClass(): string
     {
-        $class = config('talkto.models.dead_letter', TalktoDeadLetter::class);
-
-        return is_string($class) && is_a($class, TalktoDeadLetter::class, true)
-            ? $class
-            : TalktoDeadLetter::class;
+        return app(TalktoModelResolver::class)->deadLetter();
     }
 
     private function messageModelClass(): string
     {
-        $class = config('talkto.models.message', TalktoMessage::class);
-
-        return is_string($class) && is_a($class, TalktoMessage::class, true)
-            ? $class
-            : TalktoMessage::class;
+        return app(TalktoModelResolver::class)->message();
     }
 
     private function eventModelClass(): string
     {
-        $class = config('talkto.models.event', TalktoEvent::class);
-
-        return is_string($class) && is_a($class, TalktoEvent::class, true)
-            ? $class
-            : TalktoEvent::class;
+        return app(TalktoModelResolver::class)->event();
     }
 
     private function sendJobClass(): string

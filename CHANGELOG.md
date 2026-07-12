@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Atomic Redispatch Claiming
+
+- Added an internal durable dispatch-claim service for retry redispatch, dead-letter reprocess, stale lock recovery, result callback queueing, and panel redispatch actions.
+- Hardened retry and DLQ commands so eligible rows are locked, rechecked, moved out of their retry/reprocess candidate pools, and tagged with a dispatch claim before jobs are queued.
+- Corrected dispatch claims to carry a recoverable `locked_at` timestamp, expanded stale recovery to requeue orphaned `dispatch-claim:*` rows, and prevented `--force` DLQ reprocess from stealing active `reprocessing` work.
+- Hardened dispatch-failure compensation so only rows still carrying the same claim token are restored, avoiding stranded `reprocessing` dead letters and stale recovered rows when queue dispatch fails.
+- Updated callback queueing to tag the callback message while dispatch is pending and, when queue dispatch fails, verify the exact callback claim in one Talkto transaction before recording `result_callback_queue_failed` and clearing the claim.
+- Standardized dual message/dead-letter transactions on the canonical `TalktoMessage` then `TalktoDeadLetter` lock order for DLQ claim, compensation, store/refresh, and successful reprocess finalization paths.
+- Added worker-side duplicate defense so stale duplicate outgoing jobs no-op after terminal advancement instead of writing misleading skipped attempts.
+- Added focused regression coverage for retry, DLQ reprocess, stale recovery, result callback queueing, panel-compatible claim state, dispatch failure compensation, wrong-service rows, duplicate jobs, deterministic actor interleavings, canonical DLQ lock ordering, and two Laravel SQLite connections pointing at the same database.
+
 ### Connection-Aware Transactions
 
 - Hardened Talkto-owned transactions and row locks so message, attempt, event, dead-letter, retry, callback, stale recovery, repair, prune, and panel mutation writes run on the resolved Talkto model connection instead of Laravel's default transaction connection.

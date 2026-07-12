@@ -171,6 +171,8 @@ Likely cause: No queue worker, wrong queue connection, crashed worker, or stale 
 
 Safe fix: Start `php artisan queue:work`, inspect failed jobs, run `php artisan talkto:report`, and use `php artisan talkto:recover-stale --dry-run` before recovering stale locks.
 
+Retry, DLQ reprocess, stale recovery, and callback queueing use durable dispatch claims. Seeing `locked_by` start with `dispatch-claim:` and `locked_at` populated means a command or panel action claimed the row before queue dispatch and the worker has not started yet. If queue dispatch throws, Talkto records a dispatch failure event and restores only the row still carrying that same claim. If the PHP process crashes after the claim commits but before dispatch, `php artisan talkto:recover-stale` can recover old orphaned dispatch claims and queue one job.
+
 ## Source Message Stuck At `destination_received`
 
 Symptom: The original outgoing message reached the destination, but it never receives destination result/status.
@@ -179,7 +181,7 @@ Likely cause: In the durable callback design, the destination may have processed
 
 Unexpected destination handler exceptions also queue durable failed callbacks after the destination stores the failure state. The payload is `failed_retryable` or `failed_final` according to the stored retry/DLQ decision and does not include stack traces.
 
-Duplicate manual and automatic callback queue attempts should reuse the same durable callback message. If a callback has an active `result_callback_queued` event and no later queue-failed event, duplicate queue attempts are suppressed. If dispatch failed before a job was queued, the later `result_callback_queue_failed` event allows a future `sendResult()` call to retry queue dispatch.
+Duplicate manual and automatic callback queue attempts should reuse the same durable callback message. If a callback has an active `result_callback_queued` event and no later queue-failed event, duplicate queue attempts are suppressed. If dispatch failed before a job was queued, the callback dispatch claim is released and the later `result_callback_queue_failed` event allows a future `sendResult()` call to retry queue dispatch.
 
 Safe fix on the destination service:
 

@@ -5,9 +5,15 @@ namespace Mrezdev\LaravelTalkto\Console\Commands;
 use Illuminate\Console\Command;
 use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
 use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
-use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoCurrentServiceGuard;
+use Mrezdev\LaravelTalkto\Services\TalktoDispatchClaimingService;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
+use Mrezdev\LaravelTalkto\Support\TalktoDispatchTestHooks;
+use Mrezdev\LaravelTalkto\Support\TalktoModelConnection;
+use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
+use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
+use Throwable;
 
 class RetryFailedTalktoMessagesCommand extends Command
 {
@@ -18,8 +24,11 @@ class RetryFailedTalktoMessagesCommand extends Command
 
     protected $description = 'Dispatch due Talkto messages scheduled for retry.';
 
-    public function handle(TalktoRetryPolicy $retryPolicy): int
-    {
+    public function handle(
+        TalktoRetryPolicy $retryPolicy,
+        TalktoDispatchClaimingService $dispatchClaims,
+        TalktoCurrentServiceGuard $currentServiceGuard
+    ): int {
         $direction = (string) $this->option('direction');
 
         if (! in_array($direction, ['incoming', 'outgoing', 'all'], true)) {
@@ -56,6 +65,13 @@ class RetryFailedTalktoMessagesCommand extends Command
             $scanned++;
             $decision = $retryPolicy->decisionFor($message);
 
+            if (! $currentServiceGuard->allowsProcessing($message)) {
+                $skipped++;
+                $skipReasons['wrong_service'] = ($skipReasons['wrong_service'] ?? 0) + 1;
+
+                continue;
+            }
+
             if (! $decision->retryable || ! $retryPolicy->isDue($message)) {
                 $skipped++;
                 $reason = ! $retryPolicy->isDue($message) && $decision->reason === 'eligible'
@@ -66,13 +82,44 @@ class RetryFailedTalktoMessagesCommand extends Command
                 continue;
             }
 
+            if ($dryRun) {
+                $eligible++;
+
+                continue;
+            }
+
+            $claim = $dispatchClaims->claimRetry($message, 'retry-command');
+
+            if (! $claim->claimed || ! $claim->message) {
+                $skipped++;
+                $skipReasons[$claim->status] = ($skipReasons[$claim->status] ?? 0) + 1;
+
+                continue;
+            }
+
             $eligible++;
 
-            if (! $dryRun) {
-                $this->dispatchRetryJob($message);
-                $this->recordRetryDispatched($message, $decision->toArray());
-                $dispatched++;
+            try {
+                TalktoDispatchTestHooks::fire('dispatch.before_queue', [
+                    'operation' => 'retry-command',
+                    'message_db_id' => $claim->message->id,
+                    'message_id' => $claim->message->message_id,
+                    'direction' => $claim->message->direction,
+                    'claim_id' => $claim->claimId,
+                ]);
+
+                $this->dispatchRetryJob($claim->message);
+            } catch (Throwable $throwable) {
+                $dispatchClaims->compensateMessageClaim($claim);
+                $this->recordRetryDispatchFailed($claim->message, $throwable);
+                $skipped++;
+                $skipReasons['dispatch_failed'] = ($skipReasons['dispatch_failed'] ?? 0) + 1;
+
+                continue;
             }
+
+            $this->recordRetryDispatched($claim->message, $claim->decision);
+            $dispatched++;
         }
 
         $dryRunValue = $dryRun ? 'true' : 'false';
@@ -103,6 +150,8 @@ class RetryFailedTalktoMessagesCommand extends Command
     {
         $eventClass = $this->eventModelClass();
 
+        TalktoModelConnection::assertSameConnection($message, $eventClass);
+
         $eventClass::query()->create([
             'talkto_message_id' => $message->id,
             'message_id' => $message->message_id,
@@ -117,26 +166,40 @@ class RetryFailedTalktoMessagesCommand extends Command
                 'backoff_seconds' => $decision['backoff_seconds'] ?? null,
                 'next_retry_at' => optional($message->next_retry_at)->toIso8601String(),
                 'reason' => $decision['reason'] ?? null,
+                'claim_id' => $message->locked_by,
+            ],
+        ]);
+    }
+
+    private function recordRetryDispatchFailed(TalktoMessage $message, Throwable $throwable): void
+    {
+        $eventClass = $this->eventModelClass();
+
+        TalktoModelConnection::assertSameConnection($message, $eventClass);
+
+        $eventClass::query()->create([
+            'talkto_message_id' => $message->id,
+            'message_id' => $message->message_id,
+            'service_name' => config('talkto.service', 'app'),
+            'event_type' => 'retry_dispatch_failed',
+            'old_status' => $message->overall_status,
+            'new_status' => $message->overall_status,
+            'meta' => [
+                'direction' => $message->direction,
+                'exception_class' => $throwable::class,
+                'exception_message' => $this->safeExceptionMessage($throwable),
             ],
         ]);
     }
 
     private function messageModelClass(): string
     {
-        $class = config('talkto.models.message', TalktoMessage::class);
-
-        return is_string($class) && is_a($class, TalktoMessage::class, true)
-            ? $class
-            : TalktoMessage::class;
+        return app(TalktoModelResolver::class)->message();
     }
 
     private function eventModelClass(): string
     {
-        $class = config('talkto.models.event', TalktoEvent::class);
-
-        return is_string($class) && is_a($class, TalktoEvent::class, true)
-            ? $class
-            : TalktoEvent::class;
+        return app(TalktoModelResolver::class)->event();
     }
 
     private function sendJobClass(): string
@@ -155,5 +218,13 @@ class RetryFailedTalktoMessagesCommand extends Command
         return is_string($class) && is_a($class, ProcessIncomingTalktoMessage::class, true)
             ? $class
             : ProcessIncomingTalktoMessage::class;
+    }
+
+    private function safeExceptionMessage(Throwable $throwable): string
+    {
+        $message = app(TalktoSecurityRedactor::class)->redactText($throwable->getMessage()) ?? 'Dispatch failed.';
+        $message = trim($message);
+
+        return mb_substr($message === '' ? 'Dispatch failed.' : $message, 0, 300);
     }
 }

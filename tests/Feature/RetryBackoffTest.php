@@ -139,6 +139,12 @@ test('retry command dispatches due outgoing retries and dry run does not dispatc
     Queue::assertPushed(SendTalktoMessage::class, 1);
 
     Queue::fake();
+    retryOutgoingMessage('retry-command-dry-run-due', [
+        'overall_status' => 'failed_retryable',
+        'transport_status' => 'failed',
+        'retry_count' => 1,
+        'next_retry_at' => now()->subMinute(),
+    ]);
 
     expect(Artisan::call('talkto:retry-failed', ['--direction' => 'outgoing', '--limit' => 1, '--dry-run' => true]))->toBe(0)
         ->and(Artisan::output())->toContain('scanned=1 eligible=1 dispatched=0 skipped=0 dry_run=true direction=outgoing');

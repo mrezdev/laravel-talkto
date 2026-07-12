@@ -167,7 +167,7 @@ test('dead letter reprocess dispatches outgoing incoming and skips missing origi
         ->and(TalktoEvent::query()->where('message_id', 'dlq-missing-original')->where('event_type', 'dead_letter_reprocess_missing_original')->exists())->toBeTrue();
 });
 
-test('dead letter reprocess claim prevents duplicate dispatch unless forced', function (): void {
+test('dead letter reprocess claim prevents duplicate dispatch even when forced', function (): void {
     Queue::fake();
     $message = dlqOutgoingMessage('dlq-already-reprocessing', ['overall_status' => 'failed_final', 'transport_status' => 'failed_final']);
     $deadLetter = app(TalktoDeadLetterQueue::class)->store($message, 'Final failure.');
@@ -182,8 +182,9 @@ test('dead letter reprocess claim prevents duplicate dispatch unless forced', fu
     Queue::assertNotPushed(SendTalktoMessage::class);
 
     expect(Artisan::call('talkto:dlq-reprocess', ['--force' => true]))->toBe(0);
-    Queue::assertPushed(SendTalktoMessage::class, 1);
-    expect($deadLetter->fresh()->reprocess_count)->toBe(2);
+    Queue::assertNotPushed(SendTalktoMessage::class);
+    expect($deadLetter->fresh()->status)->toBe(TalktoDeadLetterQueue::STATUS_REPROCESSING)
+        ->and($deadLetter->fresh()->reprocess_count)->toBe(1);
 });
 
 test('dead letter reprocess limit is respected and force bypasses it', function (): void {

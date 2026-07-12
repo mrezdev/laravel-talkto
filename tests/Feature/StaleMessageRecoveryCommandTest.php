@@ -60,8 +60,8 @@ test('stale outgoing message is recovered and dispatched', function (): void {
 
     expect($message->overall_status)->toBe('waiting_to_send')
         ->and($message->transport_status)->toBe('pending')
-        ->and($message->locked_at)->toBeNull()
-        ->and($message->locked_by)->toBeNull()
+        ->and($message->locked_at)->not->toBeNull()
+        ->and(str_starts_with((string) $message->locked_by, 'dispatch-claim:'))->toBeTrue()
         ->and($message->next_retry_at)->not->toBeNull()
         ->and(TalktoEvent::query()->where('message_id', 'stale-outgoing-recover')->where('event_type', 'stale_lock_recovered')->exists())->toBeTrue();
 });
@@ -78,7 +78,7 @@ test('stale incoming message is recovered and dispatched', function (): void {
 
     expect($message->overall_status)->toBe('queued')
         ->and($message->destination_action_status)->toBe('queued')
-        ->and($message->locked_at)->toBeNull()
+        ->and($message->locked_at)->not->toBeNull()
         ->and($message->next_retry_at)->not->toBeNull()
         ->and(TalktoEvent::query()->where('message_id', 'stale-incoming-recover')->where('event_type', 'stale_lock_recovered')->exists())->toBeTrue();
 });

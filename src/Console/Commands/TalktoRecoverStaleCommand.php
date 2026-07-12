@@ -43,8 +43,12 @@ class TalktoRecoverStaleCommand extends Command
         $this->line('Stale Talkto recovery');
         $this->line('Candidates: '.$summary['candidates']);
         $this->line('Recovered: '.$summary['recovered']);
+        $this->line('Stale processing recovered: '.$summary['stale_processing_recovered']);
+        $this->line('Orphaned dispatch claims recovered: '.$summary['orphaned_dispatch_claims_recovered']);
         $this->line('Failed/dead-lettered: '.$summary['failed']);
         $this->line('Skipped: '.$summary['skipped']);
+        $this->line('Dispatch claims skipped: '.$summary['dispatch_claims_skipped']);
+        $this->line('Claim changed: '.$summary['claim_changed']);
         $this->line('Dispatched: '.$summary['dispatched']);
         $this->line('Direction: '.($direction ?? 'all'));
         $this->line('Older than minutes: '.$olderThan);

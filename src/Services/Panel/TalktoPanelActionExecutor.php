@@ -8,9 +8,11 @@ use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoCurrentServiceGuard;
 use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
+use Mrezdev\LaravelTalkto\Services\TalktoDispatchClaimingService;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 use Mrezdev\LaravelTalkto\Services\TalktoTraceReporter;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelActionResult;
+use Mrezdev\LaravelTalkto\Support\TalktoDispatchTestHooks;
 use Mrezdev\LaravelTalkto\Support\TalktoModelConnection;
 use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
@@ -27,6 +29,7 @@ class TalktoPanelActionExecutor
         private readonly TalktoDeadLetterQueue $deadLetterQueue,
         private readonly TalktoTraceReporter $traceReporter,
         private readonly TalktoCurrentServiceGuard $currentServiceGuard,
+        private readonly TalktoDispatchClaimingService $dispatchClaims,
     ) {}
 
     public function retryMessage(TalktoMessage $message): TalktoPanelActionResult
@@ -60,12 +63,32 @@ class TalktoPanelActionExecutor
         }
 
         $previousNextRetryAt = $message->next_retry_at?->toIso8601String();
-        $message = $this->prepareMessageForManualRetry($message);
+        $claim = $this->dispatchClaims->claimRetry($message, 'panel-retry', true);
+
+        if (! $claim->claimed || ! $claim->message) {
+            return TalktoPanelActionResult::failure($this->actionText('message_not_retryable'), [
+                'reason' => $claim->status,
+                'direction' => $message->direction,
+                'retry_count' => (int) ($message->retry_count ?? 0),
+                'max_attempts' => $this->retryPolicy->maxAttempts($message),
+            ]);
+        }
+
+        $message = $claim->message;
         $manualRetryAt = now()->toIso8601String();
 
         try {
+            TalktoDispatchTestHooks::fire('dispatch.before_queue', [
+                'operation' => 'panel-retry',
+                'message_db_id' => $message->id,
+                'message_id' => $message->message_id,
+                'direction' => $message->direction,
+                'claim_id' => $claim->claimId,
+            ]);
+
             $this->dispatchMessageJob($message);
         } catch (Throwable $throwable) {
+            $this->dispatchClaims->compensateMessageClaim($claim);
             $this->recordEventSafely($message, 'panel_retry_dispatch_failed', [
                 'direction' => $message->direction,
                 'exception_class' => $throwable::class,
@@ -88,6 +111,7 @@ class TalktoPanelActionExecutor
             'panel_action' => true,
             'manual_retry_at' => $manualRetryAt,
             'previous_next_retry_at' => $previousNextRetryAt,
+            'claim_id' => $claim->claimId,
         ]);
 
         return TalktoPanelActionResult::success($this->actionText('retry_dispatched'), [
@@ -151,18 +175,28 @@ class TalktoPanelActionExecutor
             ]);
         }
 
-        $claimed = $this->deadLetterQueue->claimForReprocess($deadLetter, $force);
+        $claim = $this->dispatchClaims->claimDeadLetterForReprocess($deadLetter, $force, 'panel-dlq-reprocess');
 
-        if (! $claimed) {
-            return TalktoPanelActionResult::failure($this->actionText('dead_letter_claim_failed'));
+        if (! $claim->claimed || ! $claim->message || ! $claim->deadLetter) {
+            return $this->failedDeadLetterClaimResult($claim->status, $deadLetter, $message);
         }
 
-        $this->prepareOriginalMessageForReprocess($message);
+        $message = $claim->message;
+        $claimed = $claim->deadLetter;
 
         try {
+            TalktoDispatchTestHooks::fire('dispatch.before_queue', [
+                'operation' => 'panel-dlq-reprocess',
+                'message_db_id' => $message->id,
+                'message_id' => $message->message_id,
+                'direction' => $message->direction,
+                'claim_id' => $claim->claimId,
+                'dead_letter_id' => $claimed->id,
+            ]);
+
             $this->dispatchMessageJob($message);
         } catch (Throwable $throwable) {
-            $this->deadLetterQueue->markFailedReprocess($claimed, $this->actionText('dispatch_failed'), $throwable);
+            $this->dispatchClaims->compensateDeadLetterClaim($claim, $this->actionText('dispatch_failed'), $throwable);
             $this->recordEventSafely($message, 'panel_dead_letter_reprocess_dispatch_failed', [
                 'dead_letter_id' => $claimed->id,
                 'direction' => $message->direction,
@@ -184,6 +218,7 @@ class TalktoPanelActionExecutor
             'direction' => $message->direction,
             'reprocess_count' => (int) $claimed->reprocess_count,
             'panel_action' => true,
+            'claim_id' => $claim->claimId,
         ]);
 
         return TalktoPanelActionResult::success($this->actionText('dead_letter_reprocess_dispatched'), [
@@ -198,34 +233,6 @@ class TalktoPanelActionExecutor
         $includePayload = $includePayload && (bool) config('talkto.panel.messages.show_payload', false);
 
         return $this->traceReporter->traceByMessageId($message->message_id, $limit, $includePayload);
-    }
-
-    private function prepareMessageForManualRetry(TalktoMessage $message): TalktoMessage
-    {
-        $messageClass = $this->messageModelClass();
-
-        TalktoModelConnection::assertSameConnection($message, $this->eventModelClass());
-
-        return TalktoModelConnection::transaction($message, function () use ($messageClass, $message): TalktoMessage {
-            $locked = $messageClass::query()
-                ->whereKey($message->id)
-                ->lockForUpdate()
-                ->first();
-
-            if (! $locked instanceof TalktoMessage) {
-                $locked = $message;
-            }
-
-            $now = now();
-            $locked->forceFill([
-                'next_retry_at' => $now,
-                'next_attempt_at' => $now,
-                'locked_at' => null,
-                'locked_by' => null,
-            ])->save();
-
-            return $locked->fresh() ?? $locked;
-        });
     }
 
     private function findOriginalMessage(TalktoDeadLetter $deadLetter): ?TalktoMessage
@@ -247,26 +254,24 @@ class TalktoPanelActionExecutor
         return $messageClass::query()->where('message_id', $deadLetter->message_id)->first();
     }
 
-    private function prepareOriginalMessageForReprocess(TalktoMessage $message): void
+    private function failedDeadLetterClaimResult(string $status, TalktoDeadLetter $deadLetter, TalktoMessage $message): TalktoPanelActionResult
     {
-        $attributes = [
-            'next_retry_at' => null,
-            'next_attempt_at' => null,
-            'locked_at' => null,
-            'locked_by' => null,
-        ];
-
-        if ($message->direction === 'outgoing') {
-            $attributes['transport_status'] = 'pending';
-            $attributes['overall_status'] = 'waiting_to_send';
-        }
-
-        if ($message->direction === 'incoming') {
-            $attributes['destination_action_status'] = 'queued';
-            $attributes['overall_status'] = 'queued';
-        }
-
-        $message->forceFill($attributes)->save();
+        return match ($status) {
+            'terminal_success' => TalktoPanelActionResult::failure($this->actionText('original_message_succeeded')),
+            'unsupported_direction' => TalktoPanelActionResult::failure($this->actionText('original_message_unsupported_direction'), [
+                'direction' => $message->direction,
+            ]),
+            'wrong_service' => TalktoPanelActionResult::failure($this->actionText('original_message_wrong_service'), [
+                'dead_letter_id' => $deadLetter->id,
+                'message_id' => $deadLetter->message_id,
+                'current_service' => $this->currentServiceGuard->currentService(),
+            ]),
+            'missing_original' => TalktoPanelActionResult::failure($this->actionText('original_message_not_found'), [
+                'dead_letter_id' => $deadLetter->id,
+                'message_id' => $deadLetter->message_id,
+            ]),
+            default => TalktoPanelActionResult::failure($this->actionText('dead_letter_claim_failed')),
+        };
     }
 
     private function dispatchMessageJob(TalktoMessage $message): void

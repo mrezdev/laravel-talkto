@@ -71,6 +71,8 @@ Use explicit classifications:
 
 Use `php artisan talkto:retry-failed --dry-run` before dispatching retries. The command reports eligible and skipped messages with compact skip reasons such as retry disabled, direction disabled, max attempts exhausted, or not due.
 
+When a retry is dispatched, Talkto locks and rechecks the message row, moves it out of the retryable candidate pool, and tags it with a timestamped dispatch claim before queueing the job. If queue dispatch fails before a job is queued, Talkto restores only the row still carrying that same claim.
+
 Dead letters move through a small lifecycle:
 
 - `open`: stored final failure.
@@ -80,6 +82,12 @@ Dead letters move through a small lifecycle:
 - `ignored`: deliberately set aside by operator policy.
 
 Use `php artisan talkto:trace <message-id>` to inspect attempts, events, and DLQ transitions before running recovery commands.
+
+`talkto:dlq-reprocess` claims the original message row and dead-letter row together where they share the Talkto model connection. Dual-resource paths use a consistent lock order: `TalktoMessage` first, then `TalktoDeadLetter`. If queue dispatch fails, the dead letter becomes `failed_reprocess` and the original message is restored only when it still carries the same dispatch claim and the dead letter still has the expected reprocess count. `--force` may bypass safe policy limits such as the max reprocess count, but it never claims a dead letter already in `reprocessing` or a message already carrying an active dispatch claim.
+
+`talkto:recover-stale` handles two recovery classes: stale worker locks such as `sender:*` or `processor:*`, and orphaned pre-dispatch claims where `locked_by` starts with `dispatch-claim:` and `locked_at` is older than the configured threshold. Duplicate recovery passes should see the recovered row as no longer stale because a fresh dispatch claim timestamp replaces the old one before the queue job is pushed.
+
+Result callback queue-dispatch failures are compensated atomically. Talkto reloads the callback message, verifies the exact failed `dispatch-claim:*` marker and expected pending callback state, records `result_callback_queue_failed`, and clears that claim in one Talkto transaction. If the failure event cannot be written, the transaction rolls back and the callback claim remains visible for stale recovery instead of being silently released.
 
 ## Payload Hash Repair
 
