@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Validator;
 use InvalidArgumentException;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackReceiverContract;
 use Mrezdev\LaravelTalkto\Data\TalktoResultCallbackData;
+use Mrezdev\LaravelTalkto\Exceptions\TalktoInvalidEnvelopeFieldException;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Support\TalktoModelConnection;
 use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
@@ -40,12 +41,26 @@ class TalktoResultCallbackReceiver implements ResultCallbackReceiverContract
         }
 
         $verification = $this->verifier->verifyEnvelope($envelope, $headers);
-        $callback = TalktoResultCallbackData::fromEnvelope($envelope);
 
         if (! ($verification['ok'] ?? false)) {
+            $callback = ($verification['error'] ?? null) === 'invalid_envelope_field'
+                ? null
+                : $this->callbackFromEnvelopeOrNull($envelope);
+
             $this->recordRejectedIfLinked($callback, (string) ($verification['error'] ?? 'verification_failed'));
 
-            return $this->rejected((string) ($verification['error'] ?? 'verification_failed'), $callback->callbackMessageId, $callback->originalMessageId);
+            return $this->rejected(
+                (string) ($verification['error'] ?? 'verification_failed'),
+                $callback?->callbackMessageId,
+                $callback?->originalMessageId,
+                is_string($verification['field'] ?? null) ? $verification['field'] : null
+            );
+        }
+
+        try {
+            $callback = TalktoResultCallbackData::fromEnvelope($envelope);
+        } catch (TalktoInvalidEnvelopeFieldException $exception) {
+            return $this->rejected($exception->errorCode, null, null, $exception->field);
         }
 
         if (! $this->consumeNonce($verification, $callback->callbackMessageId)) {
@@ -282,20 +297,34 @@ class TalktoResultCallbackReceiver implements ResultCallbackReceiverContract
         ];
     }
 
-    private function rejected(string $error, ?string $messageId, ?string $originalMessageId): array
+    private function rejected(string $error, ?string $messageId, ?string $originalMessageId, ?string $field = null): array
     {
-        return [
+        return array_filter([
             'accepted' => false,
             'status' => 'rejected',
             'message_id' => $messageId,
             'original_message_id' => $originalMessageId,
             'duplicate' => false,
             'error' => $error,
-        ];
+            'field' => $field,
+        ], fn (mixed $value): bool => $value !== null);
     }
 
-    private function recordRejectedIfLinked(TalktoResultCallbackData $callback, string $error): void
+    private function callbackFromEnvelopeOrNull(array $envelope): ?TalktoResultCallbackData
     {
+        try {
+            return TalktoResultCallbackData::fromEnvelope($envelope);
+        } catch (TalktoInvalidEnvelopeFieldException) {
+            return null;
+        }
+    }
+
+    private function recordRejectedIfLinked(?TalktoResultCallbackData $callback, string $error): void
+    {
+        if (! $callback instanceof TalktoResultCallbackData) {
+            return;
+        }
+
         if ($callback->originalMessageId === '') {
             return;
         }

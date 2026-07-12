@@ -84,6 +84,36 @@ Likely cause: The request declares a JSON content type but the body is empty, ma
 
 Safe fix: Send the signed envelope as raw JSON with `Content-Type: application/json` or another supported JSON media type. Do not rely on form fields, query strings, or Laravel-mutated parsed input to repair malformed signed JSON.
 
+## `invalid_envelope_field`
+
+Symptom: The receive or callback route returns:
+
+```json
+{"received":false,"status":"rejected","error":"invalid_envelope_field","field":"command"}
+```
+
+or:
+
+```json
+{"accepted":false,"status":"rejected","error":"invalid_envelope_field","field":"original_message_id"}
+```
+
+Likely cause: A protocol identifier or Talkto header value contains an unsafe control character such as NUL, tab, line feed, carriage return, `DEL`, `U+2028`, or `U+2029`; an envelope identifier contains invalid UTF-8; or a Talkto/custom HTTP header name is not a valid HTTP token. Header names cannot be empty and cannot contain spaces, tabs, CR/LF, NUL, colon, slash, `DEL`, or Unicode. The receiver rejects this before source lookup, nonce persistence, incoming message storage, callback application, or handler execution. Structurally safe but unsupported values, such as an unsupported signature version like `v99`, keep their existing error codes.
+
+Safe fix: Correct the sender, configured header name, target custom header, or host code that produced the envelope metadata. Do not trim or sanitize the signed historical value in place. For old outgoing rows with unsafe stored identifiers or target config that now fails header validation, inspect safely and create a new valid replacement message or fix the target configuration; Talkto will fail the corrupted row locally as a non-retryable review-required send failure.
+
+## `invalid_header_value_count`
+
+Symptom: The receive or callback route returns:
+
+```json
+{"received":false,"status":"rejected","error":"invalid_header_value_count","field":"nonce"}
+```
+
+Likely cause: A protocol header that must be singular was supplied with duplicate or multiple logical values. Talkto rejects duplicate timestamp, signature, signature-version, nonce, payload-hash, and message-id header values instead of selecting the first value.
+
+Safe fix: Send exactly one value for each Talkto protocol header. Do not rely on proxies, middleware, or framework header normalization to merge duplicates.
+
 ## `payload_hash_mismatch` With Decimal Floats
 
 Symptom: A valid outgoing message is rejected with:

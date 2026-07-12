@@ -48,6 +48,12 @@ Make sure outgoing target names and incoming source names match the values signe
 
 Outgoing target diagnostics use the same normalized URL config as runtime. Prefer `base_url` with `receive_endpoint` and `callback_endpoint`, or explicit `receive_url` and `callback_url`.
 
+Keep protocol identifiers free of control characters and invalid UTF-8. Talkto accepts ordinary service names and commands, including Unicode text, spaces, slashes, dots, colons, hyphens, and underscores, but rejects ASCII controls, `DEL`, `U+2028`, and `U+2029` in envelope metadata and Talkto header values before signing, routing, nonce storage, persistence, or HTTP transport.
+
+Keep HTTP header names boring and standards-compatible. Configured Talkto header names and custom target headers must match ``^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$``; spaces, tabs, CR/LF, NUL, colon, slash, `DEL`, and Unicode are rejected. All values in multi-value headers are inspected, and protocol headers such as timestamp, signature, signature version, nonce, payload hash, and message id must have exactly one logical value.
+
+Do not repair historical unsafe identifiers by mutating signed identity fields in place. If an old outgoing row fails as `invalid_envelope_field` or `invalid_header_value_count`, inspect it safely, record an operator decision, and create a new valid replacement message through normal host code or correct the target header configuration.
+
 ## Outgoing TLS Verification
 
 Keep outgoing HTTP TLS verification enabled in production:
@@ -91,6 +97,8 @@ Never use `allow_all_commands=true` in production.
 Keep outgoing payload builders deterministic. Build payloads from arrays and JSON-safe primitive values, or from objects that intentionally expose JSON-safe data through collections, `Arrayable`, `JsonSerializable`, backed enums, Carbon/JSON-serializable date objects, or public properties. Format native `DateTime` values as strings explicitly before passing them to Talkto.
 
 Talkto freezes each outgoing payload before hashing and persistence. During one freeze operation, a repeated supported object instance is converted once and memoized as a final primitive result. The frozen tree is what workers, retries, DLQ rows, callbacks, and repair commands use later. Direct callback snapshots passed into `TalktoResultCallbackData` are validated and frozen the same way before they are stored. Unsupported runtime values fail before persistence, so host tests should cover representative payloads before rollout.
+
+Do not apply envelope identifier restrictions to business payload strings. User-facing payload values may contain multiline text, tabs, empty strings, leading/trailing spaces, Persian, Arabic, accented, CJK, emoji, and other normal content as long as the payload can be frozen into JSON-safe primitives.
 
 ## Routes
 

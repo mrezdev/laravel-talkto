@@ -17,7 +17,8 @@ class TalktoResultCallbackEnvelopeBuilder
 {
     public function __construct(
         private readonly TalktoSigner $signer,
-        private readonly TalktoOutgoingTargetRegistryContract $targets
+        private readonly TalktoOutgoingTargetRegistryContract $targets,
+        private readonly ?TalktoEnvelopeFieldValidator $fieldValidator = null
     ) {}
 
     public function buildEnvelope(Model $message, IncomingCommandResultContract $result, array $options = []): array
@@ -49,12 +50,16 @@ class TalktoResultCallbackEnvelopeBuilder
             (string) $secret
         );
 
-        return array_merge($target->headers(), [
+        $headers = array_merge($target->headers(), [
             'X-Talkto-Signature' => $signature,
             'X-Talkto-Timestamp' => $timestamp,
             'X-Talkto-Message-Id' => (string) $envelope['message_id'],
             'X-Talkto-Protocol-Version' => '2',
         ]);
+
+        $this->validator()->validateTalktoHeaders($headers, $this->configuredTalktoHeaderNames());
+
+        return $headers;
     }
 
     public function callbackEndpointFor(string $targetService): string
@@ -70,6 +75,14 @@ class TalktoResultCallbackEnvelopeBuilder
 
     private function buildV2Headers(array $envelope, array $customHeaders, string $timestamp, string $secret): array
     {
+        $signatureVersionHeader = $this->validator()->validateHeaderName(
+            'signature_version_header_name',
+            config('talkto.security.signature_version_header', 'X-Talkto-Signature-Version')
+        );
+        $nonceHeader = $this->validator()->validateHeaderName(
+            'nonce_header_name',
+            config('talkto.security.nonce_header', 'X-Talkto-Nonce')
+        );
         $nonce = (string) Str::uuid();
         $signature = $this->signer->signV2(
             $timestamp,
@@ -82,15 +95,19 @@ class TalktoResultCallbackEnvelopeBuilder
             $secret
         );
 
-        return array_merge($customHeaders, [
+        $headers = array_merge($customHeaders, [
             'X-Talkto-Signature' => $signature,
             'X-Talkto-Timestamp' => $timestamp,
             'X-Talkto-Message-Id' => (string) $envelope['message_id'],
             'X-Talkto-Protocol-Version' => '2',
-            (string) config('talkto.security.signature_version_header', 'X-Talkto-Signature-Version') => 'v2',
+            $signatureVersionHeader => 'v2',
             'X-Talkto-Payload-Hash' => (string) $envelope['payload_hash'],
-            (string) config('talkto.security.nonce_header', 'X-Talkto-Nonce') => $nonce,
+            $nonceHeader => $nonce,
         ]);
+
+        $this->validator()->validateTalktoHeaders($headers, $this->configuredTalktoHeaderNames());
+
+        return $headers;
     }
 
     private function signatureVersion(): string
@@ -106,5 +123,18 @@ class TalktoResultCallbackEnvelopeBuilder
         throw new InvalidTalktoSignatureException(
             sprintf('Unsupported outgoing Talkto signature version [%s]. Supported versions: v1, v2.', $safeVersion)
         );
+    }
+
+    private function validator(): TalktoEnvelopeFieldValidator
+    {
+        return $this->fieldValidator ?? app(TalktoEnvelopeFieldValidator::class);
+    }
+
+    private function configuredTalktoHeaderNames(): array
+    {
+        return [
+            'signature_version_header_name' => config('talkto.security.signature_version_header', 'X-Talkto-Signature-Version'),
+            'nonce_header_name' => config('talkto.security.nonce_header', 'X-Talkto-Nonce'),
+        ];
     }
 }

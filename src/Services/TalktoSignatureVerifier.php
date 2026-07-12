@@ -2,6 +2,8 @@
 
 namespace Mrezdev\LaravelTalkto\Services;
 
+use Mrezdev\LaravelTalkto\Exceptions\TalktoInvalidEnvelopeFieldException;
+
 /**
  * @internal Runtime signature verifier behind receive and callback endpoints.
  */
@@ -9,7 +11,8 @@ class TalktoSignatureVerifier
 {
     public function __construct(
         private readonly TalktoPayloadHasher $payloadHasher,
-        private readonly TalktoSigner $signer
+        private readonly TalktoSigner $signer,
+        private readonly ?TalktoEnvelopeFieldValidator $fieldValidator = null
     ) {}
 
     public function verifyEnvelope(array $envelope, array $headers): array
@@ -20,13 +23,21 @@ class TalktoSignatureVerifier
             }
         }
 
+        $requireSignature = (bool) config('talkto.security.require_signature', true);
+        $normalizedHeaders = $this->normalizeHeaders($headers);
+
+        try {
+            $this->validateEnvelopeFields($envelope);
+            $this->validator()->validateTalktoHeaders($normalizedHeaders, $this->configuredTalktoHeaderNames());
+        } catch (TalktoInvalidEnvelopeFieldException $exception) {
+            return $this->failure(422, $exception->errorCode, $exception->field);
+        }
+
         $messageId = (string) $envelope['message_id'];
         $source = (string) $envelope['source'];
         $target = (string) $envelope['target'];
         $command = (string) $envelope['command'];
         $payloadHash = (string) $envelope['payload_hash'];
-        $requireSignature = (bool) config('talkto.security.require_signature', true);
-        $normalizedHeaders = $this->normalizeHeaders($headers);
         $version = $this->signatureVersion($normalizedHeaders);
         $timestamp = $this->headerValue($normalizedHeaders, 'x-talkto-timestamp');
 
@@ -146,11 +157,18 @@ class TalktoSignatureVerifier
         $normalized = [];
 
         foreach ($headers as $key => $value) {
-            if (is_array($value)) {
-                $value = reset($value);
+            $normalizedKey = strtolower((string) $key);
+
+            if (array_key_exists($normalizedKey, $normalized)) {
+                $normalized[$normalizedKey] = array_merge(
+                    $this->headerValueList($normalized[$normalizedKey]),
+                    $this->headerValueList($value)
+                );
+
+                continue;
             }
 
-            $normalized[strtolower((string) $key)] = $value === null ? null : (string) $value;
+            $normalized[$normalizedKey] = $value;
         }
 
         return $normalized;
@@ -160,7 +178,24 @@ class TalktoSignatureVerifier
     {
         $value = $headers[strtolower($key)] ?? null;
 
-        return $value === '' ? null : $value;
+        if (is_array($value)) {
+            if (count($value) !== 1) {
+                return null;
+            }
+
+            $value = reset($value);
+        }
+
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return is_string($value) ? $value : (string) $value;
+    }
+
+    private function headerValueList(mixed $value): array
+    {
+        return is_array($value) ? array_values($value) : [$value];
     }
 
     private function timestampIsWithinTolerance(string $timestamp): bool
@@ -223,12 +258,39 @@ class TalktoSignatureVerifier
         return array_keys($value) === range(0, count($value) - 1);
     }
 
-    private function failure(int $status, string $error): array
+    private function validateEnvelopeFields(array $envelope): void
+    {
+        $this->validator()->validateIdentifiers([
+            'message_id' => $envelope['message_id'],
+            'source_service' => $envelope['source'],
+            'target_service' => $envelope['target'],
+            'command' => $envelope['command'],
+            'payload_hash' => $envelope['payload_hash'],
+            'correlation_id' => $envelope['correlation_id'] ?? null,
+            'parent_message_id' => $envelope['parent_message_id'] ?? null,
+        ]);
+    }
+
+    private function validator(): TalktoEnvelopeFieldValidator
+    {
+        return $this->fieldValidator ?? app(TalktoEnvelopeFieldValidator::class);
+    }
+
+    private function configuredTalktoHeaderNames(): array
     {
         return [
+            'signature_version_header_name' => config('talkto.security.signature_version_header', 'X-Talkto-Signature-Version'),
+            'nonce_header_name' => config('talkto.security.nonce_header', 'X-Talkto-Nonce'),
+        ];
+    }
+
+    private function failure(int $status, string $error, ?string $field = null): array
+    {
+        return array_filter([
             'ok' => false,
             'status' => $status,
             'error' => $error,
-        ];
+            'field' => $field,
+        ], fn (mixed $value): bool => $value !== null);
     }
 }

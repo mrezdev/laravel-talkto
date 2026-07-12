@@ -4,6 +4,7 @@ namespace Mrezdev\LaravelTalkto\Data;
 
 use Illuminate\Database\Eloquent\Model;
 use InvalidArgumentException;
+use Mrezdev\LaravelTalkto\Services\TalktoEnvelopeFieldValidator;
 
 /**
  * Immutable public snapshot of a Talkto envelope payload.
@@ -24,7 +25,17 @@ final readonly class TalktoEnvelopeData
         public ?string $createdAt,
         public string $payloadHash,
         public ?array $payload,
-    ) {}
+    ) {
+        app(TalktoEnvelopeFieldValidator::class)->validateIdentifiers([
+            'message_id' => $this->messageId,
+            'correlation_id' => $this->correlationId,
+            'parent_message_id' => $this->parentMessageId,
+            'source_service' => $this->source,
+            'target_service' => $this->target,
+            'command' => $this->command,
+            'payload_hash' => $this->payloadHash,
+        ]);
+    }
 
     public static function fromArray(array $envelope): self
     {

@@ -7,6 +7,8 @@ namespace Mrezdev\LaravelTalkto\Services;
  */
 class TalktoSigner
 {
+    public function __construct(private readonly ?TalktoEnvelopeFieldValidator $fieldValidator = null) {}
+
     public function canonicalString(
         string $messageId,
         string $timestamp,
@@ -15,6 +17,15 @@ class TalktoSigner
         string $command,
         string $payloadHash
     ): string {
+        $this->validator()->validateIdentifiers([
+            'message_id' => $messageId,
+            'timestamp' => $timestamp,
+            'source_service' => $source,
+            'target_service' => $target,
+            'command' => $command,
+            'payload_hash' => $payloadHash,
+        ]);
+
         return implode('.', [
             $messageId,
             $timestamp,
@@ -66,6 +77,17 @@ class TalktoSigner
         string $command,
         string $payloadHash
     ): string {
+        $this->validator()->validateIdentifiers([
+            'signature_version' => 'v2',
+            'timestamp' => $timestamp,
+            'nonce' => $nonce,
+            'message_id' => $messageId,
+            'source_service' => $source,
+            'target_service' => $target,
+            'command' => $command,
+            'payload_hash' => $payloadHash,
+        ]);
+
         return implode("\n", [
             'v2',
             $timestamp,
@@ -110,5 +132,10 @@ class TalktoSigner
             $this->signV2($timestamp, $nonce, $messageId, $source, $target, $command, $payloadHash, $secret),
             $signature
         );
+    }
+
+    private function validator(): TalktoEnvelopeFieldValidator
+    {
+        return $this->fieldValidator ?? app(TalktoEnvelopeFieldValidator::class);
     }
 }

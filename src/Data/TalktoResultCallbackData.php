@@ -4,6 +4,7 @@ namespace Mrezdev\LaravelTalkto\Data;
 
 use Illuminate\Database\Eloquent\Model;
 use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
+use Mrezdev\LaravelTalkto\Services\TalktoEnvelopeFieldValidator;
 use Mrezdev\LaravelTalkto\Services\TalktoPayloadFreezer;
 use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
 
@@ -32,6 +33,17 @@ final readonly class TalktoResultCallbackData
         ?array $frozenPayload = null,
         ?string $createdAt = null,
     ) {
+        app(TalktoEnvelopeFieldValidator::class)->validateIdentifiers([
+            'callback_message_id' => $this->callbackMessageId,
+            'original_message_id' => $this->originalMessageId,
+            'original_command' => $this->originalCommand,
+            'correlation_id' => $this->correlationId,
+            'parent_message_id' => $this->parentMessageId,
+            'source_service' => $this->source,
+            'target_service' => $this->target,
+            'command' => $this->command,
+        ]);
+
         $payload = $frozenPayload ?? $this->rawPayload();
 
         $this->frozenPayload = self::freezePayloadSnapshot($payload);

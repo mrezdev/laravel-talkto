@@ -21,7 +21,8 @@ class TalktoOutgoingMessageFactory
     public function __construct(
         private readonly TalktoPayloadHasher $payloadHasher,
         private readonly TalktoOutgoingTargetRegistryContract $targets,
-        private readonly ?TalktoPayloadFreezer $payloadFreezer = null
+        private readonly ?TalktoPayloadFreezer $payloadFreezer = null,
+        private readonly ?TalktoEnvelopeFieldValidator $fieldValidator = null
     ) {}
 
     public function create(
@@ -31,10 +32,15 @@ class TalktoOutgoingMessageFactory
         array $options = []
     ): TalktoMessage {
         $resolvedTarget = $this->resolvedTargetName($target);
+        $this->validator()->validateIdentifier('target_service', $resolvedTarget);
 
-        if (! $this->targets->resolve($target)) {
+        $resolvedTargetConfig = $this->targets->resolve($target);
+
+        if (! $resolvedTargetConfig) {
             throw new InvalidArgumentException("Talkto outgoing target [{$target}] is not configured.");
         }
+
+        $this->validator()->validateTalktoHeaders($resolvedTargetConfig->headers(), $this->configuredTalktoHeaderNames());
 
         $configuredSourceService = $options['source_service'] ?? config('talkto.service', 'app');
         $sourceService = is_string($configuredSourceService) && $configuredSourceService !== ''
@@ -44,6 +50,17 @@ class TalktoOutgoingMessageFactory
         $idempotencyKey = $options['idempotency_key'] ?? null;
         $messageId = $options['message_id'] ?? Str::uuid()->toString();
         $correlationId = $options['correlation_id'] ?? Str::uuid()->toString();
+        $parentMessageId = $options['parent_message_id'] ?? null;
+
+        $this->validator()->validateIdentifiers([
+            'source_service' => $sourceService,
+            'target_service' => $resolvedTarget,
+            'command' => $command,
+            'message_id' => $messageId,
+            'correlation_id' => $correlationId,
+            'parent_message_id' => $parentMessageId,
+        ]);
+
         $sourceActionStatus = $options['source_action_status'] ?? TalktoMessageStatus::SucceededAssumed->value;
         $transportStatus = array_key_exists('transport_status', $options) ? $options['transport_status'] : TalktoMessageStatus::Pending->value;
         $destinationReceiveStatus = array_key_exists('destination_receive_status', $options) ? $options['destination_receive_status'] : null;
@@ -80,6 +97,7 @@ class TalktoOutgoingMessageFactory
                 $eventClass,
                 $messageId,
                 $correlationId,
+                $parentMessageId,
                 $options,
                 $sourceService,
                 $resolvedTarget,
@@ -98,7 +116,7 @@ class TalktoOutgoingMessageFactory
                 $message = $messageClass::create([
                     'message_id' => $messageId,
                     'correlation_id' => $correlationId,
-                    'parent_message_id' => $options['parent_message_id'] ?? null,
+                    'parent_message_id' => $parentMessageId,
                     'direction' => TalktoMessageDirection::Outgoing->value,
                     'source_service' => $sourceService,
                     'target_service' => $resolvedTarget,
@@ -184,6 +202,19 @@ class TalktoOutgoingMessageFactory
     private function payloadFreezer(): TalktoPayloadFreezer
     {
         return $this->payloadFreezer ?? app(TalktoPayloadFreezer::class);
+    }
+
+    private function validator(): TalktoEnvelopeFieldValidator
+    {
+        return $this->fieldValidator ?? app(TalktoEnvelopeFieldValidator::class);
+    }
+
+    private function configuredTalktoHeaderNames(): array
+    {
+        return [
+            'signature_version_header_name' => config('talkto.security.signature_version_header', 'X-Talkto-Signature-Version'),
+            'nonce_header_name' => config('talkto.security.nonce_header', 'X-Talkto-Nonce'),
+        ];
     }
 
     private function isDuplicateIdempotencyFingerprintException(QueryException $exception): bool

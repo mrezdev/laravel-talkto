@@ -21,6 +21,8 @@ Callback messages use the configured callback endpoint on the target, usually `/
 
 Callback result and meta payloads pass through the same outgoing one-time freeze boundary as ordinary commands. The durable callback row stores the frozen primitive tree, and direct `TalktoResultCallbackData` instances capture one immutable frozen payload snapshot that `toPayload()` and `toEnvelope()` reuse for repeatable callback hashes. The optional constructor snapshot array remains accepted for compatibility, but it is validated and frozen on entry; do not pass live resources, closures, generators, native `DateTimeInterface` values, circular structures, or mutable runtime objects that cannot be converted into JSON-safe primitives.
 
+Callback protocol identifiers use the same envelope field validation as ordinary Talkto messages. The callback message id, source service, target service, `talkto.result` command, parent message id, correlation id, original message id, original command, nonce, timestamp, signature-version header, and payload hash reject control characters before signing, nonce storage, HTTP transport, or callback application. The `result`, `meta`, and `error_message` values remain business payload data, so multiline text and tabs are allowed there.
+
 Destination apps must configure the original source service under `talkto.outgoing` with `base_url`, `receive_endpoint`, `callback_endpoint`, and `secret`, or with explicit full `receive_url` and `callback_url` values. The `url` and `endpoint` keys still work as aliases for `base_url` and `receive_endpoint`.
 
 ## Automatic Dispatch
@@ -64,6 +66,8 @@ If a handler throws an unexpected exception before returning a result, the pipel
 ## Receiver
 
 `ResultCallbackReceiverContract` accepts a signed callback envelope and headers. The default `TalktoResultCallbackReceiver` verifies the envelope, matches the original outgoing message, applies the callback status, and records callback events.
+
+If callback envelope metadata contains a forbidden control character, the receiver returns a safe `invalid_envelope_field` rejection with the field name only. It does not consume a nonce, apply the callback, update the original message, or record a successful callback event for structurally invalid metadata.
 
 Source apps must configure the destination service under `talkto.incoming` and allow the callback command:
 

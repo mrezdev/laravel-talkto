@@ -7,10 +7,12 @@ use Mrezdev\LaravelTalkto\Contracts\TalktoHttpClientWithOptions;
 use Mrezdev\LaravelTalkto\Enums\TalktoAttemptStatus;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageDirection;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
+use Mrezdev\LaravelTalkto\Exceptions\TalktoInvalidEnvelopeFieldException;
 use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
+use Mrezdev\LaravelTalkto\Services\TalktoEnvelopeFieldValidator;
 use Mrezdev\LaravelTalkto\Services\TalktoOutgoingEnvelopeBuilder;
 use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
@@ -52,6 +54,10 @@ class SendOutgoingTalktoMessagePipeline
             return;
         }
 
+        if (! $this->guardStoredEnvelopeFields($message, $retryPolicy)) {
+            return;
+        }
+
         $sending = $this->markSending($retryPolicy);
 
         if ($sending === null) {
@@ -84,6 +90,8 @@ class SendOutgoingTalktoMessagePipeline
             }
 
             $this->applyFailedResponse($message, $attempt, $response, $retryPolicy);
+        } catch (TalktoInvalidEnvelopeFieldException $throwable) {
+            $this->applyInvalidEnvelopeFieldFailure($message, $attempt, $retryPolicy, $throwable);
         } catch (Throwable $throwable) {
             $this->applyUnexpectedFailure($message, $attempt, $throwable, $retryPolicy);
         }
@@ -125,6 +133,27 @@ class SendOutgoingTalktoMessagePipeline
         );
 
         return false;
+    }
+
+    private function guardStoredEnvelopeFields(TalktoMessage $message, TalktoRetryPolicy $retryPolicy): bool
+    {
+        try {
+            app(TalktoEnvelopeFieldValidator::class)->validateIdentifiers([
+                'message_id' => (string) $message->message_id,
+                'correlation_id' => $message->correlation_id === null ? null : (string) $message->correlation_id,
+                'parent_message_id' => $message->parent_message_id === null ? null : (string) $message->parent_message_id,
+                'source_service' => (string) $message->source_service,
+                'target_service' => (string) $message->target_service,
+                'command' => (string) $message->command,
+                'payload_hash' => (string) $message->payload_hash,
+            ]);
+        } catch (TalktoInvalidEnvelopeFieldException $exception) {
+            $this->applyPreSendInvalidEnvelopeFieldFailure($message, $retryPolicy, $exception);
+
+            return false;
+        }
+
+        return true;
     }
 
     private function isSendable(TalktoMessage $message, TalktoRetryPolicy $retryPolicy): bool
@@ -695,6 +724,91 @@ class SendOutgoingTalktoMessagePipeline
                     'retryable' => false,
                     'review_required' => true,
                 ], $meta),
+            ]);
+
+            $this->recordRetryEvent($eventClass, $message, 'retry_not_scheduled');
+        });
+    }
+
+    private function applyInvalidEnvelopeFieldFailure(
+        TalktoMessage $message,
+        TalktoAttempt $attempt,
+        TalktoRetryPolicy $retryPolicy,
+        TalktoInvalidEnvelopeFieldException $exception
+    ): void {
+        $this->applyStoredPayloadHashFailure(
+            $message,
+            $attempt,
+            $retryPolicy,
+            $exception->errorCode,
+            $exception->getMessage(),
+            [
+                'field_name' => $exception->field,
+                'reason' => $exception->reason,
+            ]
+        );
+    }
+
+    private function applyPreSendInvalidEnvelopeFieldFailure(
+        TalktoMessage $message,
+        TalktoRetryPolicy $retryPolicy,
+        TalktoInvalidEnvelopeFieldException $exception
+    ): void {
+        $messageClass = $this->messageModelClass();
+        $attemptClass = $this->attemptModelClass();
+        $eventClass = $this->eventModelClass();
+
+        TalktoModelConnection::assertSameConnection($message, $attemptClass, $eventClass);
+
+        TalktoModelConnection::transaction($message, function () use ($messageClass, $attemptClass, $eventClass, $message, $retryPolicy, $exception): void {
+            $message = $messageClass::query()->whereKey($message->id)->lockForUpdate()->first();
+
+            if (! $message) {
+                return;
+            }
+
+            if (! $this->isSendable($message, $retryPolicy)) {
+                return;
+            }
+
+            $attemptNo = ((int) $message->getAttribute('attempts')) + 1;
+            $previousStatus = $message->overall_status;
+
+            $message->forceFill(['attempts' => $attemptNo])->save();
+            $retryPolicy->markFinalFailure($message, 'transport_status', $exception->errorCode);
+
+            $this->storeDeadLetterIfEnabled($message, $exception->errorCode);
+
+            $attemptClass::create([
+                'talkto_message_id' => $message->id,
+                'message_id' => $message->message_id,
+                'stage' => 'transport',
+                'attempt_no' => $attemptNo,
+                'status' => $message->overall_status,
+                'error_class' => $exception->errorCode,
+                'error_message' => $exception->getMessage(),
+                'meta' => [
+                    'retryable' => false,
+                    'review_required' => true,
+                    'field_name' => $exception->field,
+                    'reason' => $exception->reason,
+                ],
+            ]);
+
+            $eventClass::create([
+                'talkto_message_id' => $message->id,
+                'message_id' => $message->message_id,
+                'service_name' => config('talkto.service', 'app'),
+                'event_type' => 'message_send_failed',
+                'old_status' => $previousStatus,
+                'new_status' => $message->overall_status,
+                'meta' => [
+                    'error_code' => $exception->errorCode,
+                    'retryable' => false,
+                    'review_required' => true,
+                    'field_name' => $exception->field,
+                    'reason' => $exception->reason,
+                ],
             ]);
 
             $this->recordRetryEvent($eventClass, $message, 'retry_not_scheduled');

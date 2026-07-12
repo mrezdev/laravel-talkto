@@ -12,6 +12,8 @@ class TalktoNonceLedger
 {
     public function nonceHash(string $signatureVersion, string $source, string $target, string $nonce): string
     {
+        $this->validateFields($signatureVersion, $source, $target, $nonce, null, null);
+
         return hash('sha256', implode('|', [
             $signatureVersion,
             $source,
@@ -31,6 +33,8 @@ class TalktoNonceLedger
         if (! (bool) config('talkto.security.replay_protection.enabled', true)) {
             return true;
         }
+
+        $this->validateFields($signatureVersion, $source, $target, $nonce, $messageId, $signedTimestamp);
 
         if ($signatureVersion !== 'v2' || $nonce === '') {
             return false;
@@ -82,5 +86,23 @@ class TalktoNonceLedger
     private function nonceModelClass(): string
     {
         return app(TalktoModelResolver::class)->nonce();
+    }
+
+    private function validateFields(
+        string $signatureVersion,
+        string $source,
+        string $target,
+        string $nonce,
+        ?string $messageId,
+        ?string $signedTimestamp
+    ): void {
+        app(TalktoEnvelopeFieldValidator::class)->validateIdentifiers([
+            'signature_version' => $signatureVersion,
+            'source_service' => $source,
+            'target_service' => $target,
+            'nonce' => $nonce,
+            'message_id' => $messageId,
+            'timestamp' => $signedTimestamp,
+        ]);
     }
 }

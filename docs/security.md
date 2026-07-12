@@ -30,6 +30,16 @@ The package signs canonical message fields, including the timestamp, payload has
 
 Incoming verification rejects requests when the signature is invalid, the timestamp is outside tolerance, the source is unknown, the target service does not match, the command is not allowed, the payload hash differs, or nonce replay protection fails.
 
+## Envelope Field Validation
+
+Talkto rejects protocol-level envelope identifiers and Talkto header values that contain ASCII control characters `U+0000` through `U+001F`, `U+007F`, or Unicode line and paragraph separators `U+2028` and `U+2029`. Envelope identifier strings also reject invalid UTF-8. This narrow value rule prevents ambiguous canonical strings, malformed headers, hidden identifier manipulation, multiline log confusion, and misleading trace output without imposing an ASCII-only identifier format.
+
+HTTP header names use a stricter RFC token rule: ``^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$``. Configured signature-version and nonce header names, built-in Talkto headers, target custom headers, programmatically registered target headers, and direct verifier header arrays are rejected if a name is empty or contains spaces, tabs, CR/LF, NUL, colon, slash, `DEL`, or Unicode. The raw unsafe header name is never included in errors.
+
+The value rule applies to signed and routed metadata such as message ids, source service, target service, command, correlation id, parent message id, callback identity fields, timestamp header values, nonce values, signature-version values, and payload hashes. All values in a multi-value header array are inspected. Protocol headers that must be singular, including timestamp, signature, signature version, nonce, payload hash, and message id, reject duplicate logical values as `invalid_header_value_count` instead of selecting the first value. Talkto does not trim, normalize, replace, or sanitize values; invalid metadata is rejected explicitly with only the safe field name in responses and event metadata.
+
+Payload string values are intentionally outside this rule. Business payloads may contain newlines, tabs, empty strings, leading/trailing spaces, Persian, Arabic, accented, CJK, emoji, and other normal user content, subject to the separate JSON-safe payload freeze and payload hash rules.
+
 ## Payload Hash Encoding
 
 Talkto payload hashes are calculated from deterministic JSON bytes. The encoder sorts associative keys for hashing, preserves list order, leaves Unicode and slashes unescaped, keeps valid JSON numeric values as numbers, and rejects unsupported non-finite float values such as `NAN`, `INF`, and `-INF`.

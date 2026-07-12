@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Envelope Control-Character Validation
+
+- Added centralized validation for Talkto envelope identifiers and Talkto protocol headers so ASCII controls `U+0000` through `U+001F`, `U+007F`, and Unicode line/paragraph separators `U+2028` and `U+2029` are rejected before signing, routing, persistence, nonce storage, HTTP transport, callback application, or handler execution.
+- Added RFC-token validation for Talkto HTTP header names, including configured signature-version/nonce header names, built-in protocol headers, custom target headers, programmatically registered target headers, and direct verifier header arrays.
+- Hardened header value validation so all values are inspected, unsafe secondary values are not ignored, and singular protocol headers such as timestamp, signature, signature version, nonce, payload hash, and message id reject duplicate logical values.
+- Preserved ordinary identifiers, including spaces, underscores, hyphens, colons, dots, slashes, Persian, Arabic, accented, CJK, and emoji characters; payload strings remain unrestricted by this envelope rule and may still contain newlines, tabs, trailing spaces, empty strings, and multiline user content.
+- Added safe `invalid_envelope_field` receiver/callback rejections with field names only, keeping unsafe raw values out of responses, exception messages, attempts, events, and panel-facing error detail.
+- Hardened historical outgoing rows with unsafe stored identifiers so retries fail locally as final, non-retryable review-required transport failures instead of sending ambiguous signed requests or entering a retry loop.
+- Kept public APIs, config, routes, migrations, signature versions, canonical strings, payload hashes, HTTP bodies, and valid v1/v2 signatures unchanged for existing valid identifiers.
+
 ### One-Time Outgoing Payload Freezing
 
 - Added an internal outgoing payload freezer so host-supplied payloads are converted into a JSON-safe primitive tree before payload hashing, persistence, envelope creation, HTTP transport, retry, DLQ, callback creation, and hash repair paths use them.

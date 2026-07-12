@@ -155,6 +155,8 @@ TALKTO_REQUIRE_V2_NONCE=true
 
 v2 requests include a timestamp, payload hash, signature, and signed nonce. The nonce is consumed by a replay ledger that stores nonce hashes only, not raw nonce values. v1 remains available only as an explicit legacy/manual opt-in.
 
+Talkto also validates protocol identifiers and Talkto headers before signing, sending, receiving, nonce storage, and callback application. Service names, commands, message ids, correlation ids, parent ids, timestamps, nonces, signature-version values, and payload hashes may use ordinary Unicode text, spaces, slashes, dots, colons, hyphens, and underscores, but they cannot contain ASCII control characters, `DEL`, Unicode line/paragraph separators, or invalid UTF-8. HTTP header names must use RFC token characters, so configured Talkto header names and custom target headers cannot contain spaces, colons, slashes, control characters, or Unicode.
+
 Do not disable signatures, nonce replay protection, or command allowlists in production. See [docs/security.md](docs/security.md) and [docs/production-hardening.md](docs/production-hardening.md).
 
 Outgoing HTTP TLS certificate verification is also enabled by default. Use a CA bundle for private certificate authorities instead of disabling verification in production; `talkto:security-audit` and the panel surface risky SSL settings.
@@ -178,6 +180,8 @@ $message = app(TalktoOutgoingMessageFactory::class)->create(
 ```
 
 Delivery is handled after the message is stored, usually by a queue worker and retry policy. Host apps decide when to create their own business record and how to correlate it with the Talkto message.
+
+Envelope metadata and target headers are validated before the outgoing row is written where practical. Unsafe control characters in the source service, resolved target service, command, message id, correlation id, parent message id, configured header name, or custom target header fail with a package exception and no message, event, attempt, nonce, job, or HTTP request is created. Historical rows or late target config changes fail locally and non-retryably before HTTP. This validation is not applied to business payload strings, so multiline user content, tabs, trailing spaces, empty strings, and localized text remain valid payload data.
 
 Before an outgoing row is written, Talkto freezes the host-supplied payload into JSON-safe primitives. Each supported object instance is converted once per freeze operation, even when the same instance appears in multiple payload paths. The stored payload, payload hash, signed envelope, HTTP body, retries, DLQ rows, callbacks, and hash repair all reuse that frozen tree. Direct callback data snapshots supplied to `TalktoResultCallbackData` are also validated and frozen before `toPayload()` or `toEnvelope()` can reuse them. Already-primitive JSON payloads keep the same deterministic hashes; unsupported runtime values such as closures, resources, generators, internal/traversable hidden-state objects, native `DateTimeInterface`, pure enums, invalid UTF-8, non-finite floats, circular references, and excessive nesting fail before persistence. Carbon and other `JsonSerializable` date objects keep their JSON representation.
 

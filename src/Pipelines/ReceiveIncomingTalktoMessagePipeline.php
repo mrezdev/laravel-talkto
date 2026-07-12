@@ -67,11 +67,12 @@ class ReceiveIncomingTalktoMessagePipeline
         $verification = $verifier->verifyEnvelope($envelope, $request->headers->all());
 
         if (! ($verification['ok'] ?? false)) {
-            return new JsonResponse([
+            return new JsonResponse(array_filter([
                 'received' => false,
                 'status' => 'rejected',
                 'error' => $verification['error'] ?? 'verification_failed',
-            ], (int) ($verification['status'] ?? 401));
+                'field' => $verification['field'] ?? null,
+            ], fn (mixed $value): bool => $value !== null), (int) ($verification['status'] ?? 401));
         }
 
         $messageId = (string) $envelope['message_id'];
