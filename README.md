@@ -262,6 +262,38 @@ The message list includes both the detailed technical `Status` filter and a busi
 
 ## Testing And Local Validation
 
+In application tests, configure Talkto targets and migrate the testing database, then activate the fake before performing the action:
+
+```php
+use Mrezdev\LaravelTalkto\Facades\Talkto;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoOutgoingMessageFactory;
+
+Talkto::fake();
+
+app(TalktoOutgoingMessageFactory::class)->create(
+    'inventory', 'stock.reserve', ['sku' => 'ABC', 'quantity' => 2]
+);
+
+Talkto::assertSent('inventory', 'stock.reserve');
+Talkto::assertSent('inventory', 'stock.reserve', fn (TalktoMessage $message) =>
+    $message->payload['sku'] === 'ABC' && $message->payload['quantity'] === 2
+);
+Talkto::assertSentTimes('inventory', 'stock.reserve', 1);
+Talkto::assertNotSent('inventory', 'stock.release');
+```
+
+For an action that should create no outgoing messages:
+
+```php
+Talkto::fake();
+// Perform the application action.
+Talkto::assertNothingSent();
+```
+
+`Talkto::fake()` prevents Talkto remote delivery only. It does not globally fake Laravel queues or HTTP requests.
+Assertions count persisted outgoing messages created after activation, including messages whose jobs have not run. See [application testing](docs/testing.md#testing-application-integrations) for transaction, queue, and predicate details.
+
 For a package checkout:
 
 ```bash

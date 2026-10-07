@@ -230,6 +230,24 @@ hash, sign, and verify envelopes through documented send/receive flows.
 `TalktoDeadLetterQueue` exposes DLQ lifecycle helpers such as
 `markReprocessedForMessage()`, `markFailedReprocess()`, and `markIgnored()`.
 
+## Application testing facade
+
+`Mrezdev\LaravelTalkto\Facades\Talkto` provides these additive testing methods:
+
+```php
+public static function fake(): void;
+public static function assertSent(string $target, string $command, ?callable $callback = null): void;
+public static function assertNotSent(string $target, string $command, ?callable $callback = null): void;
+public static function assertNothingSent(): void;
+public static function assertSentTimes(string $target, string $command, int $times, ?callable $callback = null): void;
+```
+
+Prepare the normal testing database and targets, then call `Talkto::fake()` before resolving send services or running the application action. Assertions count new persisted outgoing messages after the latest activation, including messages that have not been delivered; idempotent reuse counts once and retries do not add messages. Existing records are excluded. Target aliases work, and predicates receive the current `TalktoMessage` or configured subclass. Nonnegative exact counts are supported. Laravel application recreation isolates fake state automatically.
+
+`Talkto::fake()` prevents Talkto remote delivery only. It does not globally fake Laravel queues or HTTP requests. It replaces `TalktoHttpClient` in the current application process and supplies a synthetic successful acknowledgment, preserving the existing message construction and job pipeline. Separate queue workers do not inherit the replacement. No configuration or migration is added. The `Testing\TalktoFake` implementation is internal.
+
+See [testing examples and scope details](testing.md#testing-application-integrations) for payload, count, negative, and nothing-sent assertions.
+
 ## Advanced extension points
 
 - Replace outgoing HTTP transport by binding `TalktoHttpClient`.
