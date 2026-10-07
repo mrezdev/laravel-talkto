@@ -22,6 +22,22 @@ test('explicitly enabled routes load receive and callback endpoints', function (
 
     expect(Route::has('talkto.receive'))->toBeTrue()
         ->and(Route::has('talkto.callback'))->toBeTrue();
+
+    foreach (['talkto.receive' => 'api/talkto/receive', 'talkto.callback' => 'api/talkto/callback'] as $name => $uri) {
+        $route = Route::getRoutes()->getByName($name);
+        expect($route?->uri())->toBe($uri)
+            ->and($route?->methods())->toBe(['POST'])
+            ->and($route?->middleware())->toContain('api', 'throttle:talkto');
+    }
+});
+
+test('disabling callbacks omits callback route while receive stays enabled', function (): void {
+    p4RouteThrottlingUseEnv(['TALKTO_ROUTES_ENABLED' => 'true', 'TALKTO_CALLBACKS_ENABLED' => 'false']);
+
+    $this->refreshApplication();
+
+    expect(Route::has('talkto.receive'))->toBeTrue()
+        ->and(Route::has('talkto.callback'))->toBeFalse();
 });
 
 test('default route middleware includes named talkto throttle', function (): void {
@@ -110,6 +126,7 @@ function p4RouteThrottlingClearEnv(): void
 {
     foreach ([
         'TALKTO_ROUTES_ENABLED',
+        'TALKTO_CALLBACKS_ENABLED',
         'TALKTO_ROUTE_MIDDLEWARE',
         'TALKTO_RATE_LIMIT_ENABLED',
         'TALKTO_RATE_LIMIT_NAME',

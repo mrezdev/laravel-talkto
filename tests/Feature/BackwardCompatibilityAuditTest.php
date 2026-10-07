@@ -1,7 +1,11 @@
 <?php
 
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
 use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler;
 use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingHandlerRegistryContract;
 use Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract;
@@ -9,8 +13,11 @@ use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoIncomingHandler;
 use Mrezdev\LaravelTalkto\Exceptions\UnknownTalktoIncomingCommand;
 use Mrezdev\LaravelTalkto\Handlers\NoopIncomingCommandHandler;
 use Mrezdev\LaravelTalkto\Handlers\SkippedIncomingCommandHandler;
+use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
 use Mrezdev\LaravelTalkto\LaravelTalktoServiceProvider;
+use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoFlowFactory;
 use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResolver;
 use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
 use Mrezdev\LaravelTalkto\Services\TalktoOutgoingEnvelopeBuilder;
@@ -126,6 +133,7 @@ test('legacy outgoing target config shapes remain compatible', function (): void
 test('aliases resolve to canonical targets and stored messages use the canonical name', function (): void {
     $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');
     expect($this->artisan('migrate')->run())->toBe(0);
+    Queue::fake();
 
     config([
         'talkto.service' => 'source-app',
@@ -140,11 +148,77 @@ test('aliases resolve to canonical targets and stored messages use the canonical
         target: 'billing',
         command: 'domain.command',
         payload: ['id' => 1],
-        options: ['message_id' => 'compat-alias-message']
+        options: ['message_id' => 'compat-alias-message', 'correlation_id' => 'compat-correlation']
     );
 
     expect(app(TalktoOutgoingTargetRegistryContract::class)->get('billing')->name())->toBe('billing-service')
-        ->and($message->target_service)->toBe('billing-service');
+        ->and($message->target_service)->toBe('billing-service')
+        ->and($message->source_service)->toBe('source-app')
+        ->and($message->direction)->toBe('outgoing')
+        ->and($message->command)->toBe('domain.command')
+        ->and($message->message_id)->toBe('compat-alias-message')
+        ->and($message->correlation_id)->toBe('compat-correlation')
+        ->and($message->payload)->toBe(['id' => 1])
+        ->and($message->payload_hash)->toBe(app(TalktoPayloadHasher::class)->hash(['id' => 1]))
+        ->and($message->source_action_status)->toBe('succeeded_assumed')
+        ->and($message->transport_status)->toBe('pending')
+        ->and($message->overall_status)->toBe('waiting_to_send')
+        ->and($message->attempts)->toBe(0)
+        ->and($message->max_attempts)->toBe(5);
+
+    $event = TalktoEvent::query()->where('message_id', $message->message_id)->where('event_type', 'message_created')->sole();
+    expect($event->talkto_message_id)->toBe($message->id)
+        ->and($event->service_name)->toBe('source-app')
+        ->and($event->old_status)->toBeNull()
+        ->and($event->new_status)->toBe('waiting_to_send');
+    Queue::assertNothingPushed();
+
+    Http::fake();
+    $queued = app(TalktoFlowFactory::class)->flow('compat-flow')->to('billing')->command('domain.command')
+        ->payload(['id' => 2])->correlationId('compat-flow-correlation')->idempotencyKey('compat-flow-key')->send();
+    expect(Str::isUuid($queued->message_id))->toBeTrue()
+        ->and($queued->correlation_id)->toBe('compat-flow-correlation')
+        ->and($queued->idempotency_key)->toBe('compat-flow-key')
+        ->and($queued->source_service)->toBe('source-app')
+        ->and($queued->target_service)->toBe('billing-service')
+        ->and($queued->payload)->toBe(['id' => 2])
+        ->and($queued->overall_status)->toBe('waiting_to_send');
+    Queue::assertPushed(SendTalktoMessage::class, 1);
+    Queue::assertPushed(SendTalktoMessage::class, fn (SendTalktoMessage $job): bool => $job->talktoMessageId === $queued->id && $job->afterCommit === true);
+    Http::assertNothingSent();
+});
+
+test('transactional outgoing flow records source results and queues only after success', function (): void {
+    $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');
+    expect($this->artisan('migrate')->run())->toBe(0);
+    config(['talkto.outgoing.peer' => ['url' => 'https://peer.test', 'secret' => 'test-secret']]);
+    Queue::fake();
+    Http::fake();
+
+    $flow = app(TalktoFlowFactory::class)->flow('compat-transactional')->to('peer')->command('domain.command');
+    $message = $flow->run(function (): array {
+        expect(DB::transactionLevel())->toBeGreaterThan(0);
+
+        return ['payload' => ['id' => 3], 'result' => ['created' => true], 'meta' => ['operation' => 'create']];
+    });
+    $event = TalktoEvent::query()->where('message_id', $message->message_id)->where('event_type', 'message_created')->sole();
+    expect($message->source_action_status)->toBe('succeeded')
+        ->and($message->payload)->toBe(['id' => 3])
+        ->and(Str::isUuid($message->correlation_id))->toBeTrue()
+        ->and($event->meta)->toMatchArray(['flow_name' => 'compat-transactional', 'source_result' => ['created' => true], 'source_meta' => ['operation' => 'create']]);
+    Queue::assertPushed(SendTalktoMessage::class, 1);
+    Queue::assertPushed(SendTalktoMessage::class, fn (SendTalktoMessage $job): bool => $job->talktoMessageId === $message->id && $job->afterCommit === true);
+
+    Queue::fake();
+    expect(fn () => app(TalktoFlowFactory::class)->flow('compat-source-failure')->to('peer')->command('domain.command')
+        ->option('message_id', 'compat-source-failed')->run(fn () => throw new RuntimeException('Source failed.')))->toThrow(RuntimeException::class, 'Source failed.');
+    $failed = TalktoMessage::query()->where('message_id', 'compat-source-failed')->sole();
+    expect($failed->source_action_status)->toBe('failed')
+        ->and($failed->transport_status)->toBeNull()
+        ->and($failed->overall_status)->toBe('failed')
+        ->and($failed->last_error)->toBe('Source failed.');
+    Queue::assertNothingPushed();
+    Http::assertNothingSent();
 });
 
 test('programmatic outgoing target registration overrides config for canonical names', function (): void {
@@ -204,26 +278,45 @@ test('incoming handler registry supports programmatic registration and rejects i
 
 test('commands options publish tags and required config keys remain stable', function (): void {
     $commands = Artisan::all();
+    $requiredCommands = [
+        'talkto:make-incoming' => [['service', 'talktoCommand'], ['force', 'dry-run'], ['base-path' => 'app/Talkto', 'base-namespace' => 'App\\Talkto']],
+        'talkto:make-integration' => [['service', 'talktoCommand'], ['outgoing', 'incoming', 'transactional', 'force', 'dry-run'], ['base-path' => 'app/Talkto', 'base-namespace' => 'App\\Talkto']],
+        'talkto:make-outgoing' => [['service', 'talktoCommand'], ['force', 'dry-run', 'transactional'], ['base-path' => 'app/Talkto', 'base-namespace' => 'App\\Talkto']],
+        'talkto:retry-failed' => [[], ['dry-run'], ['direction' => 'all', 'limit' => '100']],
+        'talkto:dlq-reprocess' => [[], ['dry-run', 'force'], ['id' => null, 'message-id' => null, 'direction' => 'all', 'limit' => '50']],
+        'talkto:repair-payload-hash' => [['message_id'], ['confirm'], ['reason' => null]],
+        'talkto:report' => [[], ['json'], ['hours' => null, 'from' => null, 'to' => null, 'direction' => 'all', 'limit' => null]],
+        'talkto:trace' => [[], ['json', 'payload'], ['correlation' => null, 'limit' => '100']],
+        'talkto:security-audit' => [[], ['json'], ['fail-on' => null]],
+        'talkto:audit-security' => [[], ['json'], []],
+        'talkto:prune' => [[], ['dry-run'], ['type' => 'all', 'older-than' => null, 'limit' => '100']],
+        'talkto:recover-stale' => [[], ['dry-run'], ['direction' => null, 'older-than' => null, 'limit' => '100']],
+    ];
 
-    expect($commands)->toHaveKey('talkto:retry-failed')
-        ->and($commands['talkto:retry-failed']->getDefinition()->hasOption('direction'))->toBeTrue()
-        ->and($commands['talkto:retry-failed']->getDefinition()->hasOption('limit'))->toBeTrue()
-        ->and($commands['talkto:retry-failed']->getDefinition()->hasOption('dry-run'))->toBeTrue()
-        ->and($commands)->toHaveKey('talkto:dlq-reprocess')
-        ->and($commands['talkto:dlq-reprocess']->getDefinition()->hasOption('id'))->toBeTrue()
-        ->and($commands['talkto:dlq-reprocess']->getDefinition()->hasOption('message-id'))->toBeTrue()
-        ->and($commands['talkto:dlq-reprocess']->getDefinition()->hasOption('force'))->toBeTrue()
-        ->and($commands)->toHaveKey('talkto:report')
-        ->and($commands['talkto:report']->getDefinition()->hasOption('hours'))->toBeTrue()
-        ->and($commands['talkto:report']->getDefinition()->hasOption('from'))->toBeTrue()
-        ->and($commands['talkto:report']->getDefinition()->hasOption('to'))->toBeTrue()
-        ->and($commands['talkto:report']->getDefinition()->hasOption('json'))->toBeTrue();
+    foreach ($requiredCommands as $name => [$arguments, $flags, $valueOptions]) {
+        expect($commands)->toHaveKey($name);
+        $definition = $commands[$name]->getDefinition();
+        foreach ($arguments as $position => $argument) {
+            expect($definition->getArgument($position)->getName())->toBe($argument)
+                ->and($definition->getArgument($argument)->isRequired())->toBeTrue();
+        }
+        foreach ($flags as $flag) {
+            expect($definition->getOption($flag)->acceptValue())->toBeFalse()
+                ->and($definition->getOption($flag)->getDefault())->toBeFalse();
+        }
+        foreach ($valueOptions as $option => $default) {
+            expect($definition->getOption($option)->acceptValue())->toBeTrue()
+                ->and($definition->getOption($option)->getDefault())->toBe($default);
+        }
+    }
+    expect($commands['talkto:trace']->getDefinition()->getArgument(0)->getName())->toBe('message_id')
+        ->and($commands['talkto:trace']->getDefinition()->getArgument('message_id')->isRequired())->toBeFalse();
 
-    foreach (['laravel-talkto-config', 'talkto-config', 'laravel-talkto-migrations', 'talkto-migrations'] as $tag) {
+    foreach (['laravel-talkto-config', 'talkto-config', 'laravel-talkto-migrations', 'talkto-migrations', 'talkto-panel-views'] as $tag) {
         expect(ServiceProvider::pathsToPublish(LaravelTalktoServiceProvider::class, $tag))->not->toBeEmpty();
     }
 
-    foreach (['incoming', 'outgoing', 'aliases', 'retry', 'dead_letter', 'security', 'observability'] as $key) {
+    foreach (['service', 'aliases', 'models', 'database', 'storage', 'security', 'http', 'callbacks', 'migrations', 'routes', 'jobs', 'builders', 'retry', 'dead_letter', 'observability', 'recovery', 'retention', 'panel', 'outgoing', 'incoming'] as $key) {
         expect(config("talkto.{$key}"))->not->toBeNull();
     }
 });

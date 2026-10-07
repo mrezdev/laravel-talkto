@@ -49,8 +49,15 @@ test('default v2 security profile accepts nonce and rejects missing or modified 
     ]);
 
     $validPayload = ['id' => 'security-default-v2'];
+    $validEnvelope = array_merge(securityEnvelope('security-default-v2', $validPayload), [
+        'correlation_id' => 'security-correlation',
+        'parent_message_id' => 'security-parent',
+        'business_key' => 'security-business',
+        'idempotency_key' => 'security-idempotency',
+        'schema_version' => 2,
+    ]);
     $valid = securityReceive(
-        securityEnvelope('security-default-v2', $validPayload),
+        $validEnvelope,
         securityV2Headers('security-default-v2', $validPayload)
     );
 
@@ -69,6 +76,69 @@ test('default v2 security profile accepts nonce and rejects missing or modified 
         ->and($missing->getData(true)['error'])->toBe('missing_nonce')
         ->and($modified->getStatusCode())->toBe(401)
         ->and($modified->getData(true)['error'])->toBe('invalid_signature');
+
+    $message = TalktoMessage::query()->sole();
+    expect($message->direction)->toBe('incoming')
+        ->and($message->source_service)->toBe('source-service')
+        ->and($message->target_service)->toBe('target-service')
+        ->and($message->command)->toBe('domain.command')
+        ->and($message->correlation_id)->toBe('security-correlation')
+        ->and($message->parent_message_id)->toBe('security-parent')
+        ->and($message->business_key)->toBe('security-business')
+        ->and($message->idempotency_key)->toBe('security-idempotency')
+        ->and($message->schema_version)->toBe(2)
+        ->and($message->payload)->toBe($validPayload)
+        ->and($message->payload_hash)->toBe($validEnvelope['payload_hash'])
+        ->and($message->destination_receive_status)->toBe('received')
+        ->and($message->destination_action_status)->toBe('queued')
+        ->and($message->overall_status)->toBe('queued')
+        ->and($message->received_at)->not->toBeNull()
+        ->and(TalktoEvent::query()->where('talkto_message_id', $message->id)->where('event_type', 'message_received')->where('new_status', 'queued')->exists())->toBeTrue();
+    Queue::assertPushed(ProcessIncomingTalktoMessage::class, 1);
+    Queue::assertPushed(ProcessIncomingTalktoMessage::class, fn (ProcessIncomingTalktoMessage $job): bool => $job->talktoMessageId === $message->id && $job->afterCommit === true);
+});
+
+test('signed receive rejects unknown sources and wrong targets before persistence or dispatch', function (array $overrides, string $error): void {
+    Queue::fake();
+    $payload = ['id' => 'security-routing-rejected'];
+    $envelope = array_merge(securityEnvelope('security-routing-rejected', $payload), $overrides);
+    $headers = securityV2Headers('security-routing-rejected', $payload);
+    $headers['X-Talkto-Signature'] = app(TalktoSigner::class)->signV2(
+        $headers['X-Talkto-Timestamp'], $headers['X-Talkto-Nonce'], $envelope['message_id'],
+        $envelope['source'], $envelope['target'], $envelope['command'], $envelope['payload_hash'], 'fake-test-secret'
+    );
+
+    $response = securityReceive($envelope, $headers);
+
+    expect($response->getStatusCode())->toBe(403)
+        ->and($response->getData(true))->toMatchArray(['received' => false, 'status' => 'rejected', 'error' => $error])
+        ->and(TalktoMessage::query()->count())->toBe(0)
+        ->and(TalktoNonce::query()->count())->toBe(0)
+        ->and(TalktoEvent::query()->count())->toBe(0);
+    Queue::assertNothingPushed();
+})->with([
+    'unknown source' => [['source' => 'unknown-service'], 'unknown_source'],
+    'wrong target' => [['target' => 'another-service'], 'wrong_target'],
+]);
+
+test('configured required idempotency key rejects missing key before storing or dispatching', function (): void {
+    Queue::fake();
+    config(['talkto.incoming.source-service.allowed_commands' => ['domain.command' => ['idempotency' => 'required']]]);
+    $payload = ['id' => 'security-required-idempotency'];
+    $envelope = securityEnvelope('security-required-idempotency', $payload);
+    $headers = securityV2Headers('security-required-idempotency', $payload);
+
+    $rejected = securityReceive($envelope, $headers);
+    expect($rejected->getStatusCode())->toBe(422)
+        ->and($rejected->getData(true)['error'])->toBe('missing_idempotency_key')
+        ->and(TalktoMessage::query()->count())->toBe(0)
+        ->and(TalktoNonce::query()->count())->toBe(0);
+    Queue::assertNothingPushed();
+
+    $accepted = securityReceive(array_merge($envelope, ['idempotency_key' => 'required-key']), $headers);
+    expect($accepted->getStatusCode())->toBe(202)
+        ->and(TalktoMessage::query()->sole()->idempotency_key)->toBe('required-key');
+    Queue::assertPushed(ProcessIncomingTalktoMessage::class, 1);
 });
 
 test('v1 is rejected by default and passes only when explicitly accepted', function (): void {
@@ -149,6 +219,8 @@ test('v2 outgoing headers include version timestamp payload hash signature and n
         ->and($headers)->toHaveKey('X-Talkto-Payload-Hash')
         ->and($headers)->toHaveKey('X-Talkto-Nonce')
         ->and($headers)->toHaveKey('X-Talkto-Signature')
+        ->and($headers['X-Talkto-Message-Id'])->toBe($message->message_id)
+        ->and($headers['X-Talkto-Protocol-Version'])->toBe('2')
         ->and($headers['X-Talkto-Payload-Hash'])->toBe($message->payload_hash);
 
     config([

@@ -8,6 +8,7 @@ use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler;
 use Mrezdev\LaravelTalkto\Http\Controllers\TalktoReceiveController;
 use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
+use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Pipelines\ReceiveIncomingTalktoMessagePipeline;
 use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
@@ -261,6 +262,7 @@ test('idempotency key is scoped by source target and command', function (): void
 });
 
 test('processing the same incoming job twice executes handler only once', function (): void {
+    config(['talkto.callbacks.enabled' => false]);
     $message = talktoIncomingMessage('incoming-job-once');
     $handler = new IncomingLedgerCountingHandler;
     $resolver = new IncomingLedgerFixedResolver($handler);
@@ -271,6 +273,18 @@ test('processing the same incoming job twice executes handler only once', functi
     expect($handler->calls)->toBe(1)
         ->and(TalktoMessage::query()->where('message_id', 'incoming-job-once')->value('overall_status'))->toBe('succeeded')
         ->and(TalktoAttempt::query()->where('message_id', 'incoming-job-once')->count())->toBe(1);
+
+    $message->refresh();
+    $attempt = TalktoAttempt::query()->where('message_id', $message->message_id)->sole();
+    expect($message->attempts)->toBe(1)
+        ->and($message->completed_at)->not->toBeNull()
+        ->and($message->locked_at)->toBeNull()
+        ->and($message->locked_by)->toBeNull()
+        ->and($attempt->talkto_message_id)->toBe($message->id)
+        ->and($attempt->stage)->toBe('destination_processor')
+        ->and($attempt->attempt_no)->toBe(1)
+        ->and($attempt->status)->toBe('succeeded')
+        ->and(TalktoEvent::query()->where('message_id', $message->message_id)->where('event_type', 'destination_processing_succeeded')->where('old_status', 'processing')->where('new_status', 'succeeded')->count())->toBe(1);
 });
 
 test('terminal and non queued statuses are skipped without handler execution', function (): void {

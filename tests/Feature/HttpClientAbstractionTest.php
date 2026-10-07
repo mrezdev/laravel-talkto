@@ -9,6 +9,7 @@ use Mrezdev\LaravelTalkto\Contracts\TalktoHttpClientWithOptions;
 use Mrezdev\LaravelTalkto\Data\TalktoHttpResponse;
 use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoOutgoingTarget;
 use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
@@ -18,6 +19,7 @@ use Mrezdev\LaravelTalkto\Services\TalktoOutgoingEnvelopeBuilder;
 use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
 use Mrezdev\LaravelTalkto\Services\TalktoResultCallbackMessageFactory;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
+use Mrezdev\LaravelTalkto\Services\TalktoSigner;
 
 beforeEach(function (): void {
     $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');
@@ -145,23 +147,54 @@ test('existing outgoing send succeeds using the default implementation', functio
 
     (new SendTalktoMessage($message->id))->handle(app(TalktoOutgoingEnvelopeBuilder::class), app(TalktoRetryPolicy::class));
 
-    Http::assertSent(function (Request $request): bool {
+    Http::assertSent(function (Request $request) use ($message): bool {
         $decoded = json_decode($request->body(), true);
 
         return $request->url() === 'https://peer.test/api/talkto/receive'
+            && $request->method() === 'POST'
             && $request->hasHeader('X-Custom', 'custom')
             && $request->hasHeader('X-Talkto-Signature')
+            && $request->hasHeader('X-Talkto-Signature-Version', 'v2')
+            && $request->hasHeader('X-Talkto-Protocol-Version', '2')
+            && $request->hasHeader('X-Talkto-Message-Id', $message->message_id)
+            && $request->hasHeader('X-Talkto-Payload-Hash', $message->payload_hash)
+            && $request->hasHeader('X-Talkto-Timestamp')
+            && $request->hasHeader('X-Talkto-Nonce')
             && $request->hasHeader('Content-Type', 'application/json')
             && is_array($decoded)
-            && ($decoded['payload_hash'] ?? null) === app(TalktoPayloadHasher::class)->hash(['id' => 'http-default-success']);
+            && ($decoded['message_id'] ?? null) === $message->message_id
+            && ($decoded['source'] ?? null) === 'testing'
+            && ($decoded['target'] ?? null) === 'peer'
+            && ($decoded['command'] ?? null) === 'domain.command'
+            && ($decoded['payload'] ?? null) === $message->payload
+            && ($decoded['payload_hash'] ?? null) === $message->payload_hash
+            && app(TalktoSigner::class)->verifyV2(
+                $request->header('X-Talkto-Signature')[0], $request->header('X-Talkto-Timestamp')[0],
+                $request->header('X-Talkto-Nonce')[0], $message->message_id, 'testing', 'peer',
+                'domain.command', $message->payload_hash, 'secret'
+            );
     });
+    Http::assertSentCount(1);
 
     $message = $message->fresh();
 
     expect($message->overall_status)->toBe('destination_received')
         ->and($message->transport_status)->toBe('sent')
         ->and($message->last_http_status)->toBe(200)
-        ->and($message->last_response)->toContain('accepted');
+        ->and($message->last_response)->toContain('accepted')
+        ->and($message->attempts)->toBe(1)
+        ->and($message->sent_at)->not->toBeNull()
+        ->and($message->locked_at)->toBeNull()
+        ->and($message->locked_by)->toBeNull();
+    $attempt = TalktoAttempt::query()->where('message_id', $message->message_id)->sole();
+    expect($attempt->talkto_message_id)->toBe($message->id)
+        ->and($attempt->stage)->toBe('transport')
+        ->and($attempt->attempt_no)->toBe(1)
+        ->and($attempt->status)->toBe('sent')
+        ->and($attempt->http_status)->toBe(200);
+    foreach (['message_sending_started' => 'sending', 'message_sent' => 'destination_received'] as $type => $status) {
+        expect(TalktoEvent::query()->where('talkto_message_id', $message->id)->where('event_type', $type)->where('new_status', $status)->exists())->toBeTrue();
+    }
 });
 
 test('existing outgoing failure retry behavior works using the default implementation', function (): void {

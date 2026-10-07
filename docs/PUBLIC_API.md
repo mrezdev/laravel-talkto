@@ -152,7 +152,7 @@ The supported command names and public options are:
 - `talkto:dlq-reprocess {--id=} {--message-id=} {--direction=} {--limit=} {--dry-run} {--force}`
 - `talkto:repair-payload-hash {message_id} {--confirm} {--reason=}`
 - `talkto:report {--hours=} {--from=} {--to=} {--json} {--direction=} {--limit=}`
-- `talkto:trace {message_id?} {--correlation} {--json} {--limit=} {--payload}`
+- `talkto:trace {message_id?} {--correlation=} {--json} {--limit=} {--payload}`
 - `talkto:security-audit {--json} {--fail-on=}`
 - `talkto:audit-security {--json}`
 - `talkto:prune {--type=} {--older-than=} {--dry-run} {--limit=}`

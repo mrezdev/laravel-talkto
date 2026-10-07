@@ -14,25 +14,55 @@ use Mrezdev\LaravelTalkto\Data\TalktoEnvelopeData;
 use Mrezdev\LaravelTalkto\Data\TalktoHttpResponse;
 use Mrezdev\LaravelTalkto\Data\TalktoIncomingCommandResultData;
 use Mrezdev\LaravelTalkto\Data\TalktoResultCallbackData;
+use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoIncomingHandler;
+use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoOutgoingTarget;
+use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoSignatureException;
+use Mrezdev\LaravelTalkto\Exceptions\TalktoCommandNotAllowedException;
+use Mrezdev\LaravelTalkto\Exceptions\TalktoException;
+use Mrezdev\LaravelTalkto\Exceptions\TalktoIdempotencyException;
+use Mrezdev\LaravelTalkto\Exceptions\TalktoJsonEncodingException;
+use Mrezdev\LaravelTalkto\Exceptions\TalktoPayloadHashMismatchException;
+use Mrezdev\LaravelTalkto\Exceptions\UnknownTalktoIncomingCommand;
+use Mrezdev\LaravelTalkto\Exceptions\UnknownTalktoOutgoingTarget;
 use Mrezdev\LaravelTalkto\Http\Controllers\TalktoReceiveController;
 use Mrezdev\LaravelTalkto\Http\Controllers\TalktoResultCallbackController;
 use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
 use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
+use Mrezdev\LaravelTalkto\LaravelTalktoServiceProvider;
+use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
+use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
+use Mrezdev\LaravelTalkto\Models\TalktoEvent;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoNonce;
 use Mrezdev\LaravelTalkto\Pipelines\ProcessIncomingTalktoMessagePipeline;
 use Mrezdev\LaravelTalkto\Pipelines\ReceiveIncomingTalktoMessagePipeline;
 use Mrezdev\LaravelTalkto\Pipelines\SendOutgoingTalktoMessagePipeline;
 use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelActionExecutor;
 use Mrezdev\LaravelTalkto\Services\Panel\TalktoPanelMessageQuery;
+use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
 use Mrezdev\LaravelTalkto\Services\TalktoFlowBuilder;
 use Mrezdev\LaravelTalkto\Services\TalktoFlowFactory;
+use Mrezdev\LaravelTalkto\Services\TalktoHealthChecker;
 use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
+use Mrezdev\LaravelTalkto\Services\TalktoIncomingHandlerRegistry;
+use Mrezdev\LaravelTalkto\Services\TalktoMetricsCollector;
 use Mrezdev\LaravelTalkto\Services\TalktoOutgoingMessageFactory;
+use Mrezdev\LaravelTalkto\Services\TalktoOutgoingTarget;
+use Mrezdev\LaravelTalkto\Services\TalktoOutgoingTargetRegistry;
+use Mrezdev\LaravelTalkto\Services\TalktoPayloadHasher;
+use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 use Mrezdev\LaravelTalkto\Services\TalktoSecurityAuditor;
+use Mrezdev\LaravelTalkto\Services\TalktoSigner;
 use Mrezdev\LaravelTalkto\Services\TalktoTraceReporter;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelActionResult;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelJsonPresenter;
 use Mrezdev\LaravelTalkto\Support\Panel\TalktoPanelMessageFilters;
+use Mrezdev\LaravelTalkto\Support\TalktoMetricsSnapshot;
+use Mrezdev\LaravelTalkto\Support\TalktoRetryDecision;
+use Mrezdev\LaravelTalkto\Support\TalktoSecurityAuditSnapshot;
+use Mrezdev\LaravelTalkto\Support\TalktoSecurityFinding;
 use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
+use Mrezdev\LaravelTalkto\Support\TalktoTraceSnapshot;
 
 function publicApiBoundaryPath(string $path): string
 {
@@ -77,10 +107,11 @@ test('public api documentation is linked and names current security defaults', f
         ->and($docsReadme)->toContain('internal boundary');
 });
 
-test('public api documentation names representative public contracts and classes', function (): void {
+test('documented public contracts classes models and exceptions remain available', function (): void {
     $publicApi = publicApiBoundaryFile('docs/PUBLIC_API.md');
 
     $publicTypes = [
+        LaravelTalktoServiceProvider::class,
         CommandHandlerContract::class,
         TalktoIncomingCommandHandler::class,
         IncomingCommandResultContract::class,
@@ -102,6 +133,35 @@ test('public api documentation names representative public contracts and classes
         TalktoTraceReporter::class,
         TalktoSecurityAuditor::class,
         TalktoSecurityRedactor::class,
+        TalktoIncomingHandlerRegistry::class,
+        TalktoOutgoingTargetRegistry::class,
+        TalktoOutgoingTarget::class,
+        TalktoMetricsCollector::class,
+        TalktoHealthChecker::class,
+        TalktoPayloadHasher::class,
+        TalktoSigner::class,
+        TalktoRetryPolicy::class,
+        TalktoDeadLetterQueue::class,
+        TalktoMetricsSnapshot::class,
+        TalktoRetryDecision::class,
+        TalktoSecurityAuditSnapshot::class,
+        TalktoSecurityFinding::class,
+        TalktoTraceSnapshot::class,
+        TalktoMessage::class,
+        TalktoAttempt::class,
+        TalktoEvent::class,
+        TalktoDeadLetter::class,
+        TalktoNonce::class,
+        TalktoException::class,
+        InvalidTalktoSignatureException::class,
+        TalktoJsonEncodingException::class,
+        TalktoCommandNotAllowedException::class,
+        TalktoIdempotencyException::class,
+        TalktoPayloadHashMismatchException::class,
+        UnknownTalktoIncomingCommand::class,
+        UnknownTalktoOutgoingTarget::class,
+        InvalidTalktoIncomingHandler::class,
+        InvalidTalktoOutgoingTarget::class,
     ];
 
     foreach ($publicTypes as $publicType) {

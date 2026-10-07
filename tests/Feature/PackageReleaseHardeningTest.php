@@ -5,6 +5,9 @@ use Illuminate\Support\ServiceProvider;
 use Mrezdev\LaravelTalkto\Console\Commands\ReportTalktoMessagesCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\ReprocessTalktoDeadLettersCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\RetryFailedTalktoMessagesCommand;
+use Mrezdev\LaravelTalkto\Contracts\ResultCallbackReceiverContract;
+use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
+use Mrezdev\LaravelTalkto\Contracts\TalktoHttpClient;
 use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingHandlerRegistryContract;
 use Mrezdev\LaravelTalkto\Contracts\TalktoOutgoingTargetRegistryContract;
 use Mrezdev\LaravelTalkto\LaravelTalktoServiceProvider;
@@ -76,6 +79,9 @@ test('package artisan commands are registered', function (): void {
 test('release extension services resolve from the container', function (): void {
     expect(app(TalktoIncomingHandlerRegistryContract::class))->toBeInstanceOf(TalktoIncomingHandlerRegistryContract::class)
         ->and(app(TalktoOutgoingTargetRegistryContract::class))->toBeInstanceOf(TalktoOutgoingTargetRegistryContract::class)
+        ->and(app(TalktoHttpClient::class))->toBeInstanceOf(TalktoHttpClient::class)
+        ->and(app(ResultCallbackSenderContract::class))->toBeInstanceOf(ResultCallbackSenderContract::class)
+        ->and(app(ResultCallbackReceiverContract::class))->toBeInstanceOf(ResultCallbackReceiverContract::class)
         ->and(app(TalktoRetryPolicy::class))->toBeInstanceOf(TalktoRetryPolicy::class)
         ->and(app(TalktoDeadLetterQueue::class))->toBeInstanceOf(TalktoDeadLetterQueue::class)
         ->and(app(TalktoMetricsCollector::class))->toBeInstanceOf(TalktoMetricsCollector::class)

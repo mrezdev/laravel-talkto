@@ -38,6 +38,9 @@ test('panel routes are not registered when panel is disabled', function (): void
     ($this->bootPanelApp)();
 
     expect(Route::has('talkto.panel.index'))->toBeFalse();
+    foreach (['messages.index', 'messages.show', 'messages.retry', 'messages.trace', 'messages.callback-status', 'dead-letters.reprocess', 'connections.index', 'connections.check'] as $name) {
+        expect(Route::has('talkto.panel.'.$name))->toBeFalse();
+    }
 
     $this->getJson('/talkto')->assertNotFound();
 });
@@ -52,6 +55,24 @@ test('panel routes are registered and accessible when enabled', function (): voi
         ->and(Route::has('talkto.panel.messages.index'))->toBeTrue()
         ->and(Route::has('talkto.panel.messages.show'))->toBeTrue()
         ->and(Route::has('talkto.panel.connections.index'))->toBeTrue();
+
+    $requiredRoutes = [
+        'index' => ['talkto', 'GET'],
+        'messages.index' => ['talkto/messages', 'GET'],
+        'messages.show' => ['talkto/messages/{message}', 'GET'],
+        'messages.retry' => ['talkto/messages/{message}/retry', 'POST'],
+        'messages.trace' => ['talkto/messages/{message}/trace', 'GET'],
+        'messages.callback-status' => ['talkto/messages/{message}/callback-status', 'GET'],
+        'dead-letters.reprocess' => ['talkto/dead-letters/{deadLetter}/reprocess', 'POST'],
+        'connections.index' => ['talkto/connections', 'GET'],
+        'connections.check' => ['talkto/connections/{direction}/{service}/check', 'POST'],
+    ];
+    foreach ($requiredRoutes as $name => [$uri, $method]) {
+        $route = Route::getRoutes()->getByName('talkto.panel.'.$name);
+        expect($route?->uri())->toBe($uri)
+            ->and($route?->methods())->toContain($method)
+            ->and($route?->middleware())->toContain('web', 'auth');
+    }
 
     $this->getJson('/talkto')
         ->assertOk()

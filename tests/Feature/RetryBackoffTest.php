@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Queue;
 use Mrezdev\LaravelTalkto\Contracts\TalktoIncomingCommandHandler;
 use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
 use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
+use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
@@ -45,6 +46,7 @@ test('retry backoff uses configured delay sequence', function (): void {
 });
 
 test('outgoing transport failure schedules retry while attempts remain', function (): void {
+    $this->freezeTime();
     Http::fake(['*' => Http::response('temporary failure', 503)]);
     $message = retryOutgoingMessage('retry-outgoing-scheduled');
 
@@ -55,7 +57,20 @@ test('outgoing transport failure schedules retry while attempts remain', functio
     expect($message->retry_count)->toBe(1)
         ->and($message->next_retry_at)->not->toBeNull()
         ->and($message->overall_status)->toBe('failed_retryable')
-        ->and($message->transport_status)->toBe('failed');
+        ->and($message->transport_status)->toBe('failed')
+        ->and($message->attempts)->toBe(1)
+        ->and((int) $message->last_attempted_at->diffInSeconds($message->next_retry_at))->toBe(10)
+        ->and($message->next_attempt_at->equalTo($message->next_retry_at))->toBeTrue()
+        ->and($message->locked_at)->toBeNull()
+        ->and($message->locked_by)->toBeNull()
+        ->and(TalktoDeadLetter::query()->where('message_id', $message->message_id)->exists())->toBeFalse();
+    $attempt = TalktoAttempt::query()->where('message_id', $message->message_id)->sole();
+    expect($attempt->stage)->toBe('transport')
+        ->and($attempt->attempt_no)->toBe(1)
+        ->and($attempt->status)->toBe('failed_retryable')
+        ->and($attempt->http_status)->toBe(503)
+        ->and($attempt->error_class)->toBe('http_error');
+    expect(TalktoEvent::query()->where('message_id', $message->message_id)->where('event_type', 'message_send_failed')->where('new_status', 'failed_retryable')->exists())->toBeTrue();
 });
 
 test('configured transient http status schedules retry while attempts remain', function (): void {
@@ -85,25 +100,45 @@ test('outgoing transport failure becomes final when attempts are exhausted', fun
     expect($message->overall_status)->toBe('failed_final')
         ->and($message->transport_status)->toBe('failed_final')
         ->and($message->next_retry_at)->toBeNull()
+        ->and(TalktoAttempt::query()->where('message_id', $message->message_id)->where('status', 'failed_final')->where('http_status', 503)->exists())->toBeTrue()
+        ->and(TalktoEvent::query()->where('message_id', $message->message_id)->where('event_type', 'retry_exhausted')->exists())->toBeTrue()
         ->and(TalktoDeadLetter::query()->where('message_id', 'retry-outgoing-final')->exists())->toBeTrue();
 });
 
-test('permanent http statuses become final without scheduling retry by default', function (): void {
-    foreach ([401, 422] as $status) {
-        Http::fake(['*' => Http::response('permanent failure', $status)]);
-        $message = retryOutgoingMessage("retry-outgoing-permanent-{$status}");
+test('permanent http statuses become final without scheduling retry by default', function (int $status): void {
+    Http::fake(['*' => Http::response('permanent failure', $status)]);
+    $message = retryOutgoingMessage("retry-outgoing-permanent-{$status}");
 
-        (new SendTalktoMessage($message->id))->handle(app(TalktoOutgoingEnvelopeBuilder::class), app(TalktoRetryPolicy::class));
+    (new SendTalktoMessage($message->id))->handle(app(TalktoOutgoingEnvelopeBuilder::class), app(TalktoRetryPolicy::class));
 
-        $message = $message->fresh();
+    $message = $message->fresh();
 
-        expect($message->overall_status)->toBe('failed_final')
-            ->and($message->transport_status)->toBe('failed_final')
-            ->and($message->retry_count)->toBe(0)
-            ->and($message->next_retry_at)->toBeNull()
-            ->and(TalktoEvent::query()->where('message_id', $message->message_id)->where('event_type', 'retry_not_scheduled')->exists())->toBeTrue();
-    }
-});
+    expect($message->overall_status)->toBe('failed_final')
+        ->and($message->transport_status)->toBe('failed_final')
+        ->and($message->retry_count)->toBe(0)
+        ->and($message->next_retry_at)->toBeNull()
+        ->and(TalktoDeadLetter::query()->where('message_id', $message->message_id)->where('status', 'open')->exists())->toBeTrue()
+        ->and(TalktoAttempt::query()->where('message_id', $message->message_id)->where('status', 'failed_final')->where('http_status', $status)->exists())->toBeTrue()
+        ->and(TalktoEvent::query()->where('message_id', $message->message_id)->where('event_type', 'retry_not_scheduled')->exists())->toBeTrue();
+})->with([401, 422]);
+
+test('disabling outgoing retry makes transient transport failures final without redispatch', function (string $setting): void {
+    config([$setting => false]);
+    Queue::fake();
+    Http::fake(['*' => Http::response('temporary failure', 503)]);
+    $message = retryOutgoingMessage('retry-disabled-transport');
+
+    (new SendTalktoMessage($message->id))->handle(app(TalktoOutgoingEnvelopeBuilder::class), app(TalktoRetryPolicy::class));
+    $message->refresh();
+
+    expect($message->overall_status)->toBe('failed_final')
+        ->and($message->transport_status)->toBe('failed_final')
+        ->and($message->retry_count)->toBe(0)
+        ->and($message->next_retry_at)->toBeNull()
+        ->and(TalktoDeadLetter::query()->where('message_id', $message->message_id)->exists())->toBeTrue();
+    expect(Artisan::call('talkto:retry-failed'))->toBe(0);
+    Queue::assertNothingPushed();
+})->with(['global disabled' => 'talkto.retry.enabled', 'outgoing disabled' => 'talkto.retry.outgoing_enabled']);
 
 test('retry command dispatches due outgoing retries and dry run does not dispatch', function (): void {
     Queue::fake();
