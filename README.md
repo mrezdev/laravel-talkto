@@ -248,6 +248,15 @@ php artisan talkto:audit-security
 
 Use `talkto:security-audit` as the main detailed security audit command. `talkto:audit-security` is also registered as a PASS/WARN/FAIL compatibility audit command.
 
+## Local Readiness Check
+
+```bash
+php artisan talkto:doctor
+php artisan talkto:doctor --json
+```
+
+Doctor checks local installation and configuration readiness without sending messages, contacting peers, or changing data. It reports PASS/WARN/FAIL/INFO and exits `1` when required prerequisites fail; warnings alone exit `0`. Use `talkto:security-audit` for detailed security posture. See [Doctor checks and JSON output](docs/doctor.md).
+
 ## Optional Panel
 
 Laravel Talkto includes an optional Blade operations panel. It is disabled by default.

@@ -155,11 +155,23 @@ The supported command names and public options are:
 - `talkto:trace {message_id?} {--correlation=} {--json} {--limit=} {--payload}`
 - `talkto:security-audit {--json} {--fail-on=}`
 - `talkto:audit-security {--json}`
+- `talkto:doctor {--json}`
 - `talkto:prune {--type=} {--older-than=} {--dry-run} {--limit=}`
 - `talkto:recover-stale {--dry-run} {--direction=} {--older-than=} {--limit=}`
 
 Command output formatting may gain new fields or clearer wording. Scripts should
 prefer `--json` where available.
+
+`talkto:doctor` is a read-only local installation/configuration readiness check.
+It does not contact peers, create messages, dispatch jobs, execute migrations, or
+repair configuration. PASS, WARN, FAIL, and INFO are rendered in human output;
+JSON uses lowercase statuses. One or more FAIL checks cause exit `1`; otherwise
+the command exits `0`, including warnings-only results. The JSON top-level keys
+are `status` (`ready` or `not_ready`), `summary` (`pass`, `warn`, `fail`, `info`
+counts), and `checks` (records with `category`, `key`, `status`, `label`, `value`,
+and nullable `message`). Doctor implementation classes are internal. See
+[Doctor](doctor.md) for exact checks and scope. `talkto:security-audit` remains
+the detailed security posture command.
 
 ## Public contracts
 

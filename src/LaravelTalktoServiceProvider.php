@@ -16,6 +16,7 @@ use Mrezdev\LaravelTalkto\Console\Commands\ReprocessTalktoDeadLettersCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\RetryFailedTalktoMessagesCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\SecurityAuditTalktoCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\TalktoAuditSecurityCommand;
+use Mrezdev\LaravelTalkto\Console\Commands\TalktoDoctorCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\TalktoPruneCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\TalktoRecoverStaleCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\TraceTalktoMessageCommand;
@@ -113,6 +114,7 @@ class LaravelTalktoServiceProvider extends ServiceProvider
                 TraceTalktoMessageCommand::class,
                 SecurityAuditTalktoCommand::class,
                 TalktoAuditSecurityCommand::class,
+                TalktoDoctorCommand::class,
                 TalktoPruneCommand::class,
                 TalktoRecoverStaleCommand::class,
             ]);
