@@ -158,14 +158,12 @@ class TalktoPanelConnectionHealthChecker
     private function latestTimestamp(Builder $query, array $columns): ?CarbonInterface
     {
         foreach ($columns as $column) {
-            $message = (clone $query)
-                ->whereNotNull($column)
-                ->orderByDesc($column)
-                ->orderByDesc('id')
-                ->first();
+            $timestamp = (clone $query)->max($column);
 
-            if ($message !== null) {
-                return $message->{$column};
+            if ($timestamp !== null) {
+                return $query->getModel()->newInstance([], true)
+                    ->setRawAttributes([$column => $timestamp], true)
+                    ->getAttribute($column);
             }
         }
 
