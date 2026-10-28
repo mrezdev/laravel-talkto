@@ -4,6 +4,7 @@ namespace Mrezdev\LaravelTalkto\Support;
 
 use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
+use Mrezdev\LaravelTalkto\Models\TalktoDispatchIntent;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoNonce;
@@ -51,6 +52,14 @@ class TalktoModelResolver
     public function nonce(): string
     {
         return $this->resolve('nonce', TalktoNonce::class);
+    }
+
+    /**
+     * @return class-string<TalktoDispatchIntent>
+     */
+    public function dispatchIntent(): string
+    {
+        return $this->resolve('dispatch_intent', TalktoDispatchIntent::class);
     }
 
     /**

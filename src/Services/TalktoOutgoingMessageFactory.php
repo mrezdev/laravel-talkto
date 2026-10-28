@@ -31,6 +31,28 @@ class TalktoOutgoingMessageFactory
         mixed $payload = [],
         array $options = []
     ): TalktoMessage {
+        return $this->persist($target, $command, $payload, $options, false);
+    }
+
+    /**
+     * @internal Only dispatch-promising flows use this opt-in creation path.
+     */
+    public function createForDispatch(
+        string $target,
+        string $command,
+        mixed $payload = [],
+        array $options = []
+    ): TalktoMessage {
+        if ((new \ReflectionMethod($this, 'create'))->getDeclaringClass()->getName() !== self::class) {
+            throw new InvalidArgumentException('A custom outgoing factory create method requires a compatible durable dispatch adapter.');
+        }
+        app(TalktoDispatchIntentService::class)->assertReady();
+
+        return $this->persist($target, $command, $payload, $options, true);
+    }
+
+    private function persist(string $target, string $command, mixed $payload, array $options, bool $durable): TalktoMessage
+    {
         $resolvedTarget = $this->resolvedTargetName($target);
         $this->validator()->validateIdentifier('target_service', $resolvedTarget);
 
@@ -111,7 +133,8 @@ class TalktoOutgoingMessageFactory
                 $transportStatus,
                 $destinationReceiveStatus,
                 $destinationActionStatus,
-                $overallStatus
+                $overallStatus,
+                $durable
             ): TalktoMessage {
                 $message = $messageClass::create([
                     'message_id' => $messageId,
@@ -158,6 +181,10 @@ class TalktoOutgoingMessageFactory
                         'source_meta' => $options['source_meta'] ?? null,
                     ], fn (mixed $value): bool => $value !== null),
                 ]);
+
+                if ($durable) {
+                    app(TalktoDispatchIntentService::class)->record($message);
+                }
 
                 return $message;
             });

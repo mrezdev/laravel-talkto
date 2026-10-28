@@ -30,6 +30,7 @@ This is the full public documentation map for Laravel Talkto. The root [README](
 
 ## Operations
 
+- [Durable initial dispatch](durable-dispatch.md) - opt-in intent storage, queue guarantees, custom builder compatibility and controlled initial-publication recovery.
 - [Recovery and monitoring](recovery-monitoring-template.md)
 - [Talkto Panel](panel.md)
 - [Testing](testing.md)

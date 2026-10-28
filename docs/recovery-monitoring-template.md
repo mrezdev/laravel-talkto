@@ -2,6 +2,14 @@
 
 Use this template to design operational views and recovery actions for a host service.
 
+## Initial Queue Publication
+
+Use the optional [durable dispatch guide](durable-dispatch.md) when investigating a message committed before its initial queue publication. `talkto:recover-undispatched` remains read-only and cannot prove that an old queued message was never published. It never creates intents or jobs.
+
+`talkto:dispatch-intents` inspects existing intents by default. Explicit `--execute` requires both durable creation and recovery enabled, and publishes only ready or expired never-attempted claims that pass locked revalidation. Its default `--min-age=30` is in minutes; use direction, public message ID and a bounded limit. `publishing` and `unknown` outcomes are not automatically repeated. Keep initial publication, transport retry, stale-processing recovery and result callback operations separate.
+
+Monitor intent backlog/age, leases, ambiguous outcomes, sanitized failure codes and controlled recovery results alongside actual worker execution and message completion. Follow the guide's single-service rollout and retention procedure before arranging any recurring invocation.
+
 ## Monitoring Summary Fields
 
 Expose summary fields for operators:

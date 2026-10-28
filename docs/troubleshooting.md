@@ -24,7 +24,13 @@ Symptom: `vendor:publish` reports no publishable resources.
 
 Likely cause: Wrong publish tag.
 
-Safe fix: Use one of the real tags: `laravel-talkto-config`, `talkto-config`, `laravel-talkto-migrations`, `talkto-migrations`, or `talkto-panel-views`.
+Safe fix: Use one of the real tags: `laravel-talkto-config`, `talkto-config`, `laravel-talkto-migrations`, `talkto-migrations`, `talkto-dispatch-intent-migrations` (separate opt-in ledger), or `talkto-panel-views`.
+
+## Durable Initial Dispatch Is Rejected Or Has No Candidates
+
+Check the [durable dispatch troubleshooting table](durable-dispatch.md#troubleshooting) for the intent migration, both feature flags, custom builder/factory restrictions, supported model keys, actual connection identity and queue/job routing. Incompatible builder/factory extensions fail before persistence or the `run()` source action; use supported configured job classes instead of bypassing validation.
+
+`talkto:dispatch-intents` is read-only unless `--execute` is explicit and recovery is enabled. Its default minimum age is 30 minutes; a public message-ID filter is not a database row-key filter. It does not backfill historical or factory-only rows, and `publishing`/`unknown` outcomes remain investigation cases. `talkto:recover-undispatched` is a separate read-only diagnostic and cannot perform recovery.
 
 ## Migrations Are Missing Or Not Run
 

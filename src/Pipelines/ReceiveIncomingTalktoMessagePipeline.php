@@ -11,6 +11,7 @@ use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
 use Mrezdev\LaravelTalkto\Exceptions\InvalidTalktoRequestJsonException;
 use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Services\TalktoDispatchIntentService;
 use Mrezdev\LaravelTalkto\Services\TalktoNonceLedger;
 use Mrezdev\LaravelTalkto\Services\TalktoSignatureVerifier;
 use Mrezdev\LaravelTalkto\Services\TalktoSignedRequestDecoder;
@@ -110,8 +111,13 @@ class ReceiveIncomingTalktoMessagePipeline
 
         TalktoModelConnection::assertSameConnection($messageClass, $this->eventModelClass());
 
+        $durable = (bool) config('talkto.dispatch_intents.enabled', false);
+        if ($durable) {
+            app(TalktoDispatchIntentService::class)->assertReady();
+        }
+
         try {
-            $message = TalktoModelConnection::transaction($messageClass, function () use ($envelope, $messageClass): TalktoMessage {
+            $message = TalktoModelConnection::transaction($messageClass, function () use ($envelope, $messageClass, $durable): TalktoMessage {
                 $eventClass = $this->eventModelClass();
 
                 $message = $messageClass::create([
@@ -150,6 +156,10 @@ class ReceiveIncomingTalktoMessagePipeline
                         'business_key' => $envelope['business_key'] ?? null,
                     ], fn (mixed $value): bool => $value !== null),
                 ]);
+
+                if ($durable) {
+                    app(TalktoDispatchIntentService::class)->record($message);
+                }
 
                 return $message;
             });
@@ -190,8 +200,10 @@ class ReceiveIncomingTalktoMessagePipeline
             );
         }
 
-        $jobClass = $this->processIncomingJobClass();
-        $jobClass::dispatch($message->id)->afterCommit();
+        if (! $durable) {
+            $jobClass = $this->processIncomingJobClass();
+            $jobClass::dispatch($message->id)->afterCommit();
+        }
 
         return new JsonResponse([
             'received' => true,

@@ -27,6 +27,7 @@ Supported publish tags:
 - `talkto-config`
 - `laravel-talkto-migrations`
 - `talkto-migrations`
+- `talkto-dispatch-intent-migrations` (separate opt-in initial-dispatch ledger)
 - `talkto-panel-views`
 
 Publish migrations and run them when the host app is ready to own the package tables:
@@ -54,6 +55,24 @@ TALKTO_MIGRATIONS_ENABLED=false
 ```
 
 Set it to true only when the host intentionally wants the package service provider to load migrations directly. Direct package migration loading uses the stable package filenames and is independent of the timestamp rewriting used by `vendor:publish`.
+
+## Durable Initial Dispatch
+
+Durable initial dispatch is disabled by default and uses a separate additive migration. Review [durable dispatch](durable-dispatch.md) before enabling it, especially with custom builders, factories, models or jobs.
+
+```php
+'dispatch_intents' => [
+    'enabled' => env('TALKTO_DISPATCH_INTENTS_ENABLED', false),
+    'recovery_enabled' => env('TALKTO_DISPATCH_INTENTS_RECOVERY_ENABLED', false),
+    'publish_after_commit' => true,
+    'lease_seconds' => 60,
+    'migrations_enabled' => false,
+],
+```
+
+`enabled` creates intents only for new dispatch-promising flows and validated incoming messages. `recovery_enabled` separately permits `talkto:dispatch-intents --execute`; it installs no schedule. `publish_after_commit` controls the initial after-commit publication attempt. `lease_seconds` defaults to 60 and is bounded to 10..3600 seconds. `migrations_enabled` exposes the separate package migration to Laravel's runner without executing it. Only `enabled` and `recovery_enabled` have environment variables in the supplied section; set the other values in PHP configuration.
+
+Publish the intent migration with `php artisan vendor:publish --tag=talkto-dispatch-intent-migrations`, inspect it, then run it through the application's normal migration deployment. This separate migration is not loaded by `TALKTO_MIGRATIONS_ENABLED`. Installing/updating Composer dependencies does not run it. The default table can be customized with `TALKTO_DISPATCH_INTENTS_TABLE`; it uses the existing `TALKTO_DB_CONNECTION` storage setting. See the full guide for choosing published versus directly loaded migration ownership.
 
 ## Routes
 

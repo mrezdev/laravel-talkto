@@ -4,6 +4,7 @@ use Mrezdev\LaravelTalkto\Jobs\ProcessIncomingTalktoMessage;
 use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoDeadLetter;
+use Mrezdev\LaravelTalkto\Models\TalktoDispatchIntent;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoNonce;
@@ -23,6 +24,7 @@ return [
         'event' => TalktoEvent::class,
         'dead_letter' => TalktoDeadLetter::class,
         'nonce' => TalktoNonce::class,
+        'dispatch_intent' => TalktoDispatchIntent::class,
     ],
 
     'database' => [
@@ -40,7 +42,18 @@ return [
             'events' => env('TALKTO_EVENTS_TABLE', 'talkto_events'),
             'dead_letters' => env('TALKTO_DEAD_LETTERS_TABLE', 'talkto_dead_letters'),
             'nonces' => env('TALKTO_NONCES_TABLE', 'talkto_nonces'),
+            'dispatch_intents' => env('TALKTO_DISPATCH_INTENTS_TABLE', 'talkto_dispatch_intents'),
         ],
+    ],
+
+    'dispatch_intents' => [
+        // Opt-in infrastructure only. Existing dispatch paths stay unchanged
+        // until explicitly enabled after the separate migration is installed.
+        'enabled' => env('TALKTO_DISPATCH_INTENTS_ENABLED', false),
+        'recovery_enabled' => env('TALKTO_DISPATCH_INTENTS_RECOVERY_ENABLED', false),
+        'publish_after_commit' => true,
+        'lease_seconds' => 60,
+        'migrations_enabled' => false,
     ],
 
     'storage' => [

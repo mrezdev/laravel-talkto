@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Durable Dispatch Builder Compatibility
+
+- Added enabled-mode preflight for unsupported FlowBuilder dispatch overrides and outgoing factory `create()` overrides, rejecting them before message persistence or source-action execution while preserving legacy customization behavior.
+- Documented opt-in durable initial dispatch, migration/configuration prerequisites, supported custom jobs, queue guarantees, controlled recovery, monitoring and service-by-service rollout in the public documentation.
+
 ### Migration Publishing And README Badges
 
 - Switched package migration publishing to Laravel's `publishesMigrations()` API so new host-published Talkto migration copies use Laravel-standard current sequential timestamps when the host has `database.migrations.update_date_on_publish=true`.

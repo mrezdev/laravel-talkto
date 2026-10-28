@@ -9,6 +9,7 @@ use InvalidArgumentException;
 use JsonSerializable;
 use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 use Throwable;
 
 /**
@@ -108,7 +109,25 @@ class TalktoFlowBuilder
 
     public function send(): TalktoMessage
     {
+        if (config('talkto.dispatch_intents.enabled', false)) {
+            $this->assertDurableCompatibility();
+        }
+
         $this->validateReady();
+
+        if (config('talkto.dispatch_intents.enabled', false)) {
+            $this->assertDurableCompatibility();
+
+            return $this->messageFactory->createForDispatch(
+                $this->target,
+                $this->command,
+                $this->payload,
+                array_merge($this->options, [
+                    'flow_name' => $this->flowName,
+                    'source_action_status' => $this->options['source_action_status'] ?? 'succeeded_assumed',
+                ])
+            );
+        }
 
         $message = $this->messageFactory->create(
             $this->target,
@@ -127,12 +146,34 @@ class TalktoFlowBuilder
 
     public function run(Closure $sourceAction): TalktoMessage
     {
+        if (config('talkto.dispatch_intents.enabled', false)) {
+            $this->assertDurableCompatibility();
+        }
+
         $this->validateReady();
 
+        $durable = (bool) config('talkto.dispatch_intents.enabled', false);
+        if ($durable) {
+            $this->assertDurableCompatibility();
+            $this->assertDurableSourceConnection();
+            app(TalktoDispatchIntentService::class)->assertReady();
+        }
+
         try {
-            $message = DB::transaction(function () use ($sourceAction): TalktoMessage {
+            $message = DB::transaction(function () use ($sourceAction, $durable): TalktoMessage {
                 $result = $sourceAction();
                 [$payload, $sourceResult, $sourceMeta] = $this->extractSourceResult($result);
+
+                if ($durable) {
+                    $this->assertDurableSourceConnection();
+
+                    return $this->messageFactory->createForDispatch(
+                        $this->target,
+                        $this->command,
+                        $payload,
+                        $this->optionsWithSourceResult($sourceResult, $sourceMeta)
+                    );
+                }
 
                 return $this->messageFactory->create(
                     $this->target,
@@ -147,9 +188,33 @@ class TalktoFlowBuilder
             throw $throwable;
         }
 
-        $this->dispatchSendJob((int) $message->id);
+        if (! $durable) {
+            $this->dispatchSendJob((int) $message->id);
+        }
 
         return $message;
+    }
+
+    private function assertDurableCompatibility(): void
+    {
+        foreach (['sendJobClass', 'dispatchSendJob'] as $method) {
+            if ((new \ReflectionMethod($this, $method))->getDeclaringClass()->getName() !== self::class) {
+                throw new InvalidArgumentException("Durable dispatch does not support a custom TalktoFlowBuilder::{$method}() override. Configure talkto.jobs.send_message and inherit the dispatch methods, or provide a compatible durable dispatch adapter.");
+            }
+        }
+
+        if ((new \ReflectionMethod($this->messageFactory, 'create'))->getDeclaringClass()->getName() !== TalktoOutgoingMessageFactory::class) {
+            throw new InvalidArgumentException('A custom outgoing factory create method requires a compatible durable dispatch adapter.');
+        }
+    }
+
+    private function assertDurableSourceConnection(): void
+    {
+        $messageClass = app(TalktoModelResolver::class)->message();
+
+        if ((new $messageClass)->getConnection() !== DB::connection()) {
+            throw new InvalidArgumentException('Durable flows require the source and Talkto message to use the same database connection.');
+        }
     }
 
     public function getFlowName(): string

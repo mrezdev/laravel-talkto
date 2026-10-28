@@ -16,9 +16,11 @@ use Mrezdev\LaravelTalkto\Console\Commands\ReprocessTalktoDeadLettersCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\RetryFailedTalktoMessagesCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\SecurityAuditTalktoCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\TalktoAuditSecurityCommand;
+use Mrezdev\LaravelTalkto\Console\Commands\TalktoDispatchIntentsCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\TalktoDoctorCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\TalktoPruneCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\TalktoRecoverStaleCommand;
+use Mrezdev\LaravelTalkto\Console\Commands\TalktoRecoverUndispatchedCommand;
 use Mrezdev\LaravelTalkto\Console\Commands\TraceTalktoMessageCommand;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackReceiverContract;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
@@ -117,6 +119,8 @@ class LaravelTalktoServiceProvider extends ServiceProvider
                 TalktoDoctorCommand::class,
                 TalktoPruneCommand::class,
                 TalktoRecoverStaleCommand::class,
+                TalktoRecoverUndispatchedCommand::class,
+                TalktoDispatchIntentsCommand::class,
             ]);
         }
 
@@ -134,6 +138,10 @@ class LaravelTalktoServiceProvider extends ServiceProvider
             'talkto-migrations',
         ]);
 
+        $this->publishesMigrations([
+            __DIR__.'/../database/dispatch-intents' => database_path('migrations'),
+        ], 'talkto-dispatch-intent-migrations');
+
         $this->publishes([
             __DIR__.'/../resources/views/panel' => resource_path('views/vendor/talkto/panel'),
         ], 'talkto-panel-views');
@@ -147,6 +155,10 @@ class LaravelTalktoServiceProvider extends ServiceProvider
 
         if (config('talkto.migrations.enabled', false)) {
             $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+        }
+
+        if (config('talkto.dispatch_intents.migrations_enabled', false)) {
+            $this->loadMigrationsFrom(__DIR__.'/../database/dispatch-intents');
         }
 
         if (config('talkto.routes.enabled', false)) {

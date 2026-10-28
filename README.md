@@ -318,6 +318,8 @@ For a host integration, also test one outgoing command, one incoming command, on
 
 ## Documentation Map
 
+For optional initial queue-publication recovery, see [durable dispatch](docs/durable-dispatch.md), including migration prerequisites, custom builder compatibility and controlled rollout.
+
 Start with [docs/README.md](docs/README.md).
 The full documentation index is a technical map with grouped links for setup, concepts, examples, operations, package development, and support.
 

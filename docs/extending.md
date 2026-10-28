@@ -48,6 +48,12 @@ Keep callback business meaning in the host application; the package only signs, 
 
 Retry behavior is configurable by global defaults, direction, target/source peer, and command. Prefer config overrides for normal tuning. Replace package services only after config cannot express the policy and the host accepts the compatibility responsibility.
 
+## Durable Builder And Job Compatibility
+
+With durable initial dispatch disabled, custom FlowBuilder dispatch methods retain their existing behavior. When it is enabled, subclasses must inherit protected `sendJobClass()` and `dispatchSendJob()` unchanged. Overrides, including intermediate-parent or trait overrides, are rejected before message persistence or the `run()` source action; arbitrary dispatch code is never executed just to inspect it. An outgoing factory overriding public `create()` is also rejected by preflight and retains its existing durable-path guard.
+
+For supported custom job selection, use `talkto.jobs.send_message` / `talkto.jobs.process_incoming` with ordinary subclasses of the existing jobs and a compatible integer-message-key constructor. Unsupported advanced queue features require a separate compatible implementation; no adapter framework is provided. See [durable dispatch](durable-dispatch.md#builders-factories-and-custom-jobs) for the full matrix, stored-routing checks and model/connection limits.
+
 ## Models, Tables, And Storage
 
 Hosts can configure Talkto model classes through `talkto.models.*`, table names through `talkto.database.tables.*`, and the storage connection through `talkto.database.connection`.
