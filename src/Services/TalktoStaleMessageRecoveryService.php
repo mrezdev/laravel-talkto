@@ -9,6 +9,7 @@ use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Support\TalktoDispatchClaim;
 use Mrezdev\LaravelTalkto\Support\TalktoDispatchTestHooks;
+use Mrezdev\LaravelTalkto\Support\TalktoMessageCandidates;
 use Mrezdev\LaravelTalkto\Support\TalktoModelConnection;
 use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 use Throwable;
@@ -26,7 +27,7 @@ class TalktoStaleMessageRecoveryService
 
     public function recover(?string $direction, int $olderThanMinutes, int $limit, bool $dryRun): array
     {
-        $messages = $this->candidateQuery($direction, $olderThanMinutes, $limit)->get();
+        $messages = TalktoMessageCandidates::select($this->candidateQuery($direction, $olderThanMinutes, $limit));
         $summary = [
             'candidates' => $messages->count(),
             'recovered' => 0,

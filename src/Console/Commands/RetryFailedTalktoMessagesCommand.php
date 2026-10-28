@@ -10,6 +10,7 @@ use Mrezdev\LaravelTalkto\Services\TalktoCurrentServiceGuard;
 use Mrezdev\LaravelTalkto\Services\TalktoDispatchClaimingService;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
 use Mrezdev\LaravelTalkto\Support\TalktoDispatchTestHooks;
+use Mrezdev\LaravelTalkto\Support\TalktoMessageCandidates;
 use Mrezdev\LaravelTalkto\Support\TalktoModelConnection;
 use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
 use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
@@ -61,7 +62,7 @@ class RetryFailedTalktoMessagesCommand extends Command
         $skipped = 0;
         $skipReasons = [];
 
-        foreach ($query->get() as $message) {
+        foreach (TalktoMessageCandidates::select($query) as $message) {
             $scanned++;
             $decision = $retryPolicy->decisionFor($message);
 

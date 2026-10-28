@@ -399,13 +399,22 @@ class TalktoCallbackStatusInspector
     {
         $deadLetterClass = $this->models->deadLetter();
 
-        return $deadLetterClass::query()
+        $query = $deadLetterClass::query()
             ->where(function ($query) use ($message): void {
                 $query->where('talkto_message_id', $message->id)
                     ->orWhere('message_id', $message->message_id);
-            })
+            });
+
+        $keyName = $query->getModel()->getQualifiedKeyName();
+
+        // Keep large attributes out of the ordering query.
+        $key = (clone $query)
             ->orderByDesc('id')
-            ->first();
+            ->toBase()
+            ->select($keyName)
+            ->value($keyName);
+
+        return $key === null ? null : $query->whereKey($key)->first();
     }
 
     private function callbackCommand(): string

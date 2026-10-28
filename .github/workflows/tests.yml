@@ -181,6 +181,11 @@ jobs:
           TALKTO_MYSQL_PORT: ${{ job.services.mysql.ports['3306'] }}
           TALKTO_MYSQL_USER: root
           TALKTO_MYSQL_EVIDENCE_PATH: ${{ runner.temp }}/talkto-mysql-evidence.json
+          TALKTO_QUERY_AUDIT_EVIDENCE_PATH: ${{ runner.temp }}/talkto-query-audit-evidence.json
+          TALKTO_OPERATIONAL_MYSQL_EVIDENCE_PATH: ${{ runner.temp }}/talkto-operational-mysql-evidence.json
+          TALKTO_OPERATIONAL_CONCURRENCY_EVIDENCE_PATH: ${{ runner.temp }}/talkto-operational-concurrency-evidence.json
+          TALKTO_DISTINCT_MYSQL_EVIDENCE_PATH: ${{ runner.temp }}/talkto-distinct-mysql-evidence.json
+          TALKTO_OPERATIONAL_MEMORY_LIMIT_EVIDENCE_PATH: ${{ runner.temp }}/talkto-memory-limit-evidence.json
         run: vendor/bin/pest --configuration phpunit.mysql.xml --log-junit mysql-timestamps-junit.xml
 
       - name: Upload MySQL SQL and EXPLAIN evidence
@@ -190,4 +195,9 @@ jobs:
           name: mysql-timestamps-php-${{ matrix.php-version }}
           path: |
             ${{ runner.temp }}/talkto-mysql-evidence.json
+            ${{ runner.temp }}/talkto-query-audit-evidence.json
+            ${{ runner.temp }}/talkto-operational-mysql-evidence.json
+            ${{ runner.temp }}/talkto-operational-concurrency-evidence.json
+            ${{ runner.temp }}/talkto-distinct-mysql-evidence.json
+            ${{ runner.temp }}/talkto-memory-limit-evidence.json
             mysql-timestamps-junit.xml

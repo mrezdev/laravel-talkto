@@ -117,14 +117,23 @@ class TalktoPanelMessageQuery
             return null;
         }
 
-        return $this->deadLetterModelClass()::query()
+        $query = $this->deadLetterModelClass()::query()
             ->where(function (Builder $query) use ($message): void {
                 $query->where('talkto_message_id', $message->getKey())
                     ->orWhere('message_id', $message->message_id);
-            })
+            });
+
+        $keyName = $query->getModel()->getQualifiedKeyName();
+
+        // Keep large attributes out of the ordering query.
+        $key = (clone $query)
             ->orderByDesc('created_at')
             ->orderByDesc('id')
-            ->first();
+            ->toBase()
+            ->select($keyName)
+            ->value($keyName);
+
+        return $key === null ? null : $query->whereKey($key)->first();
     }
 
     private function applyFilters(Builder $query, TalktoPanelMessageFilters $filters): Builder
