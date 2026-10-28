@@ -587,6 +587,18 @@ class SendOutgoingTalktoMessagePipeline
                 return;
             }
 
+            if ($this->hasTerminalOrAdvancedStatus($message)) {
+                $this->recordIgnoredFailure($message, $attempt, $eventClass, [
+                    'status' => TalktoAttemptStatus::Failed->value,
+                    'http_status' => $status,
+                    'response_excerpt' => $responseExcerpt,
+                    'error_class' => 'http_error',
+                    'error_message' => $errorMessage,
+                ]);
+
+                return;
+            }
+
             $retryableHttpStatus = $retryPolicy->isRetryableHttpStatus($status, $message);
             $retryable = $retryableHttpStatus && $retryPolicy->canScheduleRetry($message);
             $retryable
@@ -646,6 +658,16 @@ class SendOutgoingTalktoMessagePipeline
                 return;
             }
 
+            if ($this->hasTerminalOrAdvancedStatus($message)) {
+                $this->recordIgnoredFailure($message, $attempt, $eventClass, [
+                    'status' => TalktoAttemptStatus::Failed->value,
+                    'error_class' => $throwable::class,
+                    'error_message' => $errorMessage,
+                ]);
+
+                return;
+            }
+
             $retryable = $retryPolicy->canScheduleRetry($message);
             $retryable
                 ? $retryPolicy->markRetryableFailure($message, 'transport_status', $errorMessage)
@@ -698,6 +720,19 @@ class SendOutgoingTalktoMessagePipeline
                 return;
             }
 
+            if ($this->hasTerminalOrAdvancedStatus($message)) {
+                $this->recordIgnoredFailure($message, $attempt, $eventClass, [
+                    'status' => TalktoAttemptStatus::FailedFinal->value,
+                    'error_class' => $errorCode,
+                    'error_message' => $errorMessage,
+                ], array_merge([
+                    'retryable' => false,
+                    'review_required' => true,
+                ], $meta));
+
+                return;
+            }
+
             $retryPolicy->markFinalFailure($message, 'transport_status', $errorCode);
 
             $this->storeDeadLetterIfEnabled($message, $errorCode);
@@ -728,6 +763,36 @@ class SendOutgoingTalktoMessagePipeline
 
             $this->recordRetryEvent($eventClass, $message, 'retry_not_scheduled');
         });
+    }
+
+    private function recordIgnoredFailure(TalktoMessage $message, TalktoAttempt $attempt, string $eventClass, array $attributes, array $meta = []): void
+    {
+        if (array_key_exists('reason', $meta)) {
+            $meta['failure_reason'] = $meta['reason'];
+        }
+
+        $meta = array_merge($meta, [
+            'response_ignored' => true,
+            'reason' => 'message_already_terminal',
+            'current_status' => $message->overall_status,
+        ]);
+
+        $attempt->forceFill(array_merge($attributes, [
+            'meta' => array_merge($attempt->meta ?? [], $meta),
+        ]))->save();
+
+        $eventClass::create([
+            'talkto_message_id' => $message->id,
+            'message_id' => $message->message_id,
+            'service_name' => config('talkto.service', 'app'),
+            'event_type' => 'message_send_response_ignored',
+            'old_status' => $message->overall_status,
+            'new_status' => $message->overall_status,
+            'meta' => array_merge(array_filter([
+                'http_status' => $attributes['http_status'] ?? null,
+                'error_class' => $attributes['error_class'] ?? null,
+            ], fn (mixed $value): bool => $value !== null), $meta),
+        ]);
     }
 
     private function applyInvalidEnvelopeFieldFailure(

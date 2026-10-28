@@ -186,6 +186,7 @@ jobs:
           TALKTO_OPERATIONAL_CONCURRENCY_EVIDENCE_PATH: ${{ runner.temp }}/talkto-operational-concurrency-evidence.json
           TALKTO_DISTINCT_MYSQL_EVIDENCE_PATH: ${{ runner.temp }}/talkto-distinct-mysql-evidence.json
           TALKTO_OPERATIONAL_MEMORY_LIMIT_EVIDENCE_PATH: ${{ runner.temp }}/talkto-memory-limit-evidence.json
+          TALKTO_TERMINAL_MYSQL_EVIDENCE_PATH: ${{ runner.temp }}/talkto-terminal-mysql-evidence.json
         run: vendor/bin/pest --configuration phpunit.mysql.xml --log-junit mysql-timestamps-junit.xml
 
       - name: Upload MySQL SQL and EXPLAIN evidence
@@ -200,4 +201,5 @@ jobs:
             ${{ runner.temp }}/talkto-operational-concurrency-evidence.json
             ${{ runner.temp }}/talkto-distinct-mysql-evidence.json
             ${{ runner.temp }}/talkto-memory-limit-evidence.json
+            ${{ runner.temp }}/talkto-terminal-mysql-evidence.json
             mysql-timestamps-junit.xml
