@@ -27,6 +27,12 @@ Destination apps must configure the original source service under `talkto.outgoi
 
 ## Automatic Dispatch
 
+The optional [reliable callback mode](reliable-callbacks.md) commits result state, the complete outgoing callback and its durable publication intent together. It is disabled by default. It reuses the existing intent migration and preserves this signed callback format. In that mode, handlers should return their result instead of calling `sendResult()` during protected processing; unsupported extensions are rejected before handling, and an uncommitted result requires investigation instead of automatic handler replay.
+
+Reliable processing keeps the first callback's existing identity and gives later processing attempts their own deterministic callback identities. Consecutive retryable results can therefore carry different errors or metadata without overwriting an earlier callback. Existing receivers still acknowledge repeated same-status notifications as duplicates and retain the first received details; the complete per-attempt callback history remains at the destination. See [result identity and receiver ordering](reliable-callbacks.md#results-and-callback-identity) before relying on source-side error history or manually resending a later result.
+
+Disabling reliable mode does not authorize another initial delivery of a callback created in that mode. Retained coordination evidence lets the default factory reuse the original callback, including its later-attempt identity, without requiring the optional intent table. Missing or conflicting reliable history requires investigation; a new legacy callback is not a substitute.
+
 Incoming processing auto-queues durable callbacks by default after a handler result has been applied to the incoming message.
 
 ```dotenv

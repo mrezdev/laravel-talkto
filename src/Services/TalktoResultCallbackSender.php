@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
+use Mrezdev\LaravelTalkto\Exceptions\TalktoReliableCallbackPersistenceException;
 use Mrezdev\LaravelTalkto\Jobs\SendTalktoMessage;
 use Mrezdev\LaravelTalkto\Models\TalktoEvent;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
@@ -25,6 +26,12 @@ class TalktoResultCallbackSender implements ResultCallbackSenderContract
         private readonly TalktoSecurityRedactor $redactor,
         private readonly TalktoDispatchClaimingService $dispatchClaims,
     ) {}
+
+    /** @internal Preserve the actual contextual factory binding in reliable mode. */
+    public function reliableCallbackFactory(): TalktoResultCallbackMessageFactory
+    {
+        return $this->callbackMessages;
+    }
 
     public function sendResult(Model $message, IncomingCommandResultContract $result, array $options = []): array
     {
@@ -60,6 +67,18 @@ class TalktoResultCallbackSender implements ResultCallbackSenderContract
 
         $callbackMessage = null;
         $callbackClaimId = null;
+
+        if ($message instanceof TalktoMessage && (TalktoReliableCallbackService::isProtected($message) || TalktoReliableCallbackService::isActive($message))) {
+            throw new TalktoReliableCallbackPersistenceException('Return the handler result for atomic callback persistence; a protected reliable attempt cannot publish a manual callback before its result commits.');
+        }
+
+        if (config('talkto.callbacks.reliable.enabled', false)) {
+            if (! $message instanceof TalktoMessage) {
+                throw new \InvalidArgumentException('Reliable result callbacks require a TalktoMessage instance.');
+            }
+
+            return app(TalktoReliableCallbackService::class)->sendResult($message, $result, $options, $this);
+        }
 
         try {
             if (! $message instanceof TalktoMessage) {
@@ -284,21 +303,27 @@ class TalktoResultCallbackSender implements ResultCallbackSenderContract
 
         $eventClass = $this->eventModelClass();
         $queued = false;
+        $reliable = false;
 
         $eventClass::query()
             ->where('message_id', (string) ($message->message_id ?? ''))
-            ->whereIn('event_type', ['result_callback_queued', 'result_callback_queue_failed'])
+            ->whereIn('event_type', ['result_callback_queued', 'result_callback_queue_failed', 'result_callback_persisted'])
             ->orderBy('id')
             ->get()
-            ->each(function (TalktoEvent $event) use (&$queued, $callbackMessage): void {
+            ->each(function (TalktoEvent $event) use (&$queued, &$reliable, $callbackMessage): void {
                 if (! $this->eventMatchesCallback($event, $callbackMessage)) {
                     return;
                 }
 
-                $queued = $event->event_type === 'result_callback_queued';
+                if ($event->event_type === 'result_callback_persisted') {
+                    // This durable evidence must survive disabling the feature.
+                    $reliable = true;
+                } else {
+                    $queued = $event->event_type === 'result_callback_queued';
+                }
             });
 
-        return $queued;
+        return $reliable || $queued;
     }
 
     private function eventMatchesCallback(TalktoEvent $event, TalktoMessage $callbackMessage): bool

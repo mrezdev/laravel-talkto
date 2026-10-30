@@ -12,6 +12,8 @@ Monitor intent backlog/age, leases, ambiguous outcomes, sanitized failure codes 
 
 ## Monitoring Summary Fields
 
+For [reliable result callbacks](reliable-callbacks.md), distinguish a protected incoming processing attempt from a recoverable callback intent. A `reliable-callback:` processing lock can represent an unknown handler outcome and is deliberately excluded from Retry, DLQ reprocess and stale recovery, even after the feature is disabled. Investigate it without rerunning the handler. A committed outgoing callback with a safe intent uses the existing `talkto:dispatch-intents` command, with both reliable and durable recovery explicitly enabled. Preserve active/ambiguous records and coordination events when configuring retention.
+
 Expose summary fields for operators:
 
 - service identity

@@ -1,0 +1,396 @@
+<?php
+
+namespace Mrezdev\LaravelTalkto\Services;
+
+use Illuminate\Support\Facades\Validator;
+use InvalidArgumentException;
+use Mrezdev\LaravelTalkto\Contracts\ResultCallbackReceiverContract;
+use Mrezdev\LaravelTalkto\Data\TalktoResultCallbackData;
+use Mrezdev\LaravelTalkto\Exceptions\TalktoInvalidEnvelopeFieldException;
+use Mrezdev\LaravelTalkto\Models\TalktoMessage;
+use Mrezdev\LaravelTalkto\Support\TalktoModelConnection;
+use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
+
+/**
+ * @internal Default receiver behind ResultCallbackReceiverContract.
+ */
+class TalktoResultCallbackReceiver implements ResultCallbackReceiverContract
+{
+    private const VALID_CALLBACK_STATUSES = [
+        'succeeded',
+        'skipped',
+        'failed_retryable',
+        'failed_final',
+    ];
+
+    public function __construct(
+        private readonly TalktoSignatureVerifier $verifier,
+        private readonly TalktoNonceLedger $nonceLedger
+    ) {}
+
+    public function receiveResult(array $envelope, array $headers = []): array
+    {
+        if (! config('talkto.callbacks.enabled', true)) {
+            return $this->rejected('callbacks_disabled', null, null);
+        }
+
+        $validation = $this->validateEnvelope($envelope);
+
+        if ($validation !== null) {
+            return $this->rejected('validation_failed', null, null);
+        }
+
+        $verification = $this->verifier->verifyEnvelope($envelope, $headers);
+
+        if (! ($verification['ok'] ?? false)) {
+            $callback = ($verification['error'] ?? null) === 'invalid_envelope_field'
+                ? null
+                : $this->callbackFromEnvelopeOrNull($envelope);
+
+            $this->recordRejectedIfLinked($callback, (string) ($verification['error'] ?? 'verification_failed'));
+
+            return $this->rejected(
+                (string) ($verification['error'] ?? 'verification_failed'),
+                $callback?->callbackMessageId,
+                $callback?->originalMessageId,
+                is_string($verification['field'] ?? null) ? $verification['field'] : null
+            );
+        }
+
+        try {
+            $callback = TalktoResultCallbackData::fromEnvelope($envelope);
+        } catch (TalktoInvalidEnvelopeFieldException $exception) {
+            return $this->rejected($exception->errorCode, null, null, $exception->field);
+        }
+
+        if (! $this->consumeNonce($verification, $callback->callbackMessageId)) {
+            $this->recordRejectedIfLinked($callback, 'replay_nonce_reused');
+
+            return $this->rejected('replay_nonce_reused', $callback->callbackMessageId, $callback->originalMessageId);
+        }
+
+        if (! in_array($callback->status, self::VALID_CALLBACK_STATUSES, true)) {
+            $this->recordRejectedIfLinked($callback, 'invalid_callback_status');
+
+            return $this->rejected('invalid_callback_status', $callback->callbackMessageId, $callback->originalMessageId);
+        }
+
+        $messageClass = $this->messageModelClass();
+        $message = $messageClass::query()
+            ->where('direction', 'outgoing')
+            ->where('message_id', $callback->originalMessageId)
+            ->first();
+
+        if (! $message) {
+            return $this->rejected('original_message_not_found', $callback->callbackMessageId, $callback->originalMessageId);
+        }
+
+        if ($callback->originalCommand !== (string) $message->command) {
+            $this->recordEvent($message, 'result_callback_rejected', null, null, [
+                'callback_message_id' => $callback->callbackMessageId,
+                'error' => 'callback_original_command_mismatch',
+                'original_command' => $callback->originalCommand,
+                'message_command' => $message->command,
+            ]);
+
+            return $this->rejected('callback_original_command_mismatch', $callback->callbackMessageId, $callback->originalMessageId);
+        }
+
+        if ($callback->parentMessageId !== null && $callback->parentMessageId !== (string) $message->message_id) {
+            $this->recordEvent($message, 'result_callback_rejected', null, null, [
+                'callback_message_id' => $callback->callbackMessageId,
+                'error' => 'callback_parent_message_mismatch',
+                'parent_message_id' => $callback->parentMessageId,
+            ]);
+
+            return $this->rejected('callback_parent_message_mismatch', $callback->callbackMessageId, $callback->originalMessageId);
+        }
+
+        if ($callback->source !== (string) $message->target_service || $callback->target !== (string) $message->source_service) {
+            $this->recordEvent($message, 'result_callback_rejected', null, null, [
+                'callback_message_id' => $callback->callbackMessageId,
+                'error' => 'callback_relationship_mismatch',
+                'source' => $callback->source,
+                'target' => $callback->target,
+            ]);
+
+            return $this->rejected('callback_relationship_mismatch', $callback->callbackMessageId, $callback->originalMessageId);
+        }
+
+        [$destinationStatus, $overallStatus] = $this->statusesFor($callback->status);
+
+        if ($message->destination_action_status === $destinationStatus && $message->overall_status === $overallStatus) {
+            $this->recordEvent($message, 'result_callback_duplicate', $message->overall_status, $message->overall_status, [
+                'callback_message_id' => $callback->callbackMessageId,
+                'status' => $callback->status,
+            ]);
+
+            return $this->accepted('duplicate', $callback, true);
+        }
+
+        if ($this->shouldIgnoreStaleCallback($message, $destinationStatus, $overallStatus)) {
+            $this->recordStaleCallbackIgnored($message, $callback, $destinationStatus, $overallStatus);
+
+            return $this->accepted('stale_ignored', $callback, false);
+        }
+
+        $applyResult = TalktoModelConnection::transaction($message, function () use ($message, $callback, $destinationStatus, $overallStatus): array {
+            $messageClass = $this->messageModelClass();
+            $message = $messageClass::query()->whereKey($message->id)->lockForUpdate()->first();
+
+            if (! $message) {
+                return ['status' => 'applied', 'duplicate' => false];
+            }
+
+            if ($message->destination_action_status === $destinationStatus && $message->overall_status === $overallStatus) {
+                $this->recordEvent($message, 'result_callback_duplicate', $message->overall_status, $message->overall_status, [
+                    'callback_message_id' => $callback->callbackMessageId,
+                    'status' => $callback->status,
+                ]);
+
+                return ['status' => 'duplicate', 'duplicate' => true];
+            }
+
+            if ($this->shouldIgnoreStaleCallback($message, $destinationStatus, $overallStatus)) {
+                $this->recordStaleCallbackIgnored($message, $callback, $destinationStatus, $overallStatus);
+
+                return ['status' => 'stale_ignored', 'duplicate' => false];
+            }
+
+            $oldStatus = $message->overall_status;
+
+            $message->forceFill($this->callbackStateAttributes(
+                $destinationStatus,
+                $overallStatus,
+                $callback->resultData->errorMessage
+            ))->save();
+
+            $this->recordEvent($message, 'result_callback_received', $oldStatus, $message->overall_status, [
+                'callback_message_id' => $callback->callbackMessageId,
+                'status' => $callback->status,
+                'source' => $callback->source,
+                'command' => $callback->command,
+            ]);
+
+            $this->recordEvent($message, 'result_callback_applied', $oldStatus, $message->overall_status, [
+                'callback_message_id' => $callback->callbackMessageId,
+                'destination_action_status' => $destinationStatus,
+                'result' => $callback->resultData->result,
+                'result_meta' => $callback->resultData->meta,
+            ]);
+
+            return ['status' => 'applied', 'duplicate' => false];
+        });
+
+        return $this->accepted((string) $applyResult['status'], $callback, (bool) $applyResult['duplicate']);
+    }
+
+    private function validateEnvelope(array $envelope): ?array
+    {
+        $validator = Validator::make($envelope, [
+            'message_id' => ['required', 'string', 'max:100'],
+            'source' => ['required', 'string', 'max:80'],
+            'target' => ['required', 'string', 'max:80'],
+            'command' => ['required', 'string', 'max:150'],
+            'payload_hash' => ['required', 'string', 'max:100'],
+            'payload' => ['required', 'array'],
+            'payload.original_message_id' => ['required', 'string', 'max:100'],
+            'payload.original_command' => ['required', 'string', 'max:150'],
+            'payload.status' => ['required', 'string'],
+            'payload.succeeded' => ['required', 'boolean'],
+            'payload.retryable' => ['required', 'boolean'],
+            'payload.skipped' => ['required', 'boolean'],
+            'payload.result' => ['nullable', 'array'],
+            'payload.meta' => ['nullable', 'array'],
+        ]);
+
+        return $validator->fails() ? $validator->errors()->toArray() : null;
+    }
+
+    private function statusesFor(string $status): array
+    {
+        return match ($status) {
+            'succeeded' => ['succeeded', 'completed'],
+            'skipped' => ['skipped', 'completed'],
+            'failed_retryable' => ['failed_retryable', 'failed_retryable'],
+            'failed_final' => ['failed_final', 'failed_final'],
+            default => throw new InvalidArgumentException('Unsupported callback status.'),
+        };
+    }
+
+    private function callbackStateAttributes(string $destinationStatus, string $overallStatus, ?string $errorMessage): array
+    {
+        $attributes = [
+            'destination_action_status' => $destinationStatus,
+            'overall_status' => $overallStatus,
+        ];
+
+        if ($overallStatus === 'completed') {
+            return $attributes + [
+                'completed_at' => now(),
+                'failed_at' => null,
+                'last_error' => null,
+            ];
+        }
+
+        if (in_array($overallStatus, ['failed_retryable', 'failed_final'], true)) {
+            return $attributes + [
+                'completed_at' => null,
+                'failed_at' => now(),
+                'last_error' => $errorMessage,
+            ];
+        }
+
+        return $attributes;
+    }
+
+    private function shouldIgnoreStaleCallback(TalktoMessage $message, string $destinationStatus, string $overallStatus): bool
+    {
+        $currentDestinationStatus = (string) ($message->destination_action_status ?? '');
+        $currentOverallStatus = (string) ($message->overall_status ?? '');
+
+        $callbackIsSuccess = $destinationStatus === 'succeeded' && $overallStatus === 'completed';
+
+        if ($callbackIsSuccess) {
+            return false;
+        }
+
+        $currentIsSuccessful = in_array($currentOverallStatus, ['completed', 'succeeded'], true)
+            || $currentDestinationStatus === 'succeeded';
+        $callbackWouldWeakenSuccess = in_array($destinationStatus, ['failed_retryable', 'failed_final', 'skipped'], true)
+            || in_array($overallStatus, ['failed_retryable', 'failed_final'], true);
+
+        if ($currentIsSuccessful && $callbackWouldWeakenSuccess) {
+            return true;
+        }
+
+        return ($currentOverallStatus === 'failed_final' || $currentDestinationStatus === 'failed_final')
+            && ($overallStatus === 'failed_retryable' || $destinationStatus === 'failed_retryable');
+    }
+
+    private function recordStaleCallbackIgnored(
+        TalktoMessage $message,
+        TalktoResultCallbackData $callback,
+        string $destinationStatus,
+        string $overallStatus
+    ): void {
+        $this->recordEvent($message, 'result_callback_stale_ignored', $message->overall_status, $message->overall_status, [
+            'callback_message_id' => $callback->callbackMessageId,
+            'status' => $callback->status,
+            'current_destination_action_status' => $message->destination_action_status,
+            'current_overall_status' => $message->overall_status,
+            'ignored_destination_action_status' => $destinationStatus,
+            'ignored_overall_status' => $overallStatus,
+            'source' => $callback->source,
+            'command' => $callback->command,
+        ]);
+    }
+
+    private function accepted(string $status, TalktoResultCallbackData $callback, bool $duplicate): array
+    {
+        return [
+            'accepted' => true,
+            'status' => $status,
+            'message_id' => $callback->callbackMessageId,
+            'original_message_id' => $callback->originalMessageId,
+            'duplicate' => $duplicate,
+        ];
+    }
+
+    private function rejected(string $error, ?string $messageId, ?string $originalMessageId, ?string $field = null): array
+    {
+        return array_filter([
+            'accepted' => false,
+            'status' => 'rejected',
+            'message_id' => $messageId,
+            'original_message_id' => $originalMessageId,
+            'duplicate' => false,
+            'error' => $error,
+            'field' => $field,
+        ], fn (mixed $value): bool => $value !== null);
+    }
+
+    private function callbackFromEnvelopeOrNull(array $envelope): ?TalktoResultCallbackData
+    {
+        try {
+            return TalktoResultCallbackData::fromEnvelope($envelope);
+        } catch (TalktoInvalidEnvelopeFieldException) {
+            return null;
+        }
+    }
+
+    private function recordRejectedIfLinked(?TalktoResultCallbackData $callback, string $error): void
+    {
+        if (! $callback instanceof TalktoResultCallbackData) {
+            return;
+        }
+
+        if ($callback->originalMessageId === '') {
+            return;
+        }
+
+        $messageClass = $this->messageModelClass();
+        $message = $messageClass::query()
+            ->where('direction', 'outgoing')
+            ->where('message_id', $callback->originalMessageId)
+            ->first();
+
+        if (! $message) {
+            return;
+        }
+
+        $this->recordEvent($message, 'result_callback_rejected', null, null, [
+            'callback_message_id' => $callback->callbackMessageId,
+            'error' => $error,
+        ]);
+    }
+
+    private function recordEvent(TalktoMessage $message, string $eventType, ?string $oldStatus, ?string $newStatus, array $meta = []): void
+    {
+        $eventClass = $this->eventModelClass();
+
+        TalktoModelConnection::assertSameConnection($message, $eventClass);
+
+        $eventClass::query()->create([
+            'talkto_message_id' => $message->id,
+            'message_id' => $message->message_id,
+            'service_name' => config('talkto.service', 'app'),
+            'event_type' => $eventType,
+            'old_status' => $oldStatus,
+            'new_status' => $newStatus,
+            'meta' => array_filter($meta, fn (mixed $value): bool => $value !== null),
+        ]);
+    }
+
+    private function consumeNonce(array $verification, string $messageId): bool
+    {
+        if (($verification['signature_version'] ?? null) !== 'v2') {
+            return true;
+        }
+
+        $nonce = $verification['nonce'] ?? null;
+
+        if (! is_string($nonce) || $nonce === '') {
+            return ! (bool) config('talkto.security.replay_protection.enabled', true);
+        }
+
+        return $this->nonceLedger->consume(
+            'v2',
+            (string) ($verification['source'] ?? ''),
+            (string) ($verification['target'] ?? ''),
+            $nonce,
+            $messageId,
+            is_string($verification['signed_timestamp'] ?? null) ? $verification['signed_timestamp'] : null
+        );
+    }
+
+    private function messageModelClass(): string
+    {
+        return app(TalktoModelResolver::class)->message();
+    }
+
+    private function eventModelClass(): string
+    {
+        return app(TalktoModelResolver::class)->event();
+    }
+}

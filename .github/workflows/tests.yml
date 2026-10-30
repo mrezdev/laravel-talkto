@@ -189,6 +189,8 @@ jobs:
           TALKTO_TERMINAL_MYSQL_EVIDENCE_PATH: ${{ runner.temp }}/talkto-terminal-mysql-evidence.json
           TALKTO_UNDISPATCHED_QUEUE_EVIDENCE_PATH: ${{ runner.temp }}/talkto-undispatched-queue-evidence.json
           TALKTO_DISPATCH_INTENT_MYSQL_EVIDENCE_PATH: ${{ runner.temp }}/talkto-dispatch-intent-mysql-evidence.json
+          TALKTO_RELIABLE_CALLBACK_MYSQL_EVIDENCE_PATH: ${{ runner.temp }}/talkto-reliable-callback-mysql-evidence.json
+          TALKTO_RELIABLE_CALLBACK_RETRY_MYSQL_EVIDENCE_PATH: ${{ runner.temp }}/talkto-reliable-callback-retry-mysql-evidence.json
         run: vendor/bin/pest --configuration phpunit.mysql.xml --log-junit mysql-timestamps-junit.xml
 
       - name: Upload MySQL SQL and EXPLAIN evidence
@@ -206,4 +208,6 @@ jobs:
             ${{ runner.temp }}/talkto-terminal-mysql-evidence.json
             ${{ runner.temp }}/talkto-undispatched-queue-evidence.json
             ${{ runner.temp }}/talkto-dispatch-intent-mysql-evidence.json
+            ${{ runner.temp }}/talkto-reliable-callback-mysql-evidence.json
+            ${{ runner.temp }}/talkto-reliable-callback-retry-mysql-evidence.json
             mysql-timestamps-junit.xml

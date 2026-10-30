@@ -279,6 +279,17 @@ TALKTO_CALLBACK_TIMEOUT_SECONDS=20
 
 `callbacks.enabled=false` disables callback creation and sending. `callbacks.auto_dispatch=false` disables automatic callback queueing after incoming processing, but manual `ResultCallbackSenderContract::sendResult()` can still be used when callbacks are enabled. The recommended default is `auto_dispatch=true`.
 
+Optional reliable result persistence is configured under `callbacks.reliable`:
+
+```php
+'reliable' => [
+    'enabled' => env('TALKTO_RELIABLE_CALLBACKS_ENABLED', false),
+    'recovery_enabled' => env('TALKTO_RELIABLE_CALLBACKS_RECOVERY_ENABLED', false),
+],
+```
+
+Both values default to false. Reliable automatic callbacks require callbacks/auto-dispatch and durable dispatch to be enabled, with the existing optional intent migration already installed. There is no new callback migration. Explicit callback recovery through `talkto:dispatch-intents --execute` additionally needs both durable-dispatch and reliable-callback recovery enabled; no scheduler is registered. Review [reliable callbacks](reliable-callbacks.md) for supported senders/jobs, processing protection, same-connection requirements, deliberate callback disabling and safe rollout.
+
 For result callbacks, every destination service that sends callbacks must configure the original source service in `talkto.outgoing` with a callback endpoint:
 
 ```php

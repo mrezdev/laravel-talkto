@@ -127,7 +127,8 @@ class TalktoStaleMessageRecoveryService
                 })->orWhere(function ($query): void {
                     $query->where('direction', TalktoMessageDirection::Incoming->value)
                         ->where('overall_status', TalktoMessageStatus::Processing->value)
-                        ->where('destination_action_status', TalktoMessageStatus::Processing->value);
+                        ->where('destination_action_status', TalktoMessageStatus::Processing->value)
+                        ->where(fn ($locks) => $locks->whereNull('locked_by')->orWhere('locked_by', 'not like', TalktoReliableCallbackService::LOCK_PREFIX.'%'));
                 })->orWhere(function ($query): void {
                     $query->where('locked_by', 'like', 'dispatch-claim:%')
                         ->where(function ($query): void {
@@ -245,6 +246,9 @@ class TalktoStaleMessageRecoveryService
 
     private function isStillStale(TalktoMessage $message, int $olderThanMinutes): bool
     {
+        if (TalktoReliableCallbackService::isProtected($message)) {
+            return false;
+        }
         if ($message->locked_at === null || $message->locked_at->greaterThan(now()->subMinutes($olderThanMinutes))) {
             return false;
         }

@@ -4,6 +4,8 @@ Durable dispatch records a message's intended first queue publication in a separ
 
 The feature is disabled by default. Enabling it does not schedule recovery, backfill historical messages or guarantee that every queue failure is recoverable. Read this guide and test the host application's models, builders, jobs and queue before enabling it in one service.
 
+[Reliable result callbacks](reliable-callbacks.md) optionally use the same ledger with `purpose=result_callback`, committing an incoming result and its frozen outgoing callback atomically. Ordinary intents keep their existing initial-dispatch behavior. Executing callback publication recovery additionally requires the reliable-callback creation/recovery flags; enabling general durable recovery alone does not authorize it.
+
 ## Scope And Requirements
 
 The package requires PHP `^8.2` and Laravel components `^12.0|^13.0`, as declared in `composer.json`. Use a PHP version supported by the selected Laravel release; the package test matrix is PHP 8.2/8.3/8.4 with Laravel 12 and PHP 8.3/8.4 with Laravel 13.

@@ -2,19 +2,25 @@
 
 namespace Mrezdev\LaravelTalkto\Pipelines;
 
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 use Mrezdev\LaravelTalkto\Contracts\IncomingCommandResultContract;
 use Mrezdev\LaravelTalkto\Contracts\ResultCallbackSenderContract;
 use Mrezdev\LaravelTalkto\Enums\TalktoAttemptStatus;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageDirection;
 use Mrezdev\LaravelTalkto\Enums\TalktoMessageStatus;
+use Mrezdev\LaravelTalkto\Exceptions\TalktoReliableCallbackPersistenceException;
 use Mrezdev\LaravelTalkto\Models\TalktoAttempt;
 use Mrezdev\LaravelTalkto\Models\TalktoMessage;
 use Mrezdev\LaravelTalkto\Services\TalktoDeadLetterQueue;
 use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResolver;
 use Mrezdev\LaravelTalkto\Services\TalktoIncomingCommandResult;
+use Mrezdev\LaravelTalkto\Services\TalktoReliableCallbackService;
 use Mrezdev\LaravelTalkto\Services\TalktoRetryPolicy;
+use Mrezdev\LaravelTalkto\Support\TalktoDispatchTestHooks;
 use Mrezdev\LaravelTalkto\Support\TalktoModelConnection;
 use Mrezdev\LaravelTalkto\Support\TalktoModelResolver;
+use Mrezdev\LaravelTalkto\Support\TalktoReliableCallbackContext;
 use Mrezdev\LaravelTalkto\Support\TalktoSecurityRedactor;
 use Throwable;
 
@@ -39,9 +45,15 @@ class ProcessIncomingTalktoMessagePipeline
 
     private int $talktoMessageId;
 
+    private ?TalktoReliableCallbackContext $reliableContext = null;
+
+    private ?TalktoReliableCallbackService $reliableCallbacks = null;
+
     public function process(int $talktoMessageId, mixed $resolver = null, ?TalktoRetryPolicy $retryPolicy = null): void
     {
         $this->talktoMessageId = $talktoMessageId;
+        $this->reliableContext = null;
+        $this->reliableCallbacks = null;
         $resolver ??= app(TalktoIncomingCommandResolver::class);
         $retryPolicy ??= app(TalktoRetryPolicy::class);
 
@@ -66,6 +78,11 @@ class ProcessIncomingTalktoMessagePipeline
             return;
         }
 
+        if (TalktoReliableCallbackService::required()) {
+            $this->reliableCallbacks = app(TalktoReliableCallbackService::class);
+            $this->reliableContext = $this->reliableCallbacks->preflight($message);
+        }
+
         $processing = $this->markProcessing($retryPolicy);
 
         if ($processing === null) {
@@ -73,6 +90,12 @@ class ProcessIncomingTalktoMessagePipeline
         }
 
         [$message, $attempt] = $processing;
+
+        if ($this->reliableContext !== null) {
+            $this->processWithReliableCallback($message, $attempt, $resolver, $retryPolicy);
+
+            return;
+        }
 
         try {
             $handler = $resolver->resolve($message);
@@ -94,6 +117,9 @@ class ProcessIncomingTalktoMessagePipeline
 
     private function isQueuedForProcessing(TalktoMessage $message, TalktoRetryPolicy $retryPolicy): bool
     {
+        if (TalktoReliableCallbackService::isProtected($message)) {
+            return false;
+        }
         if (
             in_array($message->overall_status, self::NON_PROCESSABLE_STATUSES, true)
             || in_array($message->destination_action_status, self::NON_PROCESSABLE_STATUSES, true)
@@ -108,10 +134,88 @@ class ProcessIncomingTalktoMessagePipeline
 
     private function processorLockName(): string
     {
+        if ($this->reliableContext !== null) {
+            return TalktoReliableCallbackService::LOCK_PREFIX.Str::uuid();
+        }
         $hostname = function_exists('gethostname') ? gethostname() : false;
         $processId = function_exists('getmypid') ? getmypid() : false;
 
         return 'processor:'.($hostname ?: 'unknown-host').':'.($processId ?: 'unknown-process');
+    }
+
+    private function processWithReliableCallback(TalktoMessage $message, TalktoAttempt $attempt, mixed $resolver, TalktoRetryPolicy $retryPolicy): void
+    {
+        $context = $this->reliableContext;
+        $callbacks = $this->reliableCallbacks;
+        if ($context === null || $callbacks === null) {
+            throw new \LogicException('Reliable callback processing context is unavailable.');
+        }
+        $returned = false;
+        $active = $callbacks->registerActive($message);
+        try {
+            $callbacks->assertContext($context);
+            if ($context->connection->transactionLevel() !== 0) {
+                throw new \RuntimeException('The reliable processing claim must commit before handler execution.');
+            }
+            $hook = $callbacks->hookContext($message, $attempt);
+            TalktoDispatchTestHooks::fire('reliable_callback.before_handler', $hook);
+            $callbacks->assertContext($context);
+            $context->connection->transaction(fn () => $callbacks->lockResult($context, $message, $attempt));
+            $failure = null;
+            $result = null;
+            try {
+                $handler = $resolver->resolve($message);
+                $result = $handler->handle($message);
+                $returned = true;
+            } catch (Throwable $throwable) {
+                if ($throwable instanceof TalktoReliableCallbackPersistenceException) {
+                    throw $throwable;
+                }
+                $failure = $throwable;
+            }
+            TalktoDispatchTestHooks::fire('reliable_callback.after_handler', $hook + ['result_returned' => $returned]);
+            $callbacks->assertContext($context);
+            if ($context->connection->transactionLevel() !== 0) {
+                throw new \RuntimeException('A reliable handler must finish its own transactions before result persistence.');
+            }
+            $snapshot = $failure === null ? $callbacks->freezeResult($result) : null;
+            $context->connection->transaction(function () use ($callbacks, $context, $message, $attempt, $snapshot, $failure, $retryPolicy, $hook): void {
+                [$locked, $lockedAttempt] = $callbacks->lockResult($context, $message, $attempt);
+                TalktoDispatchTestHooks::fire('reliable_callback.before_result_persistence', $hook);
+                $callbacks->assertContext($context);
+                if ($failure !== null) {
+                    $result = $this->applyUnexpectedFailure($locked, $lockedAttempt, $failure, $retryPolicy);
+                    if ($result === null) {
+                        throw new \RuntimeException('The reliable handler exception result could not be persisted.');
+                    }
+                    $result = $callbacks->freezeResult($result);
+                } else {
+                    $result = $snapshot;
+                    $this->applyResult($locked, $lockedAttempt, $result, $retryPolicy);
+                }
+                $callbacks->assertContext($context);
+                TalktoDispatchTestHooks::fire('reliable_callback.result_persisted', $hook);
+                $callbacks->assertContext($context);
+                $class = $context->models['message'];
+                $current = $class::query()->whereKey($message->getKey())->first();
+                if (! $current instanceof TalktoMessage) {
+                    throw new \RuntimeException('The reliable result message disappeared before callback persistence.');
+                }
+                $callbacks->assertPersistedResult($context, $current, $lockedAttempt);
+                $callbacks->persistForAttempt($context, $current, $result, $lockedAttempt);
+                TalktoDispatchTestHooks::fire('reliable_callback.before_commit', $hook);
+                $callbacks->assertContext($context);
+            });
+            TalktoDispatchTestHooks::fire('reliable_callback.committed', $hook);
+        } catch (Throwable $failure) {
+            $callbacks->investigate($context, $message, $attempt, $failure, $returned);
+
+            // Database errors may embed the complete result as SQL bindings.
+            // Keep that exception out of worker/failed-job logs and chains.
+            throw new TalktoReliableCallbackPersistenceException('Reliable callback processing requires investigation. Inspect the durable message and callback state; no handler retry was authorized.');
+        } finally {
+            $callbacks->unregisterActive($active);
+        }
     }
 
     private function createSkippedAttempt(TalktoMessage $message, string $errorClass, string $errorMessage): void
@@ -149,6 +253,10 @@ class ProcessIncomingTalktoMessagePipeline
                 return null;
             }
 
+            if ($this->reliableContext !== null && $this->reliableCallbacks !== null) {
+                $this->reliableCallbacks->assertMessageIdentity($this->reliableContext, $message);
+            }
+
             if ($message->direction !== TalktoMessageDirection::Incoming->value) {
                 $this->createSkippedAttempt(
                     $message,
@@ -166,7 +274,9 @@ class ProcessIncomingTalktoMessagePipeline
             $previousStatus = $message->overall_status;
             $attemptNo = ((int) $message->getAttribute('attempts')) + 1;
 
-            $message->forceFill([
+            $this->assertReliableContext();
+
+            $this->saveRequired($message, [
                 'attempts' => $attemptNo,
                 'destination_action_status' => TalktoMessageStatus::Processing->value,
                 'overall_status' => TalktoMessageStatus::Processing->value,
@@ -176,7 +286,9 @@ class ProcessIncomingTalktoMessagePipeline
                 'next_attempt_at' => null,
                 'locked_at' => now(),
                 'locked_by' => $this->processorLockName(),
-            ])->save();
+            ]);
+
+            $this->assertReliableContext();
 
             $attempt = $attemptClass::query()->create([
                 'talkto_message_id' => $message->id,
@@ -188,10 +300,14 @@ class ProcessIncomingTalktoMessagePipeline
                     'command' => $message->command,
                     'business_key' => $message->business_key,
                     'idempotency_key' => $message->idempotency_key,
+                    ...($this->reliableContext !== null ? ['reliable_callback_claim' => $message->locked_by] : []),
                 ],
             ]);
+            $this->assertReliableCreated($attempt);
 
-            $eventClass::query()->create([
+            $this->assertReliableContext();
+
+            $event = $eventClass::query()->create([
                 'talkto_message_id' => $message->id,
                 'message_id' => $message->message_id,
                 'service_name' => config('talkto.service', 'app'),
@@ -200,6 +316,13 @@ class ProcessIncomingTalktoMessagePipeline
                 'new_status' => TalktoMessageStatus::Processing->value,
                 'meta' => $this->eventMeta($message),
             ]);
+            $this->assertReliableCreated($event);
+
+            $this->assertReliableContext();
+
+            if ($this->reliableContext !== null && $this->reliableCallbacks !== null) {
+                return $this->reliableCallbacks->lockResult($this->reliableContext, $message, $attempt);
+            }
 
             return [$message->fresh(), $attempt];
         });
@@ -242,7 +365,7 @@ class ProcessIncomingTalktoMessagePipeline
 
         TalktoModelConnection::assertSameConnection($message, $eventClass);
 
-        $eventClass::query()->create([
+        $event = $eventClass::query()->create([
             'talkto_message_id' => $message->id,
             'message_id' => $message->message_id,
             'service_name' => config('talkto.service', 'app'),
@@ -254,6 +377,7 @@ class ProcessIncomingTalktoMessagePipeline
                 'durable' => true,
             ]),
         ]);
+        $this->assertReliableCreated($event);
     }
 
     private function applySkippedResult(TalktoMessage $message, TalktoAttempt $attempt, IncomingCommandResultContract $result): void
@@ -271,7 +395,9 @@ class ProcessIncomingTalktoMessagePipeline
                 return;
             }
 
-            $message->forceFill([
+            $this->assertReliableContext();
+
+            $this->saveRequired($message, [
                 'destination_action_status' => TalktoMessageStatus::Skipped->value,
                 'overall_status' => TalktoMessageStatus::Skipped->value,
                 'completed_at' => now(),
@@ -279,16 +405,20 @@ class ProcessIncomingTalktoMessagePipeline
                 'last_error' => null,
                 'locked_at' => null,
                 'locked_by' => null,
-            ])->save();
+            ]);
 
-            $attempt->forceFill([
+            $this->assertReliableContext();
+
+            $this->saveRequired($attempt, [
                 'status' => TalktoAttemptStatus::Skipped->value,
                 'meta' => $this->mergeAttemptMeta($attempt, [
                     'result_meta' => $meta,
                 ]),
-            ])->save();
+            ]);
 
-            $eventClass::query()->create([
+            $this->assertReliableContext();
+
+            $event = $eventClass::query()->create([
                 'talkto_message_id' => $message->id,
                 'message_id' => $message->message_id,
                 'service_name' => config('talkto.service', 'app'),
@@ -297,6 +427,7 @@ class ProcessIncomingTalktoMessagePipeline
                 'new_status' => TalktoMessageStatus::Skipped->value,
                 'meta' => $this->eventMeta($message, $meta),
             ]);
+            $this->assertReliableCreated($event);
 
             app(TalktoDeadLetterQueue::class)->markReprocessedForMessage($message);
         });
@@ -318,7 +449,9 @@ class ProcessIncomingTalktoMessagePipeline
                 return;
             }
 
-            $message->forceFill([
+            $this->assertReliableContext();
+
+            $this->saveRequired($message, [
                 'destination_action_status' => TalktoMessageStatus::Succeeded->value,
                 'overall_status' => TalktoMessageStatus::Succeeded->value,
                 'completed_at' => now(),
@@ -326,17 +459,21 @@ class ProcessIncomingTalktoMessagePipeline
                 'last_error' => null,
                 'locked_at' => null,
                 'locked_by' => null,
-            ])->save();
+            ]);
 
-            $attempt->forceFill([
+            $this->assertReliableContext();
+
+            $this->saveRequired($attempt, [
                 'status' => TalktoAttemptStatus::Succeeded->value,
                 'meta' => $this->mergeAttemptMeta($attempt, [
                     'result' => $resultPayload,
                     'result_meta' => $meta,
                 ]),
-            ])->save();
+            ]);
 
-            $eventClass::query()->create([
+            $this->assertReliableContext();
+
+            $event = $eventClass::query()->create([
                 'talkto_message_id' => $message->id,
                 'message_id' => $message->message_id,
                 'service_name' => config('talkto.service', 'app'),
@@ -348,6 +485,7 @@ class ProcessIncomingTalktoMessagePipeline
                     'result_meta' => $meta,
                 ]),
             ]);
+            $this->assertReliableCreated($event);
 
             app(TalktoDeadLetterQueue::class)->markReprocessedForMessage($message);
         });
@@ -385,7 +523,9 @@ class ProcessIncomingTalktoMessagePipeline
                     $newStatus = $message->overall_status;
                 }
             } else {
-                $message->forceFill([
+                $this->assertReliableContext();
+
+                $this->saveRequired($message, [
                     'destination_action_status' => $newStatus,
                     'overall_status' => $newStatus,
                     'failed_at' => now(),
@@ -393,23 +533,27 @@ class ProcessIncomingTalktoMessagePipeline
                     'last_error' => $errorMessage,
                     'locked_at' => null,
                     'locked_by' => null,
-                ])->save();
+                ]);
             }
 
             if ($newStatus === $retryPolicy->finalFailureStatus()) {
                 $this->storeDeadLetterIfEnabled($message, $errorMessage);
             }
 
-            $attempt->forceFill([
+            $this->assertReliableContext();
+
+            $this->saveRequired($attempt, [
                 'status' => $newStatus,
                 'error_class' => $errorClass,
                 'error_message' => $errorMessage,
                 'meta' => $this->mergeAttemptMeta($attempt, [
                     'result_meta' => $meta,
                 ]),
-            ])->save();
+            ]);
 
-            $eventClass::query()->create([
+            $this->assertReliableContext();
+
+            $event = $eventClass::query()->create([
                 'talkto_message_id' => $message->id,
                 'message_id' => $message->message_id,
                 'service_name' => config('talkto.service', 'app'),
@@ -421,6 +565,7 @@ class ProcessIncomingTalktoMessagePipeline
                     'retryable' => $retryable,
                 ]),
             ]);
+            $this->assertReliableCreated($event);
 
             if ($retryable && $retryPolicy->isDirectionEnabled($message)) {
                 $this->recordRetryEvent($eventClass, $message, $scheduled ? 'retry_scheduled' : 'retry_exhausted');
@@ -457,7 +602,9 @@ class ProcessIncomingTalktoMessagePipeline
 
                 $newStatus = $message->overall_status;
             } else {
-                $message->forceFill([
+                $this->assertReliableContext();
+
+                $this->saveRequired($message, [
                     'destination_action_status' => $newStatus,
                     'overall_status' => $newStatus,
                     'failed_at' => now(),
@@ -465,7 +612,7 @@ class ProcessIncomingTalktoMessagePipeline
                     'last_error' => $throwable->getMessage(),
                     'locked_at' => null,
                     'locked_by' => null,
-                ])->save();
+                ]);
             }
 
             $isFinalFailure = $newStatus === $retryPolicy->finalFailureStatus($message);
@@ -476,14 +623,18 @@ class ProcessIncomingTalktoMessagePipeline
             }
 
             if ($attempt) {
-                $attempt->forceFill([
+                $this->assertReliableContext();
+
+                $this->saveRequired($attempt, [
                     'status' => $newStatus,
                     'error_class' => $throwable::class,
                     'error_message' => $throwable->getMessage(),
-                ])->save();
+                ]);
             }
 
-            $eventClass::query()->create([
+            $this->assertReliableContext();
+
+            $event = $eventClass::query()->create([
                 'talkto_message_id' => $message->id,
                 'message_id' => $message->message_id,
                 'service_name' => config('talkto.service', 'app'),
@@ -495,6 +646,7 @@ class ProcessIncomingTalktoMessagePipeline
                     'retryable' => $retryableForEvent,
                 ]),
             ]);
+            $this->assertReliableCreated($event);
 
             if ($retryPolicy->isDirectionEnabled($message)) {
                 $this->recordRetryEvent($eventClass, $message, $scheduled ? 'retry_scheduled' : 'retry_exhausted');
@@ -547,7 +699,7 @@ class ProcessIncomingTalktoMessagePipeline
 
     private function recordRetryEvent(string $eventClass, TalktoMessage $message, string $eventType): void
     {
-        $eventClass::query()->create([
+        $event = $eventClass::query()->create([
             'talkto_message_id' => $message->id,
             'message_id' => $message->message_id,
             'service_name' => config('talkto.service', 'app'),
@@ -556,6 +708,7 @@ class ProcessIncomingTalktoMessagePipeline
             'new_status' => $message->overall_status,
             'meta' => $this->eventMeta($message, $this->retryEventMeta($message, $eventType)),
         ]);
+        $this->assertReliableCreated($event);
     }
 
     private function retryEventMeta(TalktoMessage $message, string $eventType): array
@@ -605,21 +758,67 @@ class ProcessIncomingTalktoMessagePipeline
 
     private function messageModelClass(): string
     {
+        if ($this->reliableContext !== null) {
+            $this->assertReliableContext();
+
+            return $this->reliableContext->models['message'];
+        }
+
         return app(TalktoModelResolver::class)->message();
     }
 
     private function attemptModelClass(): string
     {
+        if ($this->reliableContext !== null) {
+            $this->assertReliableContext();
+
+            return $this->reliableContext->models['attempt'];
+        }
+
         return app(TalktoModelResolver::class)->attempt();
     }
 
     private function eventModelClass(): string
     {
+        if ($this->reliableContext !== null) {
+            $this->assertReliableContext();
+
+            return $this->reliableContext->models['event'];
+        }
+
         return app(TalktoModelResolver::class)->event();
     }
 
     private function deadLetterModelClass(): string
     {
+        if ($this->reliableContext !== null) {
+            $this->assertReliableContext();
+
+            return $this->reliableContext->models['dead_letter'];
+        }
+
         return app(TalktoModelResolver::class)->deadLetter();
+    }
+
+    private function assertReliableContext(): void
+    {
+        if ($this->reliableContext !== null && $this->reliableCallbacks !== null) {
+            $this->reliableCallbacks->assertContext($this->reliableContext);
+        }
+    }
+
+    private function saveRequired(Model $model, array $attributes): void
+    {
+        $saved = $model->forceFill($attributes)->save();
+        if ($this->reliableContext !== null && ! $saved) {
+            throw new TalktoReliableCallbackPersistenceException('Required reliable processing persistence was cancelled.');
+        }
+    }
+
+    private function assertReliableCreated(Model $model): void
+    {
+        if ($this->reliableContext !== null && (! $model->exists || $model->getKey() === null)) {
+            throw new TalktoReliableCallbackPersistenceException('Required reliable processing evidence was not persisted.');
+        }
     }
 }

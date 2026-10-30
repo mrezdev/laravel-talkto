@@ -213,6 +213,8 @@ Callbacks let the destination app report handler results back to the source app.
 
 Result callbacks are durable: the destination stores an outgoing `talkto.result` callback message in `talkto_messages`, queues `SendTalktoMessage`, and delivers the callback through the normal outgoing send pipeline. Callback delivery can use the existing retry, DLQ, report, panel, and reprocess behavior.
 
+Optional [reliable result callbacks](docs/reliable-callbacks.md) also commit the incoming result, frozen callback and dispatch intent atomically, closing the crash gap before callback creation. This mode is disabled by default, requires the existing durable-dispatch ledger and uses controlled publication recovery without rerunning the incoming handler. Review its extension, transaction and rollout requirements before opting in one service.
+
 Incoming processing auto-queues callbacks by default after a handler returns a `TalktoIncomingCommandResult`, so normal handlers only need to return the result:
 
 ```php

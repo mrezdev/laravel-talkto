@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Consecutive Reliable Callback Results
+
+- Gave later reliable incoming processing attempts distinct deterministic callback identities and idempotency keys, allowing same-status retries with changing result details to progress without altering earlier callbacks.
+- Preserved first-result and legacy identities, immutable payload verification, atomic result/callback persistence, durable dispatch recovery and existing status-level receiver behavior. Manual resends of later results require retained attempt, callback and intent evidence.
+- Kept later reliable callback history protected after disablement by resolving the verified stored callback before legacy creation, without requiring the optional intent table or changing ordinary legacy identities.
+- Documented receiver duplicate and ordering semantics without adding protocol fields, migrations or deployment dependencies between services.
+
+### Reliable Result Callback Persistence
+
+- Added an optional mode that commits incoming results, existing attempt/events, frozen outgoing callbacks and durable publication intents atomically, with safe controlled callback publication recovery.
+- Preserved signed callback payloads, identities and legacy defaults; protected interrupted processing requires investigation instead of automatic handler replay.
+- Documented prerequisites, supported extensions/backends, monitoring, retention and service-by-service rollout. The mode reuses existing tables and adds no migration or scheduler.
+
 ### Durable Dispatch Builder Compatibility
 
 - Added enabled-mode preflight for unsupported FlowBuilder dispatch overrides and outgoing factory `create()` overrides, rejecting them before message persistence or source-action execution while preserving legacy customization behavior.

@@ -24,6 +24,8 @@ use Throwable;
 /** @internal Opt-in initial-dispatch outbox; never backfills historical messages. */
 class TalktoDispatchIntentService
 {
+    private bool $recovering = false;
+
     public function __construct(private readonly TalktoModelResolver $models, private readonly TalktoCurrentServiceGuard $guard) {}
 
     public function enabled(): bool
@@ -74,6 +76,65 @@ class TalktoDispatchIntentService
 
     public function record(TalktoMessage $message): TalktoDispatchIntent
     {
+        return $this->recordWithPurpose($message, 'initial');
+    }
+
+    /** @internal The callback message is still a newly created outgoing message. */
+    public function recordCallback(TalktoMessage $message, TalktoMessage $incoming): TalktoDispatchIntent
+    {
+        $target = config('talkto.aliases.'.$incoming->source_service);
+        $target = is_string($target) && $target !== '' ? $target : $incoming->source_service;
+        if (! config('talkto.callbacks.reliable.enabled', false) || $message->direction !== 'outgoing'
+            || $incoming->direction !== 'incoming' || ! $this->guard->ownsIncoming($incoming)
+            || $message->getConnection() !== $incoming->getConnection() || $message->source_service !== $incoming->target_service
+            || $message->target_service !== $target || $message->parent_message_id !== $incoming->message_id
+            || ! is_array($message->payload) || ($message->payload['original_message_id'] ?? null) !== $incoming->message_id
+            || ($message->payload['original_command'] ?? null) !== $incoming->command || $message->command !== $this->callbackCommand()) {
+            throw new RuntimeException('Reliable callback dispatch requires a new bound callback message.');
+        }
+
+        return $this->recordWithPurpose($message, 'result_callback');
+    }
+
+    /** @internal Before a handler starts, never execute a custom job constructor. */
+    public function assertCallbackReady(TalktoMessage $incoming): array
+    {
+        $this->assertReady();
+        $class = config('talkto.jobs.send_message', SendTalktoMessage::class);
+        if (! is_string($class) || ! is_a($class, SendTalktoMessage::class, true)) {
+            throw new RuntimeException('Reliable callbacks require a valid configured SendTalktoMessage subclass.');
+        }
+        $reflection = new \ReflectionClass($class);
+        if (! $reflection->isInstantiable() || $reflection->getConstructor()?->getDeclaringClass()->getName() !== SendTalktoMessage::class) {
+            throw new RuntimeException('Reliable callbacks require the inherited SendTalktoMessage constructor; custom constructors need a compatible adapter.');
+        }
+        $key = $this->compatibleMessageKey($incoming);
+        if ($key === null) {
+            throw new RuntimeException('Reliable callbacks require the supported integer message key and effective id binding.');
+        }
+        $routing = $this->routing('outgoing', (int) $key);
+        $queue = Queue::connection($routing['queue_connection']);
+        $adapter = match ($routing['queue_driver']) {
+            'database' => DatabaseQueue::class,
+            'redis' => RedisQueue::class,
+            'sqs' => SqsQueue::class,
+            default => throw new RuntimeException('Unsupported reliable callback queue backend.'),
+        };
+        if (! $queue instanceof $adapter) {
+            throw new RuntimeException('The reliable callback queue requires a compatible durable backend.');
+        }
+        if ($queue instanceof DatabaseQueue) {
+            $table = config('queue.connections.'.$routing['queue_connection'].'.table', 'jobs');
+            if (! is_string($table) || ! $queue->getDatabase()->getSchemaBuilder()->hasTable($table)) {
+                throw new RuntimeException('The reliable callback database queue table is missing.');
+            }
+        }
+
+        return $routing;
+    }
+
+    private function recordWithPurpose(TalktoMessage $message, string $purpose): TalktoDispatchIntent
+    {
         $this->assertReady();
         $connection = $message->getConnection();
         $intentClass = $this->models->dispatchIntent();
@@ -100,7 +161,7 @@ class TalktoDispatchIntentService
         $this->assertCapturedConnection($connection);
         $this->assertNoForeignTransactions($connection);
         $intent = $intentClass::create($routing + [
-            'intent_key' => hash('sha256', json_encode([$message->getTable(), $message->getKeyName(), $key, (string) $message->message_id, 'initial'], JSON_THROW_ON_ERROR)),
+            'intent_key' => hash('sha256', json_encode([$message->getTable(), $message->getKeyName(), $key, (string) $message->message_id, $purpose], JSON_THROW_ON_ERROR)),
             'message_class' => $message::class,
             'message_table' => $message->getTable(),
             'message_key_name' => $message->getKeyName(),
@@ -108,7 +169,7 @@ class TalktoDispatchIntentService
             'message_id' => $message->message_id,
             'direction' => $message->direction,
             'owner' => $this->guard->currentService(),
-            'purpose' => 'initial',
+            'purpose' => $purpose,
             'status' => 'ready',
         ]);
         $this->assertCapturedConnection($connection);
@@ -237,13 +298,23 @@ class TalktoDispatchIntentService
             || $this->compatibleMessageKey($message) !== $intent->message_key) {
             return null;
         }
+        if ($intent->purpose === 'result_callback' && $message->command !== $this->callbackCommand()) {
+            return null;
+        }
 
         return $message;
     }
 
+    private function callbackCommand(): string
+    {
+        $command = (string) config('talkto.callbacks.command', 'talkto.result');
+
+        return $command !== '' ? $command : 'talkto.result';
+    }
+
     private function sameBinding(TalktoDispatchIntent $intent, TalktoDispatchIntent $snapshot): bool
     {
-        if ($intent->owner !== $this->guard->currentService() || $intent->purpose !== 'initial') {
+        if ($intent->owner !== $this->guard->currentService() || ! in_array($intent->purpose, ['initial', 'result_callback'], true)) {
             return false;
         }
         foreach (['intent_key', 'message_class', 'message_table', 'message_key_name', 'message_key', 'message_id', 'direction', 'owner', 'purpose',
@@ -253,7 +324,7 @@ class TalktoDispatchIntentService
             }
         }
 
-        return hash_equals(hash('sha256', json_encode([$intent->message_table, $intent->message_key_name, $intent->message_key, (string) $intent->message_id, 'initial'], JSON_THROW_ON_ERROR)), $intent->intent_key);
+        return hash_equals(hash('sha256', json_encode([$intent->message_table, $intent->message_key_name, $intent->message_key, (string) $intent->message_id, $intent->purpose], JSON_THROW_ON_ERROR)), $intent->intent_key);
     }
 
     private function result(int $id, string $reason, bool $published = false): array
@@ -273,8 +344,23 @@ class TalktoDispatchIntentService
         TalktoDispatchTestHooks::fire('dispatch_intent.before_claim', ['intent_id' => $id]);
         $this->assertPublicationBoundary($connection);
         $snapshot = $class::query()->find($id);
-        if (! $snapshot || $snapshot->owner !== $this->guard->currentService() || $snapshot->purpose !== 'initial') {
+        if (! $snapshot || $snapshot->owner !== $this->guard->currentService() || ! in_array($snapshot->purpose, ['initial', 'result_callback'], true)) {
             return $this->result($id, 'not_owned_or_missing');
+        }
+        if ($snapshot->purpose === 'result_callback' && $this->recovering
+            && (! config('talkto.callbacks.reliable.enabled', false) || ! config('talkto.callbacks.reliable.recovery_enabled', false))) {
+            return $this->result($id, 'reliable_callback_recovery_disabled');
+        }
+        if ($snapshot->purpose === 'result_callback') {
+            $messageClass = $this->models->message();
+            $model = new $messageClass;
+            if ($snapshot->message_class !== $messageClass || $snapshot->message_table !== $model->getTable() || $snapshot->message_key_name !== $model->getKeyName()) {
+                return $this->result($id, 'callback_configuration_changed');
+            }
+            $callback = $messageClass::query()->whereKey($snapshot->message_key)->first(['message_id', 'command']);
+            if (! $callback || $callback->message_id !== $snapshot->message_id || $callback->command !== $this->callbackCommand()) {
+                return $this->result($id, 'callback_configuration_changed');
+            }
         }
         // Resolve/connect before a claim. An exception here cannot publish a job.
         try {
@@ -466,7 +552,9 @@ class TalktoDispatchIntentService
         }
         $class = $this->models->dispatchIntent();
         $query = $class::query()->where('owner', $this->guard->currentService())->where('created_at', '<=', now()->subMinutes($minimumAgeMinutes));
+        $callbacksAuthorized = config('talkto.callbacks.reliable.enabled', false) && config('talkto.callbacks.reliable.recovery_enabled', false);
         if ($eligibleOnly) {
+            $query->whereIn('purpose', $callbacksAuthorized ? ['initial', 'result_callback'] : ['initial']);
             $query->where(fn ($states) => $states->where('status', 'ready')->orWhere(fn ($expired) => $expired->where('status', 'claimed')->whereNotNull('claim_expires_at')->where('claim_expires_at', '<=', now())));
         }
         if ($direction !== null) {
@@ -475,7 +563,7 @@ class TalktoDispatchIntentService
         if ($messageId !== null) {
             $query->where('message_id', $messageId);
         }
-        $rows = $query->toBase()->reorder()->select(['id', 'message_id', 'direction', 'owner', 'status', 'claim_expires_at', 'publication_attempts', 'created_at', 'last_error_code'])
+        $rows = $query->toBase()->reorder()->select(['id', 'message_id', 'direction', 'owner', 'purpose', 'status', 'claim_expires_at', 'publication_attempts', 'created_at', 'last_error_code'])
             ->orderBy('created_at')->orderBy('id')->limit($limit)->get();
         $candidates = [];
         foreach ($rows as $row) {
@@ -483,9 +571,17 @@ class TalktoDispatchIntentService
                 continue;
             }
             $eligible = $row->status === 'ready' || ($row->status === 'claimed' && $row->claim_expires_at !== null && Carbon::parse($row->claim_expires_at)->lte(now()));
+            $reason = $eligible ? 'ready_for_locked_revalidation' : 'not_safely_recoverable';
+            if ($row->purpose === 'result_callback' && ! $callbacksAuthorized) {
+                $eligible = false;
+                $reason = 'reliable_callback_recovery_disabled';
+            } elseif (! in_array($row->purpose, ['initial', 'result_callback'], true)) {
+                $eligible = false;
+                $reason = 'unsupported_intent_purpose';
+            }
             $candidates[] = ['intent_id' => (int) $row->id, 'message_id' => $this->safe($row->message_id), 'direction' => $this->safe($row->direction),
                 'status' => $this->safe($row->status), 'publication_attempts' => (int) $row->publication_attempts,
-                'recovery_eligible' => $eligible, 'reason' => $eligible ? 'ready_for_locked_revalidation' : 'not_safely_recoverable', 'last_error_code' => $this->safe($row->last_error_code)];
+                'recovery_eligible' => $eligible, 'reason' => $reason, 'last_error_code' => $this->safe($row->last_error_code)];
         }
 
         return ['mode' => 'read_only', 'dry_run' => true, 'count' => count($candidates), 'candidates' => $candidates, 'dispatched' => 0, 'skipped' => 0];
@@ -505,10 +601,14 @@ class TalktoDispatchIntentService
 
                 continue;
             }
+            $previousRecovery = $this->recovering;
+            $this->recovering = true;
             try {
                 $result = $this->publish($candidate['intent_id']);
             } catch (Throwable) {
                 $result = $this->result($candidate['intent_id'], 'publication_deferred');
+            } finally {
+                $this->recovering = $previousRecovery;
             }
             $candidate['result'] = $result;
             $report[$result['published'] ? 'dispatched' : 'skipped']++;

@@ -51,6 +51,10 @@ class TalktoDispatchClaimingService
                 return TalktoDispatchClaim::skipped($operation, 'wrong_service', $locked);
             }
 
+            if (TalktoReliableCallbackService::isProtected($locked)) {
+                return TalktoDispatchClaim::skipped($operation, 'reliable_callback_investigation_required', $locked);
+            }
+
             $decision = $this->retryPolicy->decisionFor($locked)->toArray();
 
             $retryable = (bool) ($decision['retryable'] ?? false);
@@ -118,6 +122,10 @@ class TalktoDispatchClaimingService
                 return TalktoDispatchClaim::skipped($operation, 'wrong_service', $message, $lockedDeadLetter);
             }
 
+            if (TalktoReliableCallbackService::isProtected($message)) {
+                return TalktoDispatchClaim::skipped($operation, 'reliable_callback_investigation_required', $message, $lockedDeadLetter);
+            }
+
             if (in_array($message->overall_status, [TalktoMessageStatus::Succeeded->value, TalktoMessageStatus::Completed->value], true)) {
                 return TalktoDispatchClaim::skipped($operation, 'terminal_success', $message, $lockedDeadLetter);
             }
@@ -176,6 +184,10 @@ class TalktoDispatchClaimingService
 
             if (! $this->currentServiceGuard->allowsProcessing($locked)) {
                 return TalktoDispatchClaim::skipped($operation, 'wrong_service', $locked);
+            }
+
+            if (TalktoReliableCallbackService::isProtected($locked)) {
+                return TalktoDispatchClaim::skipped($operation, 'reliable_callback_investigation_required', $locked);
             }
 
             if (! $this->isStillStale($locked, $olderThanMinutes)) {

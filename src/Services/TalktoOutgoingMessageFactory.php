@@ -34,6 +34,17 @@ class TalktoOutgoingMessageFactory
         return $this->persist($target, $command, $payload, $options, false);
     }
 
+    /** @internal Validate callback target metadata without creating a message. */
+    public function assertReliableCallbackTarget(string $target): void
+    {
+        $this->validator()->validateIdentifier('target_service', $this->resolvedTargetName($target));
+        $resolved = $this->targets->resolve($target);
+        if (! $resolved) {
+            throw new InvalidArgumentException('The reliable callback outgoing target is not configured.');
+        }
+        $this->validator()->validateTalktoHeaders($resolved->headers(), $this->configuredTalktoHeaderNames());
+    }
+
     /**
      * @internal Only dispatch-promising flows use this opt-in creation path.
      */
